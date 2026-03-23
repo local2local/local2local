@@ -1,4 +1,4 @@
-## L2LAAF Flutter File Shell
+# L2LAAF Flutter File Shell
 Based on the architecture, here is the empty shell structure for the **Triage Hub** (Phase 17.1). You should direct Dreamflow to populate these specific paths.
 
 ### 1. Core Infrastructure Shells
