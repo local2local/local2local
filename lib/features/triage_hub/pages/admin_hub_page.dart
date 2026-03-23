@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/triage_hub.dart';
+import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
 
 /// Main Admin Hub Page that combines shell with content switching
 class AdminHubPage extends ConsumerWidget {
@@ -18,7 +19,7 @@ class AdminHubPage extends ConsumerWidget {
   Widget _buildPageContent(int index) {
     switch (index) {
       case 0:
-        return const TriageHubPage();
+        return const TriageQueuePage();
       case 1:
         return const HealthGridPage();
       case 2:
@@ -26,7 +27,7 @@ class AdminHubPage extends ConsumerWidget {
       case 3:
         return const EvolutionTimelinePage();
       default:
-        return const TriageHubPage();
+        return const TriageQueuePage();
     }
   }
 }

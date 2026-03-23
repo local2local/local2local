@@ -21,24 +21,24 @@ class NavItem {
 /// Admin Sidebar navigation items
 const List<NavItem> adminNavItems = [
   NavItem(
-    label: 'Triage Hub',
-    icon: Icons.dashboard_rounded,
-    route: '/triage-hub',
+    label: 'Triage Queue',
+    icon: Icons.warning_amber_rounded,
+    route: '/triage-queue',
     showBadge: true,
   ),
   NavItem(
-    label: 'Health Grid',
-    icon: Icons.monitor_heart_rounded,
-    route: '/health-grid',
+    label: 'Orchestrator Health',
+    icon: Icons.psychology_rounded,
+    route: '/orchestrator-health',
   ),
   NavItem(
     label: 'Fleet Map',
-    icon: Icons.map_rounded,
+    icon: Icons.gps_fixed_rounded,
     route: '/fleet-map',
   ),
   NavItem(
     label: 'Evolution Timeline',
-    icon: Icons.history_rounded,
+    icon: Icons.auto_graph_rounded,
     route: '/evolution-timeline',
   ),
 ];
