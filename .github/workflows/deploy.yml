@@ -13,6 +13,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Map the branch to the GitHub Environment
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
 
@@ -42,14 +43,21 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          create_credentials_file: true
+          export_environment_variables: true
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       - name: Set Environment & Deploy
         env:
-          # The "Gold Standard" fix: Use the JSON key as the FIREBASE_TOKEN
-          # Firebase CLI will automatically use this for authentication
-          FIREBASE_TOKEN: ${{ secrets.GCP_SA_KEY }}
+          # Use the modern auth path as recommended by Firebase
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
           CI: true
         run: |
           # 1. Map branch to specific GCP Project ID
@@ -61,8 +69,8 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          echo "Deploying to $PROJECT_ID using Service Account Token..."
+          echo "Deploying to $PROJECT_ID using Service Account Path..."
           
           # 2. Execute Deployment
-          # We pass the project ID directly. The FIREBASE_TOKEN env var handles auth.
-          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+          # Added --debug to unmask the "unexpected error"
+          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force --debug
