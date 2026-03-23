@@ -13,7 +13,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Securely maps the branch to the corresponding GitHub Environment Vault
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
 
@@ -24,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24' # Upgraded from 20
           cache: 'npm'
           cache-dependency-path: functions/package-lock.json
 
@@ -59,7 +58,6 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
           CI: true
         run: |
-          # Resolve Project ID based on branch
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             PROJECT_ID="local2local-prod"
           elif [[ "${{ github.ref_name }}" == "staging" ]]; then
@@ -68,10 +66,5 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          echo "--- IDENTITY DIAGNOSIS ---"
-          echo "Current Branch: ${{ github.ref_name }}"
-          echo "Target Project: $PROJECT_ID"
-          gcloud auth list
-          
-          echo "--- INITIATING DEPLOY ---"
+          echo "Initiating deployment to $PROJECT_ID using Node.js 24..."
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
