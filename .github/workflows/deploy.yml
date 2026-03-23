@@ -68,7 +68,10 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          echo "Initiating deployment to $PROJECT_ID..."
+          echo "--- IDENTITY DIAGNOSIS ---"
+          echo "Current Branch: ${{ github.ref_name }}"
+          echo "Target Project: $PROJECT_ID"
+          gcloud auth list
           
-          # Deploy hosting and functions with force to handle v1/v2 cleanup
+          echo "--- INITIATING DEPLOY ---"
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
