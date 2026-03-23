@@ -3,9 +3,9 @@ name: L2LAAF Multi-Project Deployment
 on:
   push:
     branches:
-      - main      # Targets Production
-      - staging   # Targets Staging
-      - develop   # Targets Development
+      - main      # Targets Production //
+      - staging   # Targets Staging //
+      - develop   # Targets Development //
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
