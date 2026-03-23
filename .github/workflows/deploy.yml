@@ -13,33 +13,13 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Securely maps the branch to the corresponding GitHub Environment Vault
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Validate JSON Key Integrity
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-        run: |
-          if [ -z "$GCP_SA_KEY" ]; then
-            echo "ERROR: GCP_SA_KEY is empty. Check your GitHub Environment Secrets."
-            exit 1
-          fi
-          
-          # 1. Structural Check (JSON Validity)
-          echo "$GCP_SA_KEY" | jq . > /dev/null || (echo "ERROR: GCP_SA_KEY is not valid JSON. You likely missed a bracket." && exit 1)
-          
-          # 2. Signature Check (Private Key Completeness)
-          # We check if the private_key field contains the standard PEM headers/footers
-          if [[ ! "$GCP_SA_KEY" =~ "BEGIN PRIVATE KEY" ]] || [[ ! "$GCP_SA_KEY" =~ "END PRIVATE KEY" ]]; then
-            echo "ERROR: The private_key inside the JSON is incomplete or missing PEM headers."
-            exit 1
-          fi
-          
-          echo "SUCCESS: JSON Key format and Private Key headers are valid."
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +59,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
           CI: true
         run: |
+          # Resolve Project ID based on branch
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             PROJECT_ID="local2local-prod"
           elif [[ "${{ github.ref_name }}" == "staging" ]]; then
@@ -87,7 +68,7 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          echo "Deploying to $PROJECT_ID using Service Account Path..."
+          echo "Initiating deployment to $PROJECT_ID..."
           
-          # We use --debug to see the full handshake if the signature fails again
-          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force --debug
+          # Deploy hosting and functions with force to handle v1/v2 cleanup
+          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
