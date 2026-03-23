@@ -1,6 +1,6 @@
-import 'package:local2local/main.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:local2local/features/triage_hub/pages/admin_hub_page.dart';
 
 /// GoRouter configuration for app navigation
 ///
@@ -9,21 +9,15 @@ import 'package:go_router/go_router.dart';
 /// - Deep linking support (web URLs, app links)
 /// - Easy route parameters
 /// - Navigation guards and redirects
-///
-/// To add a new route:
-/// 1. Add a route constant to AppRoutes below
-/// 2. Add a GoRoute to the routes list
-/// 3. Navigate using context.go() or context.push()
-/// 4. Use context.pop() to go back.
 class AppRouter {
   static final GoRouter router = GoRouter(
-    initialLocation: AppRoutes.home,
+    initialLocation: AppRoutes.adminHub,
     routes: [
       GoRoute(
-        path: AppRoutes.home,
-        name: 'home',
-        pageBuilder: (context, state) => NoTransitionPage(
-          child: const MyHomePage(title: 'Dreamflow Starter Project'),
+        path: AppRoutes.adminHub,
+        name: 'admin-hub',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: AdminHubPage(),
         ),
       ),
     ],
@@ -33,5 +27,5 @@ class AppRouter {
 /// Route path constants
 /// Use these instead of hard-coding route strings
 class AppRoutes {
-  static const String home = '/';
+  static const String adminHub = '/';
 }
