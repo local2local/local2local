@@ -47,11 +47,14 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-          # This ensures the key file is exported for other tools to use
           create_credentials_file: true
           export_environment_variables: true
 
       - name: Set Environment & Deploy
+        env:
+          # Force the Firebase CLI to see the Service Account file
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+          CI: true
         run: |
           # 1. Map branch to specific GCP Project ID
           if [[ "${{ github.ref_name }}" == "main" ]]; then
@@ -62,12 +65,11 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          # 2. Authenticate Firebase CLI using the Service Account file path
-          # This is the "Handshake" fix
-          export GOOGLE_APPLICATION_CREDENTIALS="${{ steps.auth.outputs.credentials_file_path }}"
-          
           echo "Deploying to $PROJECT_ID using Service Account..."
           
-          # 3. Use npx to run firebase-tools without a global install to save time
-          npx firebase-tools use $PROJECT_ID --non-interactive
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+          # 2. Install Firebase Tools globally (more stable for auth than npx)
+          npm install -g firebase-tools
+          
+          # 3. Execute Deployment
+          # Note: We bypass 'firebase use' and pass the project ID directly to the deploy command
+          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
