@@ -13,24 +13,12 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Map the branch to the GitHub Environment (Case-sensitive)
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Environment Probe
-        run: |
-          echo "Branch Name: ${{ github.ref_name }}"
-          echo "Calculated Env: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}"
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "CRITICAL: GCP_SA_KEY is EMPTY. GitHub Environment mapping failed."
-            exit 1
-          else
-            echo "SUCCESS: GCP_SA_KEY is populated."
-          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -55,16 +43,17 @@ jobs:
         run: flutter build web --release
 
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
-          # This pulls the JSON key from the active Environment context
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # This ensures the key file is exported for other tools to use
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Set Environment & Deploy
         run: |
-          npm install -g firebase-tools
-          
-          # Map branch to specific GCP Project ID
+          # 1. Map branch to specific GCP Project ID
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             PROJECT_ID="local2local-prod"
           elif [[ "${{ github.ref_name }}" == "staging" ]]; then
@@ -73,5 +62,12 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           
-          firebase use $PROJECT_ID --non-interactive
-          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+          # 2. Authenticate Firebase CLI using the Service Account file path
+          # This is the "Handshake" fix
+          export GOOGLE_APPLICATION_CREDENTIALS="${{ steps.auth.outputs.credentials_file_path }}"
+          
+          echo "Deploying to $PROJECT_ID using Service Account..."
+          
+          # 3. Use npx to run firebase-tools without a global install to save time
+          npx firebase-tools use $PROJECT_ID --non-interactive
+          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
