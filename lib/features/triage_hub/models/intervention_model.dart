@@ -54,7 +54,6 @@ class InterventionModel {
   final DateTime? resolvedAt;
   final String? resolvedBy;
   final String? resolution;
-  final Map<String, dynamic>? metadata;
 
   const InterventionModel({
     required this.id,
@@ -72,12 +71,15 @@ class InterventionModel {
     this.resolvedAt,
     this.resolvedBy,
     this.resolution,
-    this.metadata,
   });
 
   /// Factory to create an InterventionModel from a Firestore document
   factory InterventionModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    // FIX: Using Map.from to handle minified types on Web
+    final rawData = doc.data() as Map?;
+    final data = rawData != null
+        ? Map<String, dynamic>.from(rawData)
+        : <String, dynamic>{};
 
     // Severity Mapping
     final severityStr = data['severity']?.toString().toLowerCase() ?? 'green';
@@ -98,6 +100,15 @@ class InterventionModel {
       category = InterventionCategory.logistics;
     }
 
+    // FIX: Handle both Firestore Timestamp and ISO String from manual JSON injection
+    DateTime parsedDate = DateTime.now();
+    final rawCreated = data['createdAt'];
+    if (rawCreated is Timestamp) {
+      parsedDate = rawCreated.toDate();
+    } else if (rawCreated is String) {
+      parsedDate = DateTime.tryParse(rawCreated) ?? DateTime.now();
+    }
+
     return InterventionModel(
       id: doc.id,
       category: category,
@@ -111,18 +122,15 @@ class InterventionModel {
       agentId: data['agent_id'] ?? 'unknown_agent',
       agentName: data['agent_name'] ?? 'System Agent',
       transactionId: data['orderId'] ?? data['correlation_id'] ?? 'N/A',
-      createdAt: (data['createdAt'] is Timestamp)
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+      createdAt: parsedDate,
       amountUsd: data['amountCents'] != null
           ? (data['amountCents'] / 100).toDouble()
           : null,
-      resolvedAt: data['resolvedAt'] != null
+      resolvedAt: data['resolvedAt'] is Timestamp
           ? (data['resolvedAt'] as Timestamp).toDate()
           : null,
       resolvedBy: data['resolvedBy'],
       resolution: data['resolution'],
-      metadata: data['metadata'],
     );
   }
 
@@ -152,10 +160,6 @@ class InterventionModel {
               id: 'aglc_reject',
               label: 'Reject - AGLC Violation',
               description: 'Deny transaction'),
-          MacroResponse(
-              id: 'escalate_legal',
-              label: 'Escalate to Legal',
-              description: 'Send to legal team'),
         ];
       case InterventionCategory.finance:
         return const [
@@ -164,97 +168,17 @@ class InterventionModel {
               label: 'Approve Payout',
               description: 'Release funds'),
           MacroResponse(
-              id: 'hold_review',
-              label: 'Hold for Review',
-              description: 'Flag for finance review'),
-          MacroResponse(
               id: 'reject_fraud',
               label: 'Reject - Suspected Fraud',
               description: 'Block transaction'),
         ];
-      case InterventionCategory.safety:
+      default:
         return const [
           MacroResponse(
-              id: 'safety_override',
-              label: 'Safety Override',
-              description: 'Acknowledge risk, proceed'),
-          MacroResponse(
-              id: 'safety_halt',
-              label: 'Halt Operations',
-              description: 'Stop all related activities'),
-          MacroResponse(
-              id: 'safety_review',
-              label: 'Schedule Safety Review',
-              description: 'Flag for review'),
-        ];
-      case InterventionCategory.logistics:
-        return const [
-          MacroResponse(
-              id: 'reroute',
-              label: 'Approve Reroute',
-              description: 'Allow alternate route'),
-          MacroResponse(
-              id: 'cancel_delivery',
-              label: 'Cancel Delivery',
-              description: 'Abort delivery'),
-          MacroResponse(
-              id: 'reassign',
-              label: 'Reassign Carrier',
-              description: 'Assign new carrier'),
-        ];
-      case InterventionCategory.talent:
-        return const [
-          MacroResponse(
-              id: 'approve_assignment',
-              label: 'Approve Assignment',
-              description: 'Confirm talent assignment'),
-          MacroResponse(
-              id: 'flag_performance',
-              label: 'Flag Performance Issue',
-              description: 'Add to review queue'),
-          MacroResponse(
-              id: 'suspend',
-              label: 'Suspend Worker',
-              description: 'Temporarily disable'),
+              id: 'manual_resolve',
+              label: 'Mark Resolved',
+              description: 'Close task'),
         ];
     }
-  }
-
-  InterventionModel copyWith({
-    String? id,
-    InterventionCategory? category,
-    InterventionSeverity? severity,
-    String? summary,
-    String? reasoningTrace,
-    String? hbrRuleId,
-    String? hbrRuleLink,
-    String? agentId,
-    String? agentName,
-    String? transactionId,
-    double? amountUsd,
-    DateTime? createdAt,
-    DateTime? resolvedAt,
-    String? resolvedBy,
-    String? resolution,
-    Map<String, dynamic>? metadata,
-  }) {
-    return InterventionModel(
-      id: id ?? this.id,
-      category: category ?? this.category,
-      severity: severity ?? this.severity,
-      summary: summary ?? this.summary,
-      reasoningTrace: reasoningTrace ?? this.reasoningTrace,
-      hbrRuleId: hbrRuleId ?? this.hbrRuleId,
-      hbrRuleLink: hbrRuleLink ?? this.hbrRuleLink,
-      agentId: agentId ?? this.agentId,
-      agentName: agentName ?? this.agentName,
-      transactionId: transactionId ?? this.transactionId,
-      amountUsd: amountUsd ?? this.amountUsd,
-      createdAt: createdAt ?? this.createdAt,
-      resolvedAt: resolvedAt ?? this.resolvedAt,
-      resolvedBy: resolvedBy ?? this.resolvedBy,
-      resolution: resolution ?? this.resolution,
-      metadata: metadata ?? this.metadata,
-    );
   }
 }

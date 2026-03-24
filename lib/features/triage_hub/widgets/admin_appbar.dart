@@ -28,28 +28,40 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
         border: Border(
             bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16), // Reduced padding
       child: Row(
         children: [
-          Expanded(
-            child: Text(widget.title,
-                style: const TextStyle(
-                    color: AdminColors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600)),
+          // Use Flexible to prevent the title from pushing everything off screen
+          Flexible(
+            child: Text(
+              widget.title,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: AdminColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600),
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           _EnvironmentBadge(
             environment: currentEnv,
             onChanged: (env) => ref
                 .read(currentEnvironmentProvider.notifier)
                 .setEnvironment(env),
           ),
-          const SizedBox(width: 16),
-          _TenantSelector(
-            currentApp: currentApp,
-            onChanged: (tenant) =>
-                ref.read(currentAppProvider.notifier).setApp(tenant),
+          const SizedBox(width: 8),
+          // Wrapped in Flexible so the toggle shrinks on smaller windows
+          Flexible(
+            child: _TenantSelector(
+              currentApp: currentApp,
+              onChanged: (tenant) =>
+                  ref.read(currentAppProvider.notifier).setApp(tenant),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined, size: 20),
+            onPressed: () {},
           ),
         ],
       ),
@@ -60,12 +72,10 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
 class _EnvironmentBadge extends StatelessWidget {
   final AppEnvironment environment;
   final Function(AppEnvironment) onChanged;
-
   const _EnvironmentBadge({required this.environment, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Exhaustive switch ensures a Color is always returned
     final Color badgeColor = switch (environment) {
       AppEnvironment.prod => AdminColors.emeraldGreen,
       AppEnvironment.staging => AdminColors.statusWarning,
@@ -76,28 +86,21 @@ class _EnvironmentBadge extends StatelessWidget {
       initialValue: environment,
       onSelected: onChanged,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: badgeColor.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: badgeColor.withOpacity(0.3)),
+          color: badgeColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: badgeColor.withOpacity(0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-                width: 8,
-                height: 8,
-                decoration:
-                    BoxDecoration(color: badgeColor, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
             Text(environment.label,
                 style: TextStyle(
                     color: badgeColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, color: badgeColor, size: 16),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold)),
+            const Icon(Icons.arrow_drop_down, size: 14),
           ],
         ),
       ),
@@ -111,14 +114,22 @@ class _EnvironmentBadge extends StatelessWidget {
 class _TenantSelector extends StatelessWidget {
   final AppTenant currentApp;
   final Function(AppTenant) onChanged;
-
   const _TenantSelector({required this.currentApp, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return SegmentedButton<AppTenant>(
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        textStyle: const TextStyle(fontSize: 11),
+      ),
       segments: AppTenant.values
-          .map((t) => ButtonSegment(value: t, label: Text(t.displayName)))
+          .map((t) => ButtonSegment(
+                value: t,
+                label: Text(t.displayName.substring(0, 4)), // Compact labels
+              ))
           .toList(),
       selected: {currentApp},
       onSelectionChanged: (set) => onChanged(set.first),

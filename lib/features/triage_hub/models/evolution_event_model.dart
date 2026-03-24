@@ -23,7 +23,7 @@ class EvolutionEventModel {
   final String agentName;
   final DateTime timestamp;
   final bool isAutonomous;
-  final String? triggeredBy; // Added to resolve lint error
+  final String? triggeredBy;
 
   const EvolutionEventModel({
     required this.id,
@@ -38,7 +38,10 @@ class EvolutionEventModel {
 
   /// Factory to map Firestore 'evolution_timeline' documents to UI model
   factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final rawData = doc.data() as Map?;
+    final data = rawData != null
+        ? Map<String, dynamic>.from(rawData)
+        : <String, dynamic>{};
 
     final typeStr = data['type']?.toString() ?? 'SYSTEM_EVOLVED';
     EvolutionEventType type = EvolutionEventType.systemEvolved;
@@ -51,17 +54,23 @@ class EvolutionEventModel {
     if (typeStr.contains('HUMAN_OVERRIDE'))
       type = EvolutionEventType.humanOverride;
 
+    DateTime parsedDate = DateTime.now();
+    final rawTs = data['timestamp'];
+    if (rawTs is Timestamp) {
+      parsedDate = rawTs.toDate();
+    } else if (rawTs is String) {
+      parsedDate = DateTime.tryParse(rawTs) ?? DateTime.now();
+    }
+
     return EvolutionEventModel(
       id: doc.id,
       type: type,
       title: typeStr.replaceAll('_', ' '),
       description: data['details'] ?? 'System event recorded.',
       agentName: data['agentId'] ?? data['source'] ?? 'Core Engine',
-      timestamp: (data['timestamp'] is Timestamp)
-          ? (data['timestamp'] as Timestamp).toDate()
-          : DateTime.tryParse(data['timestamp'] ?? '') ?? DateTime.now(),
+      timestamp: parsedDate,
       isAutonomous: data['isAutonomous'] ?? true,
-      triggeredBy: data['triggeredBy'], // Mapped from Firestore
+      triggeredBy: data['triggeredBy'],
     );
   }
 

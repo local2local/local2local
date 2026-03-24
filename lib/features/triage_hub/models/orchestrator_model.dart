@@ -1,44 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Orchestrator Agent Status
-enum OrchestratorStatus {
-  online('Online', 'Operating normally'),
-  degraded('Degraded', 'Performance issues detected'),
-  paused('Paused', 'Manually paused by admin'),
-  offline('Offline', 'Not responding'),
-  rollback('Rollback', 'Rolling back to previous version');
+enum OrchestratorStatus { online, degraded, paused, offline, rollback }
 
-  const OrchestratorStatus(this.label, this.description);
-  final String label;
-  final String description;
-}
-
-/// The 7 "Brain" Orchestrator Agents
 enum OrchestratorType {
-  compliance('Compliance', 'AGLC & regulatory enforcement'),
-  finance('Finance', 'Payouts, invoicing, fraud detection'),
-  logistics('Logistics', 'Route optimization, carrier dispatch'),
-  talent('Talent', 'Worker matching & scheduling'),
-  customer('Customer', 'Support, escalation handling'),
-  inventory('Inventory', 'Stock management & forecasting'),
-  analytics('Analytics', 'Reporting & insights generation');
+  compliance('Compliance'),
+  finance('Finance'),
+  logistics('Logistics'),
+  talent('Talent'),
+  customer('Customer'),
+  inventory('Inventory'),
+  analytics('Analytics');
 
-  const OrchestratorType(this.label, this.description);
+  const OrchestratorType(this.label);
   final String label;
-  final String description;
 }
 
 class OrchestratorModel {
-  final String id;
+  final String id, version;
   final OrchestratorType type;
   final OrchestratorStatus status;
   final double efficacyScore;
   final int latencyMs;
-  final int currentBacklog;
-  final int processedToday;
-  final int errorsToday;
-  final String version;
-  final DateTime lastHeartbeat;
 
   const OrchestratorModel({
     required this.id,
@@ -46,57 +28,45 @@ class OrchestratorModel {
     required this.status,
     required this.efficacyScore,
     required this.latencyMs,
-    required this.currentBacklog,
-    required this.processedToday,
-    required this.errorsToday,
     required this.version,
-    required this.lastHeartbeat,
   });
 
-  /// Factory to map Firestore 'agent_registry' documents to UI model
   factory OrchestratorModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final statusData = data['status'] as Map<String, dynamic>? ?? {};
-    final deployData = data['deployment'] as Map<String, dynamic>? ?? {};
+    final dynamic data = doc.data();
+    final dynamic statusData = data['status'] ?? {};
+    final dynamic deployData = data['deployment'] ?? {};
 
-    // Map Domain/Type
-    final domain = data['domain']?.toString().toUpperCase() ?? '';
-    OrchestratorType type = OrchestratorType.compliance;
-    if (domain.contains('FINANCE')) type = OrchestratorType.finance;
-    if (domain.contains('OPS')) type = OrchestratorType.logistics;
-    if (domain.contains('INSIGHTS')) type = OrchestratorType.analytics;
-
-    // Map Health to Status
-    final health = statusData['health']?.toString().toLowerCase() ?? 'green';
-    OrchestratorStatus status = (statusData['mode'] == 'paused')
-        ? OrchestratorStatus.paused
-        : (health == 'red')
-            ? OrchestratorStatus.offline
-            : OrchestratorStatus.online;
+    final String domain = (data['domain'] ?? '').toString().toUpperCase();
+    final String health =
+        (statusData['health'] ?? 'green').toString().toLowerCase();
 
     return OrchestratorModel(
       id: doc.id,
-      type: type,
-      status: status,
-      efficacyScore: (statusData['current_efficacy'] ?? 100).toDouble(),
-      latencyMs: (statusData['latency_ms'] ?? 0).toInt(),
-      currentBacklog: (statusData['backlog_count'] ?? 0).toInt(),
-      processedToday: (statusData['processed_today'] ?? 0).toInt(),
-      errorsToday: (statusData['errors_today'] ?? 0).toInt(),
-      version: deployData['version'] ?? 'v2.0.0',
-      lastHeartbeat: (statusData['last_heartbeat'] is Timestamp)
-          ? (statusData['last_heartbeat'] as Timestamp).toDate()
-          : DateTime.tryParse(statusData['last_heartbeat'] ?? '') ??
-              DateTime.now(),
+      version: (deployData['version'] ?? 'v2.0').toString(),
+      efficacyScore: (statusData['current_efficacy'] is num)
+          ? (statusData['current_efficacy'] as num).toDouble()
+          : 100.0,
+      latencyMs: (statusData['latency_ms'] is num)
+          ? (statusData['latency_ms'] as num).toInt()
+          : 0,
+      type: domain.contains('FINANCE')
+          ? OrchestratorType.finance
+          : domain.contains('OPS')
+              ? OrchestratorType.logistics
+              : OrchestratorType.compliance,
+      status: statusData['mode'] == 'paused'
+          ? OrchestratorStatus.paused
+          : health == 'red'
+              ? OrchestratorStatus.offline
+              : OrchestratorStatus.online,
     );
   }
 
   bool get isHealthy =>
       status == OrchestratorStatus.online && efficacyScore >= 80;
+  String get efficacyDisplay => '${efficacyScore.toStringAsFixed(1)}%';
+  String get latencyDisplay => '${latencyMs}ms';
   bool get isWarning => efficacyScore >= 60 && efficacyScore < 80;
   bool get isCritical =>
       efficacyScore < 60 || status == OrchestratorStatus.offline;
-
-  String get efficacyDisplay => '${efficacyScore.toStringAsFixed(1)}%';
-  String get latencyDisplay => '${latencyMs}ms';
 }
