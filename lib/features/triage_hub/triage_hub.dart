@@ -17,7 +17,7 @@ export 'widgets/admin_sidebar.dart';
 export 'widgets/admin_appbar.dart';
 
 // Pages
-export 'pages/admin_shell.dart';
+export 'pages/admin_hub_page.dart';
 export 'pages/triage_queue_page.dart';
 export 'pages/health_grid_page.dart';
 export 'pages/fleet_map_page.dart';

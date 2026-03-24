@@ -4,9 +4,6 @@ import 'package:local2local/features/triage_hub/models/evolution_event_model.dar
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-/// Evolution Timeline Page - The "Diary" of system growth
-/// Displays chronological events of system evolution and human overrides
-/// Listens to: artifacts/{appId}/public/data/evolution_timeline
 class EvolutionTimelinePage extends ConsumerWidget {
   const EvolutionTimelinePage({super.key});
 
@@ -23,9 +20,11 @@ class EvolutionTimelinePage extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: AdminColors.rubyRed, size: 48),
+            const Icon(Icons.error_outline,
+                color: AdminColors.rubyRed, size: 48),
             const SizedBox(height: 16),
-            Text('Error loading timeline', style: TextStyle(color: AdminColors.textSecondary)),
+            Text('Error loading timeline',
+                style: TextStyle(color: AdminColors.textSecondary)),
           ],
         ),
       ),
@@ -40,11 +39,9 @@ class _TimelineContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sort events by timestamp (newest first)
     final sortedEvents = List<EvolutionEventModel>.from(events)
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    // Group events by date
     final Map<String, List<EvolutionEventModel>> groupedEvents = {};
     for (final event in sortedEvents) {
       final dateKey = _formatDateKey(event.timestamp);
@@ -53,7 +50,6 @@ class _TimelineContent extends StatelessWidget {
 
     return CustomScrollView(
       slivers: [
-        // Header
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -63,7 +59,6 @@ class _TimelineContent extends StatelessWidget {
             ),
           ),
         ),
-        // Timeline
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           sliver: SliverList(
@@ -103,7 +98,6 @@ class _TimelineContent extends StatelessWidget {
   }
 }
 
-/// Timeline header with stats
 class _TimelineHeader extends StatelessWidget {
   final int totalEvents;
   final int autonomousCount;
@@ -137,11 +131,11 @@ class _TimelineHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 20),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Evolution Timeline',
                   style: TextStyle(
                     color: AdminColors.textPrimary,
@@ -149,92 +143,21 @@ class _TimelineHeader extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
-                const Text(
+                SizedBox(height: 4),
+                Text(
                   'The chronological diary of system growth and human interventions',
-                  style: TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+                  style:
+                      TextStyle(color: AdminColors.textSecondary, fontSize: 14),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 24),
-          _StatBadge(
-            label: 'Total Events',
-            value: totalEvents.toString(),
-            icon: Icons.history,
-            color: AdminColors.statusInfo,
-          ),
-          const SizedBox(width: 16),
-          _StatBadge(
-            label: 'Autonomous',
-            value: autonomousCount.toString(),
-            icon: Icons.smart_toy_outlined,
-            color: AdminColors.emeraldGreen,
-          ),
-          const SizedBox(width: 16),
-          _StatBadge(
-            label: 'Human',
-            value: (totalEvents - autonomousCount).toString(),
-            icon: Icons.person_outline,
-            color: AdminColors.statusWarning,
-          ),
         ],
       ),
     );
   }
 }
 
-/// Stat badge widget
-class _StatBadge extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _StatBadge({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(color: AdminColors.textMuted, fontSize: 10),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Date section with events
 class _DateSection extends StatelessWidget {
   final String dateLabel;
   final List<EvolutionEventModel> events;
@@ -252,7 +175,6 @@ class _DateSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!isFirst) const SizedBox(height: 24),
-        // Date header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
@@ -269,13 +191,10 @@ class _DateSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // Events
         ...events.asMap().entries.map((entry) {
-          final index = entry.key;
-          final event = entry.value;
           return _TimelineEventCard(
-            event: event,
-            isLast: index == events.length - 1,
+            event: entry.value,
+            isLast: entry.key == events.length - 1,
           );
         }),
       ],
@@ -283,7 +202,6 @@ class _DateSection extends StatelessWidget {
   }
 }
 
-/// Individual timeline event card
 class _TimelineEventCard extends StatelessWidget {
   final EvolutionEventModel event;
   final bool isLast;
@@ -311,6 +229,8 @@ class _TimelineEventCard extends StatelessWidget {
         return Icons.lightbulb_rounded;
       case EvolutionEventType.systemEvolved:
         return Icons.auto_awesome_rounded;
+      case EvolutionEventType.criticalIntervention:
+        return Icons.warning_amber_rounded; // FIX: Added missing case
     }
   }
 
@@ -321,15 +241,13 @@ class _TimelineEventCard extends StatelessWidget {
       case EvolutionEventType.ruleAdded:
         return AdminColors.emeraldGreen;
       case EvolutionEventType.ruleModified:
-        return AdminColors.statusWarning;
       case EvolutionEventType.thresholdChanged:
-        return AdminColors.statusWarning;
-      case EvolutionEventType.rollback:
-        return AdminColors.rubyRed;
       case EvolutionEventType.humanOverride:
         return AdminColors.statusWarning;
+      case EvolutionEventType.rollback:
+      case EvolutionEventType.criticalIntervention: // FIX: Added missing case
+        return AdminColors.rubyRed;
       case EvolutionEventType.patternLearned:
-        return AdminColors.emeraldGreen;
       case EvolutionEventType.systemEvolved:
         return AdminColors.emeraldGreen;
     }
@@ -341,7 +259,6 @@ class _TimelineEventCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline connector
           SizedBox(
             width: 40,
             child: Column(
@@ -367,7 +284,6 @@ class _TimelineEventCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Event card
           Expanded(
             child: Container(
               margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
@@ -380,12 +296,11 @@ class _TimelineEventCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
                   Row(
                     children: [
-                      // Type badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: typeColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
@@ -393,80 +308,68 @@ class _TimelineEventCard extends StatelessWidget {
                         child: Text(
                           event.type.label,
                           style: TextStyle(
-                            color: typeColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
+                              color: typeColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Autonomous badge
                       if (event.isAutonomous)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                            color: AdminColors.emeraldGreen
+                                .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.smart_toy_outlined, size: 12, color: AdminColors.emeraldGreen),
+                              Icon(Icons.smart_toy_outlined,
+                                  size: 12, color: AdminColors.emeraldGreen),
                               SizedBox(width: 4),
-                              Text(
-                                'AUTONOMOUS',
-                                style: TextStyle(
-                                  color: AdminColors.emeraldGreen,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
+                              Text('AUTONOMOUS',
+                                  style: TextStyle(
+                                      color: AdminColors.emeraldGreen,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700)),
                             ],
                           ),
                         ),
                       const Spacer(),
-                      // Time
-                      Text(
-                        event.timeDisplay,
-                        style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
-                      ),
+                      Text(event.timeDisplay,
+                          style: const TextStyle(
+                              color: AdminColors.textMuted, fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Title
-                  Text(
-                    event.title,
-                    style: const TextStyle(
-                      color: AdminColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  Text(event.title,
+                      style: const TextStyle(
+                          color: AdminColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
-                  // Description
-                  Text(
-                    event.description,
-                    style: const TextStyle(color: AdminColors.textSecondary, fontSize: 13),
-                  ),
+                  Text(event.description,
+                      style: const TextStyle(
+                          color: AdminColors.textSecondary, fontSize: 13)),
                   const SizedBox(height: 12),
-                  // Footer
                   Row(
                     children: [
-                      const Icon(Icons.smart_toy_outlined, size: 14, color: AdminColors.textMuted),
+                      const Icon(Icons.smart_toy_outlined,
+                          size: 14, color: AdminColors.textMuted),
                       const SizedBox(width: 6),
-                      Text(
-                        event.agentName,
-                        style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
-                      ),
+                      Text(event.agentName,
+                          style: const TextStyle(
+                              color: AdminColors.textMuted, fontSize: 11)),
                       if (event.triggeredBy != null) ...[
                         const SizedBox(width: 16),
-                        const Icon(Icons.person_outline, size: 14, color: AdminColors.textMuted),
+                        const Icon(Icons.person_outline,
+                            size: 14, color: AdminColors.textMuted),
                         const SizedBox(width: 6),
-                        Text(
-                          event.triggeredBy!,
-                          style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
-                        ),
+                        Text(event.triggeredBy!,
+                            style: const TextStyle(
+                                color: AdminColors.textMuted, fontSize: 11)),
                       ],
                     ],
                   ),
