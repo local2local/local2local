@@ -16,7 +16,7 @@ enum OrchestratorType {
 }
 
 class OrchestratorModel {
-  final String id, version;
+  final String id, version, domain; // Added domain
   final OrchestratorType type;
   final OrchestratorStatus status;
   final double efficacyScore;
@@ -29,6 +29,7 @@ class OrchestratorModel {
     required this.efficacyScore,
     required this.latencyMs,
     required this.version,
+    required this.domain, // Added to constructor
   });
 
   factory OrchestratorModel.fromFirestore(DocumentSnapshot doc) {
@@ -36,12 +37,14 @@ class OrchestratorModel {
     final dynamic statusData = data['status'] ?? {};
     final dynamic deployData = data['deployment'] ?? {};
 
-    final String domain = (data['domain'] ?? '').toString().toUpperCase();
+    final String rawDomain =
+        (data['domain'] ?? 'GENERAL').toString().toUpperCase();
     final String health =
         (statusData['health'] ?? 'green').toString().toLowerCase();
 
     return OrchestratorModel(
       id: doc.id,
+      domain: rawDomain,
       version: (deployData['version'] ?? 'v2.0').toString(),
       efficacyScore: (statusData['current_efficacy'] is num)
           ? (statusData['current_efficacy'] as num).toDouble()
@@ -49,9 +52,9 @@ class OrchestratorModel {
       latencyMs: (statusData['latency_ms'] is num)
           ? (statusData['latency_ms'] as num).toInt()
           : 0,
-      type: domain.contains('FINANCE')
+      type: rawDomain.contains('FINANCE')
           ? OrchestratorType.finance
-          : domain.contains('OPS')
+          : rawDomain.contains('OPS')
               ? OrchestratorType.logistics
               : OrchestratorType.compliance,
       status: statusData['mode'] == 'paused'

@@ -9,368 +9,123 @@ class EvolutionTimelinePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final eventsAsync = ref.watch(evolutionTimelineProvider);
+    final timelineAsync = ref.watch(evolutionTimelineProvider);
 
-    return eventsAsync.when(
-      data: (events) => _TimelineContent(events: events),
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
-      ),
-      error: (e, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline,
-                color: AdminColors.rubyRed, size: 48),
-            const SizedBox(height: 16),
-            Text('Error loading timeline',
-                style: TextStyle(color: AdminColors.textSecondary)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TimelineContent extends StatelessWidget {
-  final List<EvolutionEventModel> events;
-
-  const _TimelineContent({required this.events});
-
-  @override
-  Widget build(BuildContext context) {
-    final sortedEvents = List<EvolutionEventModel>.from(events)
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-    final Map<String, List<EvolutionEventModel>> groupedEvents = {};
-    for (final event in sortedEvents) {
-      final dateKey = _formatDateKey(event.timestamp);
-      groupedEvents.putIfAbsent(dateKey, () => []).add(event);
-    }
-
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: _TimelineHeader(
-              totalEvents: events.length,
-              autonomousCount: events.where((e) => e.isAutonomous).length,
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final entries = groupedEvents.entries.toList();
-                if (index >= entries.length) return null;
-
-                final entry = entries[index];
-                return _DateSection(
-                  dateLabel: entry.key,
-                  events: entry.value,
-                  isFirst: index == 0,
-                );
-              },
-              childCount: groupedEvents.length,
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-      ],
-    );
-  }
-
-  String _formatDateKey(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final eventDate = DateTime(date.year, date.month, date.day);
-
-    if (eventDate == today) {
-      return 'Today';
-    } else if (eventDate == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday';
-    } else {
-      return '${date.month}/${date.day}/${date.year}';
-    }
-  }
-}
-
-class _TimelineHeader extends StatelessWidget {
-  final int totalEvents;
-  final int autonomousCount;
-
-  const _TimelineHeader({
-    required this.totalEvents,
-    required this.autonomousCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AdminColors.slateMedium,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.borderDefault),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.auto_graph_rounded,
-              color: AdminColors.emeraldGreen,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 20),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Evolution Timeline',
-                  style: TextStyle(
-                    color: AdminColors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'The chronological diary of system growth and human interventions',
-                  style:
-                      TextStyle(color: AdminColors.textSecondary, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DateSection extends StatelessWidget {
-  final String dateLabel;
-  final List<EvolutionEventModel> events;
-  final bool isFirst;
-
-  const _DateSection({
-    required this.dateLabel,
-    required this.events,
-    required this.isFirst,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isFirst) const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: AdminColors.slateLight,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            dateLabel,
-            style: const TextStyle(
-              color: AdminColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        ...events.asMap().entries.map((entry) {
-          return _TimelineEventCard(
-            event: entry.value,
-            isLast: entry.key == events.length - 1,
+    return timelineAsync.when(
+      data: (events) {
+        if (events.isEmpty) {
+          return const Center(
+            child: Text(
+                "No evolution events recorded yet.\nSystem is in baseline state.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AdminColors.textMuted)),
           );
-        }),
-      ],
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: events.length,
+          itemBuilder: (context, index) => _TimelineItem(
+              event: events[index],
+              isFirst: index == 0,
+              isLast: index == events.length - 1),
+        );
+      },
+      loading: () => const Center(
+          child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+      error: (e, _) => Center(
+          child: Text('Error: $e',
+              style: const TextStyle(color: AdminColors.textSecondary))),
     );
   }
 }
 
-class _TimelineEventCard extends StatelessWidget {
+class _TimelineItem extends StatelessWidget {
   final EvolutionEventModel event;
+  final bool isFirst;
   final bool isLast;
-
-  const _TimelineEventCard({
-    required this.event,
-    required this.isLast,
-  });
-
-  IconData get typeIcon {
-    switch (event.type) {
-      case EvolutionEventType.agentDeployed:
-        return Icons.rocket_launch_rounded;
-      case EvolutionEventType.ruleAdded:
-        return Icons.add_circle_rounded;
-      case EvolutionEventType.ruleModified:
-        return Icons.edit_rounded;
-      case EvolutionEventType.thresholdChanged:
-        return Icons.tune_rounded;
-      case EvolutionEventType.rollback:
-        return Icons.history_rounded;
-      case EvolutionEventType.humanOverride:
-        return Icons.person_rounded;
-      case EvolutionEventType.patternLearned:
-        return Icons.lightbulb_rounded;
-      case EvolutionEventType.systemEvolved:
-        return Icons.auto_awesome_rounded;
-      case EvolutionEventType.criticalIntervention:
-        return Icons.warning_amber_rounded; // FIX: Added missing case
-    }
-  }
-
-  Color get typeColor {
-    switch (event.type) {
-      case EvolutionEventType.agentDeployed:
-        return AdminColors.statusInfo;
-      case EvolutionEventType.ruleAdded:
-        return AdminColors.emeraldGreen;
-      case EvolutionEventType.ruleModified:
-      case EvolutionEventType.thresholdChanged:
-      case EvolutionEventType.humanOverride:
-        return AdminColors.statusWarning;
-      case EvolutionEventType.rollback:
-      case EvolutionEventType.criticalIntervention: // FIX: Added missing case
-        return AdminColors.rubyRed;
-      case EvolutionEventType.patternLearned:
-      case EvolutionEventType.systemEvolved:
-        return AdminColors.emeraldGreen;
-    }
-  }
+  const _TimelineItem(
+      {required this.event, required this.isFirst, required this.isLast});
 
   @override
   Widget build(BuildContext context) {
+    final bool isCritical =
+        event.type == EvolutionEventType.criticalIntervention;
+    final Color accentColor =
+        isCritical ? AdminColors.rubyRed : AdminColors.emeraldGreen;
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 40,
-            child: Column(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: typeColor.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(typeIcon, color: typeColor, size: 16),
+          // Timeline Line & Dot
+          Column(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  color: isCritical ? accentColor : AdminColors.slateDarkest,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: accentColor, width: 2),
+                  boxShadow: isCritical
+                      ? [
+                          BoxShadow(
+                              color: accentColor.withOpacity(0.3),
+                              blurRadius: 8)
+                        ]
+                      : null,
                 ),
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      color: AdminColors.borderDefault,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AdminColors.slateMedium,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AdminColors.borderDefault),
               ),
+              if (!isLast)
+                Expanded(
+                    child:
+                        Container(width: 2, color: AdminColors.borderDefault)),
+            ],
+          ),
+          const SizedBox(width: 20),
+          // Content Card
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: typeColor.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          event.type.label,
+                      Text(event.title.toUpperCase(),
                           style: TextStyle(
-                              color: typeColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (event.isAutonomous)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AdminColors.emeraldGreen
-                                .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.smart_toy_outlined,
-                                  size: 12, color: AdminColors.emeraldGreen),
-                              SizedBox(width: 4),
-                              Text('AUTONOMOUS',
-                                  style: TextStyle(
-                                      color: AdminColors.emeraldGreen,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                      const Spacer(),
+                              color: isCritical
+                                  ? AdminColors.rubyRed
+                                  : AdminColors.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              letterSpacing: 1)),
                       Text(event.timeDisplay,
                           style: const TextStyle(
                               color: AdminColors.textMuted, fontSize: 11)),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(event.title,
-                      style: const TextStyle(
-                          color: AdminColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Text(event.description,
                       style: const TextStyle(
-                          color: AdminColors.textSecondary, fontSize: 13)),
+                          color: AdminColors.textSecondary,
+                          fontSize: 13,
+                          height: 1.4)),
                   const SizedBox(height: 12),
+                  // Provenance Metadata
                   Row(
                     children: [
-                      const Icon(Icons.smart_toy_outlined,
-                          size: 14, color: AdminColors.textMuted),
-                      const SizedBox(width: 6),
-                      Text(event.agentName,
-                          style: const TextStyle(
-                              color: AdminColors.textMuted, fontSize: 11)),
-                      if (event.triggeredBy != null) ...[
-                        const SizedBox(width: 16),
-                        const Icon(Icons.person_outline,
-                            size: 14, color: AdminColors.textMuted),
-                        const SizedBox(width: 6),
-                        Text(event.triggeredBy!,
-                            style: const TextStyle(
-                                color: AdminColors.textMuted, fontSize: 11)),
-                      ],
+                      _MetaBadge(
+                          label: "AGENT: ${event.agentName}",
+                          color: AdminColors.slateLight),
+                      const SizedBox(width: 8),
+                      if (event.isAutonomous)
+                        _MetaBadge(
+                            label: "AUTONOMOUS",
+                            color: AdminColors.emeraldGreen.withOpacity(0.1),
+                            textColor: AdminColors.emeraldGreen),
                     ],
                   ),
                 ],
@@ -379,6 +134,28 @@ class _TimelineEventCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MetaBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color? textColor;
+  const _MetaBadge({required this.label, required this.color, this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration:
+          BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
+      child: Text(label,
+          style: TextStyle(
+              color: textColor ?? AdminColors.textMuted,
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5)),
     );
   }
 }

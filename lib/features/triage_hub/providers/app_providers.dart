@@ -1,41 +1,43 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/models/intervention_model.dart';
-import 'package:local2local/features/triage_hub/models/orchestrator_model.dart';
-import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import '../models/intervention_model.dart';
+import '../models/orchestrator_model.dart';
+import '../models/evolution_event_model.dart';
+import '../models/logistics_job_model.dart';
 
+/// Available app tenants (App IDs)
 enum AppTenant {
   kaskflow('local2local-kaskflow', 'Kaskflow'),
   moonlitely('local2local-moonlitely', 'Moonlitely');
 
   const AppTenant(this.id, this.displayName);
-  final String id, displayName;
+  final String id;
+  final String displayName;
 }
 
+/// Environment types
 enum AppEnvironment {
   prod('PROD', 'Production'),
   staging('STAGING', 'Staging'),
   dev('DEV', 'Development');
 
   const AppEnvironment(this.label, this.displayName);
-  final String label, displayName;
+  final String label;
+  final String displayName;
 }
 
-/// Notifier for Tenant Selection
+/// Notifier for the currently selected app tenant
 class CurrentAppNotifier extends Notifier<AppTenant> {
   @override
   AppTenant build() => AppTenant.kaskflow;
-  void setApp(AppTenant tenant) {
-    print('DEBUG: Switching Tenant to: ${tenant.id}');
-    state = tenant;
-  }
+  void setApp(AppTenant tenant) => state = tenant;
 }
 
 final currentAppProvider =
     NotifierProvider<CurrentAppNotifier, AppTenant>(CurrentAppNotifier.new);
 
-/// Notifier for Navigation
+/// Notifier for Navigation Index
 class NavIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -57,7 +59,7 @@ final selectedInterventionProvider =
   SelectedInterventionNotifier.new,
 );
 
-/// Notifier for Environment
+/// Notifier for Environment Selection
 class CurrentEnvironmentNotifier extends Notifier<AppEnvironment> {
   @override
   AppEnvironment build() => AppEnvironment.dev;
@@ -69,7 +71,7 @@ final currentEnvironmentProvider =
   CurrentEnvironmentNotifier.new,
 );
 
-/// Notifier for Global Search
+/// Notifier for Search Query
 class SearchQueryNotifier extends Notifier<String> {
   @override
   String build() => '';
@@ -79,7 +81,7 @@ class SearchQueryNotifier extends Notifier<String> {
 final searchQueryProvider =
     NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
 
-// ============= LIVE FIRESTORE PROVIDERS =============
+// ============= LIVE FIRESTORE PROVIDERS (Hardened with Converters) =============
 
 final interventionsProvider = StreamProvider<List<InterventionModel>>((ref) {
   final currentApp = ref.watch(currentAppProvider);
@@ -136,15 +138,34 @@ final evolutionTimelineProvider =
           snapshot.docs.map((doc) => doc.data())));
 });
 
+final fleetProvider = StreamProvider<List<LogisticsJobModel>>((ref) {
+  final currentApp = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts')
+      .doc(currentApp.id)
+      .collection('public')
+      .doc('data')
+      .collection('logistics_jobs')
+      .withConverter<LogisticsJobModel>(
+        fromFirestore: (snapshot, _) =>
+            LogisticsJobModel.fromFirestore(snapshot),
+        toFirestore: (model, _) => {},
+      )
+      .snapshots()
+      .map((snapshot) =>
+          List<LogisticsJobModel>.from(snapshot.docs.map((doc) => doc.data())));
+});
+
+/// Optimized provider for active intervention count badge
 final activeInterventionCountProvider = Provider<AsyncValue<int>>((ref) {
   final interventionsAsync = ref.watch(interventionsProvider);
   return interventionsAsync
       .whenData((list) => list.where((i) => i.isActive).length);
 });
 
-// ============= LIVE SERVICES =============
+// ============= LIVE SERVICES (The "Hands") =============
 
-/// Service to handle manual agent overrides
+/// Service to handle manual agent overrides from the UI
 class OrchestratorService {
   static final _db = FirebaseFirestore.instance;
 
@@ -197,9 +218,12 @@ class OrchestratorService {
 class InterventionService {
   static final _db = FirebaseFirestore.instance;
 
+  /// Resolves an intervention and notifies the agent bus to unblock the backend task
   static Future<void> resolveIntervention(
       String appId, String interventionId, String macroId) async {
     final batch = _db.batch();
+
+    // 1. Mark status as resolved
     final intRef = _db
         .collection('artifacts')
         .doc(appId)
@@ -207,6 +231,7 @@ class InterventionService {
         .doc('data')
         .collection('interventions')
         .doc(interventionId);
+
     batch.update(intRef, {
       'status': 'resolved',
       'resolution': macroId,
@@ -214,6 +239,7 @@ class InterventionService {
       'resolvedBy': 'SUPER_ADMIN'
     });
 
+    // 2. Post a RESPONSE message to the agent bus to notify the waiting Orchestrator
     final busRef = _db
         .collection('artifacts')
         .doc(appId)
@@ -221,6 +247,7 @@ class InterventionService {
         .doc('data')
         .collection('agent_bus')
         .doc();
+
     batch.set(busRef, {
       'correlation_id': 'resolve-$interventionId',
       'status': 'pending',
