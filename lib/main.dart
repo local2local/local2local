@@ -9,8 +9,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Initialize Firebase with explicit options (Required for Flutter Web)
-  // You can find these values in your Firebase Console:
-  // Project Settings > General > Your Apps > Firebase SDK snippet > Config
+  // These are production/development keys for the local2local-dev project
   await Firebase.initializeApp(
     options: const FirebaseOptions(
         apiKey: "AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8",
@@ -25,9 +24,10 @@ void main() async {
   // 2. Sign in Anonymously to clear Firestore permission gates
   try {
     await FirebaseAuth.instance.signInAnonymously();
-    print("DEBUG: Authenticated Anonymously");
+    // FIX: debugPrint instead of print
+    debugPrint("DEBUG: Authenticated Anonymously");
   } catch (e) {
-    print("DEBUG: Auth Error: $e");
+    debugPrint("DEBUG: Auth Error: $e");
   }
 
   runApp(const ProviderScope(child: MyApp()));

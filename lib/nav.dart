@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local2local/features/triage_hub/pages/admin_hub_page.dart';
 
@@ -9,23 +8,15 @@ import 'package:local2local/features/triage_hub/pages/admin_hub_page.dart';
 /// - Deep linking support (web URLs, app links)
 /// - Easy route parameters
 /// - Navigation guards and redirects
+///
 class AppRouter {
-  static final GoRouter router = GoRouter(
-    initialLocation: AppRoutes.adminHub,
+  static final router = GoRouter(
+    initialLocation: '/',
     routes: [
       GoRoute(
-        path: AppRoutes.adminHub,
-        name: 'admin-hub',
-        pageBuilder: (context, state) => const NoTransitionPage(
-          child: AdminHubPage(),
-        ),
+        path: '/',
+        builder: (context, state) => const AdminHubPage(),
       ),
     ],
   );
-}
-
-/// Route path constants
-/// Use these instead of hard-coding route strings
-class AppRoutes {
-  static const String adminHub = '/';
 }

@@ -36,23 +36,25 @@ class EvolutionEventModel {
     this.triggeredBy,
   });
 
-  /// Factory to map Firestore 'evolution_timeline' documents to UI model
   factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
-    final rawData = doc.data() as Map?;
-    final data = rawData != null
-        ? Map<String, dynamic>.from(rawData)
-        : <String, dynamic>{};
+    final dynamic data = doc.data();
 
     final typeStr = data['type']?.toString() ?? 'SYSTEM_EVOLVED';
     EvolutionEventType type = EvolutionEventType.systemEvolved;
-    if (typeStr.contains('INTERVENTION'))
+
+    // FIX: Statements in an if are now enclosed in blocks
+    if (typeStr.contains('INTERVENTION')) {
       type = EvolutionEventType.criticalIntervention;
-    if (typeStr.contains('VALIDATION_SUCCESS'))
+    }
+    if (typeStr.contains('VALIDATION_SUCCESS')) {
       type = EvolutionEventType.systemEvolved;
-    if (typeStr.contains('VALIDATION_FAILURE'))
+    }
+    if (typeStr.contains('VALIDATION_FAILURE')) {
       type = EvolutionEventType.rollback;
-    if (typeStr.contains('HUMAN_OVERRIDE'))
+    }
+    if (typeStr.contains('HUMAN_OVERRIDE')) {
       type = EvolutionEventType.humanOverride;
+    }
 
     DateTime parsedDate = DateTime.now();
     final rawTs = data['timestamp'];
@@ -77,9 +79,15 @@ class EvolutionEventModel {
   String get timeDisplay {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inMinutes < 1) {
+      return 'Just now';
+    }
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    }
+    if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    }
     return '${timestamp.month}/${timestamp.day}';
   }
 }

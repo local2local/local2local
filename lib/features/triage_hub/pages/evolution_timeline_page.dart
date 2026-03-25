@@ -57,7 +57,6 @@ class _TimelineItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline Line & Dot
           Column(
             children: [
               Container(
@@ -68,10 +67,11 @@ class _TimelineItem extends StatelessWidget {
                   color: isCritical ? accentColor : AdminColors.slateDarkest,
                   shape: BoxShape.circle,
                   border: Border.all(color: accentColor, width: 2),
+                  // FIX: withValues instead of withOpacity
                   boxShadow: isCritical
                       ? [
                           BoxShadow(
-                              color: accentColor.withOpacity(0.3),
+                              color: accentColor.withValues(alpha: 0.3),
                               blurRadius: 8)
                         ]
                       : null,
@@ -84,7 +84,6 @@ class _TimelineItem extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 20),
-          // Content Card
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 32),
@@ -114,7 +113,6 @@ class _TimelineItem extends StatelessWidget {
                           fontSize: 13,
                           height: 1.4)),
                   const SizedBox(height: 12),
-                  // Provenance Metadata
                   Row(
                     children: [
                       _MetaBadge(
@@ -122,9 +120,11 @@ class _TimelineItem extends StatelessWidget {
                           color: AdminColors.slateLight),
                       const SizedBox(width: 8),
                       if (event.isAutonomous)
+                        // FIX: withValues instead of withOpacity
                         _MetaBadge(
                             label: "AUTONOMOUS",
-                            color: AdminColors.emeraldGreen.withOpacity(0.1),
+                            color:
+                                AdminColors.emeraldGreen.withValues(alpha: 0.1),
                             textColor: AdminColors.emeraldGreen),
                     ],
                   ),

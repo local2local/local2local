@@ -43,7 +43,7 @@ class _HealthGridContent extends StatelessWidget {
         maxCrossAxisExtent: 400,
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
-        childAspectRatio: 1.15, // Slightly taller to accommodate the new badge
+        childAspectRatio: 1.15,
       ),
       itemCount: orchestrators.length,
       itemBuilder: (context, index) =>
@@ -78,9 +78,10 @@ class _OrchestratorCardState extends ConsumerState<OrchestratorCard> {
       decoration: BoxDecoration(
         color: AdminColors.slateMedium,
         borderRadius: BorderRadius.circular(16),
+        // FIX: withValues instead of withOpacity
         border: Border.all(
             color: orch.isCritical
-                ? AdminColors.rubyRed.withOpacity(0.3)
+                ? AdminColors.rubyRed.withValues(alpha: 0.3)
                 : AdminColors.borderDefault),
       ),
       child: Column(
@@ -101,7 +102,6 @@ class _OrchestratorCardState extends ConsumerState<OrchestratorCard> {
                             fontSize: 13,
                             letterSpacing: 0.5)),
                     const SizedBox(height: 4),
-                    // NEW: Domain Badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
@@ -180,7 +180,9 @@ class _OrchestratorCardState extends ConsumerState<OrchestratorCard> {
             appId, widget.orchestrator.id);
       }
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -236,7 +238,9 @@ class _PulsingLightState extends State<_PulsingLight>
         AnimationController(vsync: this, duration: const Duration(seconds: 2));
     _pulse = Tween<double>(begin: 0.4, end: 1.0)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-    if (!widget.isPaused) _controller.repeat(reverse: true);
+    if (!widget.isPaused) {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -267,12 +271,14 @@ class _PulsingLightState extends State<_PulsingLight>
         height: 12,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: baseColor.withOpacity(widget.isPaused ? 1.0 : _pulse.value),
+          // FIX: withValues instead of withOpacity
+          color:
+              baseColor.withValues(alpha: widget.isPaused ? 1.0 : _pulse.value),
           boxShadow: widget.isPaused
               ? null
               : [
                   BoxShadow(
-                      color: baseColor.withOpacity(0.5 * _pulse.value),
+                      color: baseColor.withValues(alpha: 0.5 * _pulse.value),
                       blurRadius: 10,
                       spreadRadius: 3 * _pulse.value)
                 ],

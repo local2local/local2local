@@ -28,10 +28,9 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
         border: Border(
             bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16), // Reduced padding
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          // Use Flexible to prevent the title from pushing everything off screen
           Flexible(
             child: Text(
               widget.title,
@@ -50,7 +49,6 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
                 .setEnvironment(env),
           ),
           const SizedBox(width: 8),
-          // Wrapped in Flexible so the toggle shrinks on smaller windows
           Flexible(
             child: _TenantSelector(
               currentApp: currentApp,
@@ -88,9 +86,10 @@ class _EnvironmentBadge extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: badgeColor.withOpacity(0.1),
+          // FIX: withValues instead of withOpacity
+          color: badgeColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: badgeColor.withOpacity(0.2)),
+          border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -128,7 +127,7 @@ class _TenantSelector extends StatelessWidget {
       segments: AppTenant.values
           .map((t) => ButtonSegment(
                 value: t,
-                label: Text(t.displayName.substring(0, 4)), // Compact labels
+                label: Text(t.displayName.substring(0, 4)),
               ))
           .toList(),
       selected: {currentApp},

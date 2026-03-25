@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+// REMOVED: unnecessary services.dart import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/models/intervention_model.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
@@ -87,8 +87,9 @@ class InterventionCard extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
+          // FIX: withValues instead of withOpacity
           color: isSelected
-              ? AdminColors.emeraldGreen.withOpacity(0.08)
+              ? AdminColors.emeraldGreen.withValues(alpha: 0.08)
               : AdminColors.slateMedium,
           border: Border.all(
               color: isSelected
@@ -151,7 +152,6 @@ class _InterventionContextPanelState
       color: AdminColors.slateDark,
       child: Column(
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -173,7 +173,6 @@ class _InterventionContextPanelState
               ],
             ),
           ),
-          // Scrollable Content
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(20),
@@ -247,7 +246,6 @@ class _InterventionContextPanelState
               ],
             ),
           ),
-          // Footer / Commit Button
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -310,12 +308,16 @@ class _InterventionContextPanelState
             content: Text('Error: $e'), backgroundColor: AdminColors.rubyRed));
       }
     } finally {
-      if (mounted) setState(() => _isCommitting = false);
+      if (mounted) {
+        setState(() => _isCommitting = false);
+      }
     }
   }
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 }
