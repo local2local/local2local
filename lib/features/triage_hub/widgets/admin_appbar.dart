@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/auth/providers/auth_provider.dart';
 
-class AdminAppBar extends ConsumerStatefulWidget implements PreferredSizeWidget {
+class AdminAppBar extends ConsumerStatefulWidget
+    implements PreferredSizeWidget {
   final String title;
   const AdminAppBar({super.key, required this.title});
 
@@ -25,44 +25,49 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
       height: 64,
       decoration: const BoxDecoration(
         color: AdminColors.slateDark,
-        border: Border(bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
+        border: Border(
+            bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.only(
+          left: 16,
+          right: 8), // Adjusted padding for better right-justification
       child: Row(
         children: [
-          Flexible(
-            child: Text(
-              widget.title,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AdminColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
-            ),
+          // 1. App Title
+          Text(
+            widget.title,
+            style: const TextStyle(
+                color: AdminColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 20),
+
+          // 2. Environment Selector
           _EnvironmentBadge(
             environment: currentEnv,
-            onChanged: (env) => ref.read(currentEnvironmentProvider.notifier).setEnvironment(env),
+            onChanged: (env) => ref
+                .read(currentEnvironmentProvider.notifier)
+                .setEnvironment(env),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: _TenantSelector(
-              currentApp: currentApp,
-              onChanged: (tenant) => ref.read(currentAppProvider.notifier).setApp(tenant),
-            ),
+          const SizedBox(width: 12),
+
+          // 3. Tenant Selector
+          _TenantSelector(
+            currentApp: currentApp,
+            onChanged: (tenant) =>
+                ref.read(currentAppProvider.notifier).setApp(tenant),
           ),
+
+          // 4. Elastic Space to push content to the right
           const Spacer(),
+
+          // 5. Right-Justified Notifications
           IconButton(
             tooltip: 'Notifications',
-            icon: const Icon(Icons.notifications_outlined, size: 20, color: AdminColors.textSecondary),
+            icon: const Icon(Icons.notifications_outlined,
+                size: 22, color: AdminColors.textSecondary),
             onPressed: () {},
-          ),
-          const SizedBox(width: 4),
-          // ADDED: Logout Button
-          IconButton(
-            tooltip: 'Sign Out',
-            icon: const Icon(Icons.exit_to_app_rounded, size: 20, color: AdminColors.rubyRed),
-            onPressed: () async {
-              await ref.read(authActionProvider.notifier).logout();
-            },
           ),
         ],
       ),
@@ -87,21 +92,28 @@ class _EnvironmentBadge extends StatelessWidget {
       initialValue: environment,
       onSelected: onChanged,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: badgeColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(environment.label, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
-            const Icon(Icons.arrow_drop_down, size: 14),
+            Text(environment.label,
+                style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down, size: 16, color: badgeColor),
           ],
         ),
       ),
-      itemBuilder: (context) => AppEnvironment.values.map((env) => PopupMenuItem(value: env, child: Text(env.displayName))).toList(),
+      itemBuilder: (context) => AppEnvironment.values
+          .map((env) => PopupMenuItem(value: env, child: Text(env.displayName)))
+          .toList(),
     );
   }
 }
@@ -117,13 +129,15 @@ class _TenantSelector extends StatelessWidget {
       showSelectedIcon: false,
       style: SegmentedButton.styleFrom(
         visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        textStyle: const TextStyle(fontSize: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
       ),
-      segments: AppTenant.values.map((t) => ButtonSegment(
-        value: t, 
-        label: Text(t.displayName.substring(0, 4)),
-      )).toList(),
+      segments: AppTenant.values
+          .map((t) => ButtonSegment(
+                value: t,
+                label: Text(t.displayName.toUpperCase()),
+              ))
+          .toList(),
       selected: {currentApp},
       onSelectionChanged: (set) => onChanged(set.first),
     );
