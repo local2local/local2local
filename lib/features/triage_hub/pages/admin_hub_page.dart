@@ -4,7 +4,8 @@ import 'package:local2local/features/auth/providers/auth_provider.dart';
 import 'package:local2local/features/triage_hub/pages/admin_shell.dart';
 import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
 import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
-import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart'; // NEW IMPORT
+import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
+import 'package:local2local/features/triage_hub/pages/health_grid_page.dart'; // NEW IMPORT
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
@@ -44,11 +45,11 @@ class AdminHubPage extends ConsumerWidget {
       case 0:
         return const TriageQueuePage();
       case 1:
-        return const Center(child: Text('Health Grid Coming Soon'));
+        return const HealthGridPage(); // UPDATED FROM PLACEHOLDER
       case 2:
         return const FleetMapPage();
       case 3:
-        return const EvolutionTimelinePage(); // UPDATED FROM PLACEHOLDER
+        return const EvolutionTimelinePage();
       default:
         return const TriageQueuePage();
     }
