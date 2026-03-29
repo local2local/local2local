@@ -4,11 +4,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/nav.dart';
 
+// FIX: Web requires explicit FirebaseOptions to avoid the "null options" assertion error
+
+const firebaseOptions = FirebaseOptions(
+    apiKey: "AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8",
+    authDomain: "local2local-dev.firebaseapp.com",
+    projectId: "local2local-dev",
+    storageBucket: "local2local-dev.firebasestorage.app",
+    messagingSenderId: "849010982119",
+    appId: "1:849010982119:web:f5af08a3214393b0943642",
+    measurementId: "G-7KYLQM8T4C");
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase (Options automatically loaded from DefaultFirebaseOptions if configured)
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp(
+      options: firebaseOptions,
+    );
+  } catch (e) {
+    debugPrint("Firebase Init Error: $e");
+  }
 
   runApp(const ProviderScope(child: MyApp()));
 }

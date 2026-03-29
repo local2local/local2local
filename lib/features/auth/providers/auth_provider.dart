@@ -18,7 +18,7 @@ final isAdminProvider = FutureProvider<bool>((ref) async {
   return adminClaim ?? false;
 });
 
-/// Notifier to handle Authentication Actions (Dreamflow Proof)
+/// Notifier to handle Authentication Actions
 class AuthNotifier extends Notifier<void> {
   @override
   void build() {}
