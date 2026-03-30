@@ -12,8 +12,6 @@ export const evolutionTimelineWorkerV2 = onDocumentCreated({
     if (!runData) return;
     const { appId } = event.params;
     
-    console.log(`[TIMELINE_PROBE] Shadow Run Triggered for ${appId}`);
-
     try {
         return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
             type: runData.status === "validated" ? "LOGIC_VALIDATION_SUCCESS" : "LOGIC_VALIDATION_FAILURE",
@@ -47,8 +45,6 @@ export const logisticsTimelineWorkerV2 = onDocumentUpdated({
     if (!statusChanged && !sobrietyTriggered) return;
     const { appId, jobId } = event.params;
 
-    console.log(`[TIMELINE_PROBE] Logistics Milestone Triggered for ${appId}`);
-
     try {
         return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
             type: sobrietyTriggered ? "REGULATORY_CHECK_ENABLED" : "LOGISTICS_MILESTONE",
@@ -67,20 +63,15 @@ export const logisticsTimelineWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 3. INTERVENTION TIMELINE WORKER (Step 16.3: Hardening)
- * Hardened: uses try/catch with explicit collection references to avoid Eventarc silent drops.
+ * 3. INTERVENTION TIMELINE WORKER
  */
 export const interventionTimelineWorkerV2 = onDocumentCreated({
     document: "artifacts/{appId}/public/data/interventions/{interventionId}"
 }, async (event) => {
     const data = event.data?.data();
-    if (!data) {
-        console.log("[TIMELINE_CRITICAL] No data in event snapshot.");
-        return;
-    }
+    if (!data) return;
 
     const { appId, interventionId } = event.params;
-    console.log(`[TIMELINE_PROBE] Intercepted Intervention in ${appId}: ${interventionId}`);
 
     try {
         const payload = {
@@ -94,12 +85,9 @@ export const interventionTimelineWorkerV2 = onDocumentCreated({
             correlation_id: data.correlation_id || "N/A"
         };
 
-        // Explicitly write to the timeline of the same appId
         await db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add(payload);
-        console.log(`[TIMELINE_SUCCESS] Written to artifacts/${appId}/public/data/evolution_timeline`);
-
     } catch (error: any) {
-        console.error(`[TIMELINE_ERROR] Failed during intervention log in ${appId}:`, error.message);
+        console.error(`[TIMELINE_ERROR] Failed during intervention log:`, error.message);
     }
 });
 
@@ -133,7 +121,8 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 5. EFFICACY AUDIT WORKER
+ * 5. EFFICACY AUDIT WORKER (Phase 27: Self-Healing Triggers)
+ * Hardened: Monitors latency and autonomously triggers Context Folding.
  */
 export const efficacyAuditWorkerV2 = onDocumentUpdated({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -144,16 +133,36 @@ export const efficacyAuditWorkerV2 = onDocumentUpdated({
 
     const { appId } = event.params;
     const agentId = data.provenance.sender_id;
+    const latency = new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime();
 
     try {
         const auditRef = db.collection(`artifacts/${appId}/public/data/efficacy_audit`).doc();
         await auditRef.set({
             agentId,
             timestamp: new Date().toISOString(),
-            latencyMs: new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime(),
+            latencyMs: latency,
             status: "success",
             correlation_id: data.correlation_id
         });
+
+        // --- PHASE 27: ATTENTION MONITORING ---
+        // Trigger a fold if latency exceeds 8 seconds (Simulating context fatigue)
+        const LATENCY_THRESHOLD_MS = 8000;
+        if (latency > LATENCY_THRESHOLD_MS) {
+            await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
+                correlation_id: `healing-${data.correlation_id}`,
+                status: "pending",
+                control: { type: "REQUEST", priority: "normal" },
+                provenance: { sender_id: "ANALYTICS_WORKER", receiver_id: "INFRASTRUCTURE_WORKER" },
+                payload: {
+                    manifest: {
+                        intent: "FOLD_CONTEXT",
+                        correlationId: data.correlation_id,
+                        targetAgentId: agentId
+                    }
+                }
+            });
+        }
     } catch (error) {
         console.error("Audit Logging Error:", error);
     }
