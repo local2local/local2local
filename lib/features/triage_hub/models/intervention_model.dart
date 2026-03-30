@@ -1,59 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Intervention Categories
-enum InterventionCategory {
-  compliance('Compliance', 'AGLC/Regulatory violations'),
-  finance('Finance', 'High-value transactions requiring approval'),
-  safety('Safety', 'Safety protocol violations'),
-  logistics('Logistics', 'Delivery/routing issues'),
-  talent('Talent', 'Worker-related issues');
+enum InterventionCategory { compliance, finance, safety, logistics, talent }
 
-  const InterventionCategory(this.label, this.description);
-  final String label;
-  final String description;
+enum InterventionSeverity { red, yellow, green }
+
+extension CategoryLabel on InterventionCategory {
+  String get label => switch (this) {
+        InterventionCategory.compliance => 'Compliance',
+        InterventionCategory.finance => 'Finance',
+        InterventionCategory.safety => 'Safety',
+        InterventionCategory.logistics => 'Logistics',
+        InterventionCategory.talent => 'Talent',
+      };
 }
 
-/// Intervention Severity Levels
-enum InterventionSeverity {
-  red('Critical', 'Immediate action required'),
-  yellow('Warning', 'Action needed soon'),
-  green('Info', 'Informational only');
-
-  const InterventionSeverity(this.label, this.description);
-  final String label;
-  final String description;
-}
-
-/// Macro Response Options for intervention resolution
 class MacroResponse {
-  final String id;
-  final String label;
-  final String description;
-
-  const MacroResponse({
-    required this.id,
-    required this.label,
-    required this.description,
-  });
+  final String id, label, description;
+  const MacroResponse(
+      {required this.id, required this.label, required this.description});
 }
 
-/// Intervention data model matching Firestore structure
 class InterventionModel {
-  final String id;
+  final String id,
+      summary,
+      reasoningTrace,
+      hbrRuleId,
+      hbrRuleLink,
+      agentId,
+      agentName,
+      transactionId;
   final InterventionCategory category;
   final InterventionSeverity severity;
-  final String summary;
-  final String reasoningTrace;
-  final String hbrRuleId;
-  final String hbrRuleLink;
-  final String agentId;
-  final String agentName;
-  final String transactionId;
-  final double? amountUsd;
   final DateTime createdAt;
+  final double? amountUsd;
   final DateTime? resolvedAt;
-  final String? resolvedBy;
   final String? resolution;
+  final String
+      rawType; // Added to store the original type for the 'title' getter
 
   const InterventionModel({
     required this.id,
@@ -67,118 +50,102 @@ class InterventionModel {
     required this.agentName,
     required this.transactionId,
     required this.createdAt,
+    required this.rawType,
     this.amountUsd,
     this.resolvedAt,
-    this.resolvedBy,
     this.resolution,
   });
 
-  /// Factory to create an InterventionModel from a Firestore document
+  // --- MISSING UI GETTERS (Fixes Phase 26 Compilation Errors) ---
+
+  /// UI Alias for the 'type' field
+  String get title => rawType.replaceAll('_', ' ');
+
+  /// UI Alias for the 'summary' field
+  String get description => summary;
+
+  /// UI Alias for mapping enum severity to the string expected by _PriorityIndicator
+  String get priority {
+    if (severity == InterventionSeverity.red) return 'high';
+    if (severity == InterventionSeverity.yellow) return 'medium';
+    return 'low';
+  }
+
+  /// Maps the internal availableMacros to the List<Map> structure expected by the UI
+  List<Map<String, String>> get macros => availableMacros
+      .map((m) => {
+            'id': m.id,
+            'label': m.label,
+          })
+      .toList();
+
+  // -------------------------------------------------------------
+
   factory InterventionModel.fromFirestore(DocumentSnapshot doc) {
-    // FIX: Using Map.from to handle minified types on Web
-    final rawData = doc.data() as Map?;
-    final data = rawData != null
-        ? Map<String, dynamic>.from(rawData)
-        : <String, dynamic>{};
+    final dynamic data = doc.data();
 
-    // Severity Mapping
-    final severityStr = data['severity']?.toString().toLowerCase() ?? 'green';
-    final severity = (severityStr == 'high' || severityStr == 'critical')
-        ? InterventionSeverity.red
-        : (severityStr == 'medium' || severityStr == 'yellow')
-            ? InterventionSeverity.yellow
-            : InterventionSeverity.green;
+    final String severityStr =
+        (data['severity'] ?? 'green').toString().toLowerCase();
+    final String typeStr =
+        (data['type'] ?? 'EXCEPTION').toString().toUpperCase();
 
-    // Category Mapping (Based on document 'type' or fallback)
-    final type = data['type']?.toString().toUpperCase() ?? '';
-    InterventionCategory category = InterventionCategory.compliance;
-    if (type.contains('PAYOUT') || type.contains('FINANCE')) {
-      category = InterventionCategory.finance;
-    } else if (type.contains('SAFETY')) {
-      category = InterventionCategory.safety;
-    } else if (type.contains('LOGISTICS')) {
-      category = InterventionCategory.logistics;
+    DateTime parsedDate = DateTime.now();
+    final createdValue = data['createdAt'];
+    if (createdValue is Timestamp) {
+      parsedDate = createdValue.toDate();
+    } else if (createdValue is String) {
+      parsedDate = DateTime.tryParse(createdValue) ?? DateTime.now();
     }
 
-    // FIX: Handle both Firestore Timestamp and ISO String from manual JSON injection
-    DateTime parsedDate = DateTime.now();
-    final rawCreated = data['createdAt'];
-    if (rawCreated is Timestamp) {
-      parsedDate = rawCreated.toDate();
-    } else if (rawCreated is String) {
-      parsedDate = DateTime.tryParse(rawCreated) ?? DateTime.now();
+    double? calculatedAmount;
+    final amountVal = data['amountCents'];
+    if (amountVal is num) {
+      calculatedAmount = amountVal.toDouble() / 100;
     }
 
     return InterventionModel(
       id: doc.id,
-      category: category,
-      severity: severity,
-      summary: data['details'] ?? 'No description provided',
-      reasoningTrace:
-          data['reasoning_trace'] ?? 'Trace unavailable for this event.',
-      hbrRuleId: data['hbr_id'] ?? 'HBR-GEN-001',
+      rawType: typeStr,
+      summary: data['details']?.toString() ?? 'No Details',
+      reasoningTrace: data['reasoning_trace']?.toString() ?? 'No trace.',
+      hbrRuleId: data['hbr_id']?.toString() ?? 'HBR-GEN-001',
       hbrRuleLink:
           'https://rules.local2local.app/hbr/${data['hbr_id'] ?? 'GEN-001'}',
-      agentId: data['agent_id'] ?? 'unknown_agent',
-      agentName: data['agent_name'] ?? 'System Agent',
-      transactionId: data['orderId'] ?? data['correlation_id'] ?? 'N/A',
+      agentId: data['agent_id']?.toString() ?? 'unknown',
+      agentName: data['agent_name']?.toString() ?? 'System Agent',
+      transactionId:
+          (data['orderId'] ?? data['correlation_id'] ?? 'N/A').toString(),
+      category: typeStr.contains('PAYOUT') || typeStr.contains('FINANCE')
+          ? InterventionCategory.finance
+          : typeStr.contains('SAFETY')
+              ? InterventionCategory.safety
+              : InterventionCategory.compliance,
+      severity: (severityStr == 'high' ||
+              severityStr == 'critical' ||
+              severityStr == 'red')
+          ? InterventionSeverity.red
+          : (severityStr == 'medium' || severityStr == 'yellow')
+              ? InterventionSeverity.yellow
+              : InterventionSeverity.green,
       createdAt: parsedDate,
-      amountUsd: data['amountCents'] != null
-          ? (data['amountCents'] / 100).toDouble()
-          : null,
+      amountUsd: calculatedAmount,
       resolvedAt: data['resolvedAt'] is Timestamp
           ? (data['resolvedAt'] as Timestamp).toDate()
           : null,
-      resolvedBy: data['resolvedBy'],
-      resolution: data['resolution'],
+      resolution: data['resolution']?.toString(),
     );
   }
 
   bool get isActive => resolvedAt == null;
+  String get ageDisplay =>
+      '${DateTime.now().difference(createdAt).inMinutes}m ago';
 
-  Duration get age => DateTime.now().difference(createdAt);
-
-  String get ageDisplay {
-    final mins = age.inMinutes;
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return '$mins min ago';
-    final hours = age.inHours;
-    if (hours < 24) return '$hours hr ago';
-    final days = age.inDays;
-    return '$days day${days > 1 ? 's' : ''} ago';
-  }
-
-  List<MacroResponse> get availableMacros {
-    switch (category) {
-      case InterventionCategory.compliance:
-        return const [
-          MacroResponse(
-              id: 'aglc_override',
-              label: 'Manual AGLC Override',
-              description: 'Approve with regulatory exemption'),
-          MacroResponse(
-              id: 'aglc_reject',
-              label: 'Reject - AGLC Violation',
-              description: 'Deny transaction'),
-        ];
-      case InterventionCategory.finance:
-        return const [
-          MacroResponse(
-              id: 'approve_payout',
-              label: 'Approve Payout',
-              description: 'Release funds'),
-          MacroResponse(
-              id: 'reject_fraud',
-              label: 'Reject - Suspected Fraud',
-              description: 'Block transaction'),
-        ];
-      default:
-        return const [
-          MacroResponse(
-              id: 'manual_resolve',
-              label: 'Mark Resolved',
-              description: 'Close task'),
-        ];
-    }
-  }
+  List<MacroResponse> get availableMacros => const [
+        MacroResponse(
+            id: 'approve',
+            label: 'Approve',
+            description: 'Proceed with action'),
+        MacroResponse(
+            id: 'reject', label: 'Reject', description: 'Deny and notify user'),
+      ];
 }
