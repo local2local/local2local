@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/models/intervention_model.dart';
 import 'package:local2local/features/triage_hub/models/orchestrator_model.dart';
 import 'package:local2local/features/triage_hub/models/logistics_job_model.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
 
 // --- TENANT STATE ---
 
@@ -85,6 +86,18 @@ final fleetProvider = StreamProvider<List<LogisticsJobModel>>((ref) {
           .toList());
 });
 
+final evolutionTimelineProvider =
+    StreamProvider<List<EvolutionEventModel>>((ref) {
+  final app = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts/${app.id}/public/data/evolution_timeline')
+      .orderBy('timestamp', descending: true)
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => EvolutionEventModel.fromFirestore(doc))
+          .toList());
+});
+
 final activeInterventionCountProvider = Provider<AsyncValue<int>>((ref) {
   return ref
       .watch(interventionsProvider)
@@ -120,7 +133,6 @@ class InterventionService {
     });
 
     // 2. Write Human Response to Agent Bus
-    // This tells the agent that "Human has spoken" and provides the decision.
     final busRef = FirebaseFirestore.instance
         .collection('artifacts/$appId/public/data/agent_bus')
         .doc();
@@ -130,8 +142,7 @@ class InterventionService {
       'control': {'type': 'RESPONSE', 'priority': 'high'},
       'provenance': {
         'sender_id': 'SUPER_ADMIN_HUB',
-        'receiver_id':
-            'EVOLUTION_WORKER', // Evolution worker logs the "Lesson Learned"
+        'receiver_id': 'EVOLUTION_WORKER',
       },
       'payload': {
         'result': {
@@ -161,7 +172,6 @@ class OrchestratorService {
   }
 
   static Future<void> rollbackOrchestrator(String appId, String agentId) async {
-    // Write a request to the Evolution worker to trigger a prompt rollback
     await FirebaseFirestore.instance
         .collection('artifacts/$appId/public/data/agent_bus')
         .add({

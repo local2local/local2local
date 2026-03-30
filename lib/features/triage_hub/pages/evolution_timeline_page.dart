@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-class EvolutionTimelinePage extends StatelessWidget {
+class EvolutionTimelinePage extends ConsumerWidget {
   const EvolutionTimelinePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timelineAsync = ref.watch(evolutionTimelineProvider);
+
     return Container(
       color: AdminColors.slateDarkest,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section - Refactored for Responsiveness
+          // Header Section
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Wrap(
@@ -20,7 +25,6 @@ class EvolutionTimelinePage extends StatelessWidget {
               spacing: 16,
               runSpacing: 16,
               children: [
-                // Title Section - Constrained to prevent overflow
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 500),
                   child: const Column(
@@ -44,63 +48,41 @@ class EvolutionTimelinePage extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Filter Chips Section
-                const Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _FilterChip(label: 'All Events', isSelected: true),
-                    _FilterChip(label: 'Protocol Updates', isSelected: false),
-                    _FilterChip(label: 'Agent Versions', isSelected: false),
-                  ],
-                ),
               ],
             ),
           ),
           const Divider(height: 1, color: AdminColors.borderDefault),
 
-          // Timeline List
+          // Timeline List - Now Live
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              children: [
-                const _TimelineEvent(
-                  date: 'MAR 29, 2026',
-                  title: 'Security Hardening: Double-Guard Implemented',
-                  description:
-                      'Cryptographic Custom Claims verification fused with GoRouter navigation guards to eliminate sensitive data leakage on Flutter Web.',
-                  icon: Icons.security_rounded,
-                  color: AdminColors.emeraldGreen,
-                  isLast: false,
-                ),
-                const _TimelineEvent(
-                  date: 'MAR 24, 2026',
-                  title: 'Agent Protocol v4.2 Deployment',
-                  description:
-                      'Enhanced Treasury Worker reasoning trace. Added support for multi-tenant Xero reconciliation exceptions.',
-                  icon: Icons.precision_manufacturing_rounded,
-                  color: AdminColors.statusInfo,
-                  isLast: false,
-                ),
-                const _TimelineEvent(
-                  date: 'MAR 15, 2026',
-                  title: 'Fleet Map Integration',
-                  description:
-                      'Real-time geospatial tracking of local service agents enabled via Firestore geo-queries.',
-                  icon: Icons.map_rounded,
-                  color: AdminColors.statusWarning,
-                  isLast: false,
-                ),
-                const _TimelineEvent(
-                  date: 'FEB 28, 2026',
-                  title: 'L2LAAF Infrastructure Genesis',
-                  description:
-                      'Initial project setup. Github Actions CI/CD pipelines established with Flutter 3.38.5 pinning.',
-                  icon: Icons.auto_awesome_mosaic_rounded,
-                  color: AdminColors.textSecondary,
-                  isLast: true,
-                ),
-              ],
+            child: timelineAsync.when(
+              data: (events) {
+                if (events.isEmpty) {
+                  return const Center(
+                    child: Text('No evolution events recorded yet.',
+                        style: TextStyle(color: AdminColors.textMuted)),
+                  );
+                }
+
+                return ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  itemCount: events.length,
+                  itemBuilder: (context, index) {
+                    final event = events[index];
+                    return _TimelineEvent(
+                      event: event,
+                      isLast: index == events.length - 1,
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(
+                  child: CircularProgressIndicator(
+                      color: AdminColors.emeraldGreen)),
+              error: (e, _) => Center(
+                  child: Text('Timeline Link Error: $e',
+                      style: const TextStyle(color: AdminColors.rubyRed))),
             ),
           ),
         ],
@@ -110,24 +92,19 @@ class EvolutionTimelinePage extends StatelessWidget {
 }
 
 class _TimelineEvent extends StatelessWidget {
-  final String date;
-  final String title;
-  final String description;
-  final IconData icon;
-  final Color color;
+  final EvolutionEventModel event;
   final bool isLast;
 
   const _TimelineEvent({
-    required this.date,
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.color,
+    required this.event,
     required this.isLast,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = _getEventColor(event.type);
+    final icon = _getEventIcon(event.type);
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,18 +140,38 @@ class _TimelineEvent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    date,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        event.timeDisplay.toUpperCase(),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      if (event.isAutonomous)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                AdminColors.emeraldGreen.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text('AUTONOMOUS',
+                              style: TextStyle(
+                                  color: AdminColors.emeraldGreen,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    title,
+                    event.title,
                     style: const TextStyle(
                       color: AdminColors.textPrimary,
                       fontSize: 18,
@@ -183,20 +180,38 @@ class _TimelineEvent extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Container(
-                    width: double.infinity, // Ensure card fills available space
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AdminColors.slateDark,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AdminColors.borderDefault),
                     ),
-                    child: Text(
-                      description,
-                      style: const TextStyle(
-                        color: AdminColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.description,
+                          style: const TextStyle(
+                            color: AdminColors.textSecondary,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.token_rounded,
+                                size: 12, color: AdminColors.textMuted),
+                            const SizedBox(width: 6),
+                            Text('Source: ${event.agentName}',
+                                style: const TextStyle(
+                                    color: AdminColors.textMuted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -207,37 +222,32 @@ class _TimelineEvent extends StatelessWidget {
       ),
     );
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
+  Color _getEventColor(EvolutionEventType type) {
+    switch (type) {
+      case EvolutionEventType.criticalIntervention:
+        return AdminColors.rubyRed;
+      case EvolutionEventType.rollback:
+        return AdminColors.statusWarning;
+      case EvolutionEventType.humanOverride:
+        return AdminColors.statusInfo;
+      default:
+        return AdminColors.emeraldGreen;
+    }
+  }
 
-  const _FilterChip({required this.label, required this.isSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? AdminColors.emeraldGreen.withValues(alpha: 0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color:
-              isSelected ? AdminColors.emeraldGreen : AdminColors.borderDefault,
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color:
-              isSelected ? AdminColors.emeraldGreen : AdminColors.textSecondary,
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-    );
+  IconData _getEventIcon(EvolutionEventType type) {
+    switch (type) {
+      case EvolutionEventType.criticalIntervention:
+        return Icons.warning_rounded;
+      case EvolutionEventType.rollback:
+        return Icons.settings_backup_restore_rounded;
+      case EvolutionEventType.humanOverride:
+        return Icons.person_search_rounded;
+      case EvolutionEventType.agentDeployed:
+        return Icons.cloud_done_rounded;
+      default:
+        return Icons.auto_awesome_rounded;
+    }
   }
 }

@@ -3,7 +3,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * HELPER: Simple order-insensitive object comparison
+ * HELPER: Simple order-insensitive object comparison for SMV
  */
 function areResultsIdentical(a: any, b: any): boolean {
     try {
@@ -15,54 +15,73 @@ function areResultsIdentical(a: any, b: any): boolean {
 
 /**
  * 1. EVOLUTION ORCHESTRATOR
- * Handlers for Registry Management, Shadow Initiation, and Dependency Registration.
+ * Handlers for Registry Management, Shadow Initiation, Dependency Registration, 
+ * and Human Commit Resolutions from the Triage Hub.
  */
 export const evolutionOrchestratorV2 = onDocumentUpdated({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
+    
+    // Safety check: Only process 'dispatched' messages intended for this worker
     if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "EVOLUTION_WORKER") return;
 
     const { appId } = event.params;
     const client = new AgentBusClient({ 
-        agentId: "EVOLUTION_WORKER", capabilities: ["logic_optimization", "dependency_mapping", "shadow_mode_management"], 
+        agentId: "EVOLUTION_WORKER", 
+        capabilities: ["logic_optimization", "dependency_mapping", "shadow_mode_management"], 
         jurisdictions: ["AB"], substances: ["DATA"], role: "ORCHESTRATOR", domain: "SECURITY"
     }, appId);
     
     await client.register();
 
     try {
-        const { intent } = data.payload.manifest;
+        // --- PHASE 29 FIX: HANDLE HUMAN RESOLUTIONS ---
+        // Human actions arrive as RESPONSE types with an action: HUMAN_COMMIT.
+        if (data.control?.type === "RESPONSE" && data.payload?.result?.action === "HUMAN_COMMIT") {
+            const { intervention_id, macro_applied } = data.payload.result;
+            console.log(`[EVOLUTION_RESOLUTION] Human override received for ${intervention_id}. Action: ${macro_applied}`);
+            
+            // Record the learning event for the Evolution Timeline
+            await db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
+                type: "HUMAN_OVERRIDE_COMMITTED",
+                details: `Super Admin manually resolved intervention ${intervention_id} using macro: ${macro_applied}.`,
+                agentId: "EVOLUTION_WORKER",
+                isAutonomous: false,
+                timestamp: new Date().toISOString()
+            });
 
-        // --- PHASE 28: DEPENDENCY REGISTRATION ---
+            return; // Resolution logged, no further processing needed
+        }
+
+        // --- STANDARD INTENT PROCESSING (REQUESTS) ---
+        const manifest = data.payload?.manifest;
+        if (!manifest) throw new Error("MISSING_MANIFEST_IN_REQUEST");
+
+        const { intent } = manifest;
+
         if (intent === "REGISTER_DEPENDENCY") {
-            const { hbrId, primaryAgentId, dependsOn = [] } = data.payload.manifest;
+            const { hbrId, primaryAgentId, dependsOn = [] } = manifest;
             
-            // Logic: Prevent an HBR from depending on itself
-            if (dependsOn.includes(hbrId)) {
-                throw new Error("SELF_REFERENCE_PROHIBITED");
-            }
+            // Block self-reference loops immediately
+            if (dependsOn.includes(hbrId)) throw new Error("SELF_REFERENCE_PROHIBITED");
 
-            const dependencyRef = db.doc(`artifacts/${appId}/public/data/logic_dependencies/${hbrId}`);
-            
-            await dependencyRef.set({
-                hbrId,
-                primary_agent: primaryAgentId,
-                dependencies: dependsOn, // Array of other HBR IDs
-                updatedAt: new Date().toISOString(),
+            await db.doc(`artifacts/${appId}/public/data/logic_dependencies/${hbrId}`).set({
+                hbrId, 
+                primary_agent: primaryAgentId, 
+                dependencies: dependsOn,
+                updatedAt: new Date().toISOString(), 
                 status: "active"
             }, { merge: true });
 
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, { 
-                status: "dependency_mapped", 
-                hbrId, 
-                dependencyCount: dependsOn.length 
+                status: "dependency_mapped", hbrId, dependencyCount: dependsOn.length 
             });
         }
 
         if (intent === "INITIATE_SHADOW_TEST") {
-            const { targetAgentId } = data.payload.manifest;
+            const { targetAgentId } = manifest;
             await db.doc(`artifacts/${appId}/public/data/agent_registry/${targetAgentId}`).update({
                 "status.mode": "shadow",
                 "status.shadow_started_at": new Date().toISOString(),
@@ -70,9 +89,8 @@ export const evolutionOrchestratorV2 = onDocumentUpdated({
             });
 
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
-                status: "shadow_mode_active",
-                agentId: targetAgentId,
-                message: `Shadow fork enabled for ${targetAgentId}. Resetting success counter.`
+                status: "shadow_mode_active", 
+                agentId: targetAgentId
             });
         }
 
@@ -86,7 +104,7 @@ export const evolutionOrchestratorV2 = onDocumentUpdated({
 
 /**
  * 2. SHADOW COMPARATOR WORKER
- * Hardened comparison and autonomous promotion to live status.
+ * Performs side-by-side validation and autonomous promotion of agent versions.
  */
 export const shadowComparatorWorkerV2 = onDocumentUpdated({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -152,8 +170,8 @@ export const shadowComparatorWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 3. LOGIC COLLISION WORKER (Phase 28: LCD Protocol)
- * Traverses the dependency graph to prevent circular logic (A -> B -> A).
+ * 3. LOGIC COLLISION WORKER
+ * Traverses the HBR dependency graph to prevent circular logic.
  */
 export const logicCollisionWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
@@ -168,11 +186,8 @@ export const logicCollisionWorkerV2 = onDocumentCreated({
         const visited = new Set<string>();
         const stack = new Set<string>();
 
-        /**
-         * Recursive Depth-First Search to detect cycles in the HBR graph.
-         */
         const hasCycle = async (currentId: string): Promise<boolean> => {
-            if (stack.has(currentId)) return true; // Cycle detected
+            if (stack.has(currentId)) return true;
             if (visited.has(currentId)) return false;
 
             visited.add(currentId);
@@ -192,21 +207,17 @@ export const logicCollisionWorkerV2 = onDocumentCreated({
         const cycleFound = await hasCycle(hbrId);
 
         if (cycleFound) {
-            console.warn(`[LCD_FAILURE] Circular dependency detected for ${hbrId}. Raising Intervention.`);
-            
-            // 1. Mark dependency as invalid/blocked
             await db.doc(`artifacts/${appId}/public/data/logic_dependencies/${hbrId}`).update({
                 status: "blocked",
                 collision_detected: true,
                 error_message: "CIRCULAR_LOGIC_LOOP"
             });
 
-            // 2. Create Red Status Intervention for Human
             await db.collection(`artifacts/${appId}/public/data/interventions`).add({
                 type: "LOGIC_COLLISION",
                 severity: "high",
                 status: "active",
-                details: `CIRCULAR LOGIC: ${hbrId} creates an infinite loop in the business rule graph. Registration blocked.`,
+                details: `CIRCULAR LOGIC: ${hbrId} creates an infinite loop in the business rule graph.`,
                 createdAt: new Date().toISOString()
             });
         }
