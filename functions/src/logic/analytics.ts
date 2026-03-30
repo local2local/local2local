@@ -122,7 +122,7 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER (Phase 27: Self-Healing Triggers)
- * Resilient Implementation: Added robust date parsing and explicit logging.
+ * Hardened Implementation: Added support for both native Timestamps and ISO Strings.
  */
 export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -130,6 +130,7 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
 }, async (event) => {
     const data = event.data?.after.data();
     
+    // 1. Validation Logic
     if (!data || data.control?.type !== "RESPONSE") return;
     if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
     if (data.correlation_id.startsWith("healing-")) return;
@@ -137,18 +138,31 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
     const { appId } = event.params;
     const agentId = data.provenance.sender_id;
     
-    // Robust Date Parsing
-    const end = Date.parse(data.telemetry.completed_at);
-    const start = Date.parse(data.telemetry.processed_at);
+    // 2. ULTRA-ROBUST DATE PARSING (Handles Timestamp and String)
+    const getTime = (val: any) => {
+        if (!val) return NaN;
+        // If it's a Firestore Timestamp object
+        if (val.toDate && typeof val.toDate === 'function') return val.toDate().getTime();
+        // If it's a JSON/ISO String
+        if (typeof val === 'string') {
+            const dateStr = val.endsWith('Z') ? val : val + 'Z';
+            return Date.parse(dateStr);
+        }
+        return NaN;
+    };
+
+    const end = getTime(data.telemetry.completed_at);
+    const start = getTime(data.telemetry.processed_at);
 
     if (isNaN(start) || isNaN(end)) {
-        console.warn(`[AUDIT_SKIPPED] Invalid ISO date format for ${data.correlation_id}`);
+        console.warn(`[AUDIT_SKIPPED] Could not parse telemetry for ${data.correlation_id}`);
         return;
     }
 
     const latency = end - start;
 
     try {
+        // 3. Log Audit Record
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
             agentId,
             timestamp: new Date().toISOString(),
@@ -157,9 +171,12 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             correlation_id: data.correlation_id
         });
 
+        // 4. TRIGGER SELF-HEALING (8s threshold)
         const THRESHOLD = 8000;
+        console.log(`[SELF-HEALING_WATCHDOG] Agent: ${agentId}, Latency: ${latency}ms`);
+
         if (latency > THRESHOLD) {
-            console.log(`[SELF-HEALING] Latency trigger: ${latency}ms for ${agentId}.`);
+            console.log(`[SELF-HEALING_TRIGGER] Threshold exceeded. Requesting Context Fold.`);
             
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
