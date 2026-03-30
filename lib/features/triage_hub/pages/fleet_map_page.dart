@@ -1,85 +1,91 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/logistics_job_model.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-class FleetMapPage extends StatelessWidget {
+class FleetMapPage extends ConsumerWidget {
   const FleetMapPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fleetAsync = ref.watch(fleetProvider);
+
     return Container(
       color: AdminColors.slateDarkest,
       child: Row(
         children: [
-          // 1. Primary Map Area
           Expanded(
             child: Stack(
               children: [
-                // Abstract Map Grid / Background
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _MapGridPainter(),
-                  ),
-                ),
-                // Map Header Overlay
+                Positioned.fill(child: CustomPaint(painter: _MapGridPainter())),
+
                 Positioned(
                   top: 24,
                   left: 24,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Fleet Geo-Intelligence',
-                        style: TextStyle(
-                          color: AdminColors.textPrimary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      const Text('Fleet Geo-Intelligence',
+                          style: TextStyle(
+                              color: AdminColors.textPrimary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: AdminColors.emeraldGreen,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '12 ACTIVE NODES IN RANGE',
-                            style: TextStyle(
-                              color: AdminColors.textSecondary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ],
-                      ),
+                      _FleetStatusCounter(fleetAsync: fleetAsync),
                     ],
                   ),
                 ),
-                // Pulse Markers (Simulated Agent Locations)
-                // FIX: These now use Align internally to avoid the ParentDataWidget error
-                const _AgentMarker(
-                    top: 0.3, left: 0.4, label: 'Node-Alpha', status: 'Online'),
-                const _AgentMarker(
-                    top: 0.5, left: 0.7, label: 'Node-Beta', status: 'Transit'),
-                const _AgentMarker(
-                    top: 0.2, left: 0.8, label: 'Node-Gamma', status: 'Online'),
-                const _AgentMarker(
-                    top: 0.7,
-                    left: 0.3,
-                    label: 'Node-Delta',
-                    status: 'Offline',
-                    isAlert: true),
+
+                // LIVE DATA MARKERS
+                fleetAsync.when(
+                  data: (jobs) {
+                    final activeJobs = jobs
+                        .where((j) => j.status != LogisticsStatus.completed)
+                        .toList();
+                    if (activeJobs.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Stack(
+                      children: List.generate(activeJobs.length, (index) {
+                        final job = activeJobs[index];
+
+                        // 1. Projection
+                        double top = _projectLatitude(job.lat ?? 53.5);
+                        double left = _projectLongitude(job.lng ?? -113.5);
+
+                        // 2. JITTER ENGINE
+                        final jitterOffset = 0.015 * index;
+
+                        // 3. DYNAMIC LABEL
+                        final String label = job.carrierId == 'Unassigned'
+                            ? 'Job: ${job.id.substring(0, 4)}'
+                            : job.carrierId;
+
+                        return _AgentMarker(
+                          key: ValueKey(job.id),
+                          top: top + jitterOffset,
+                          left: left + jitterOffset,
+                          label: label,
+                          status: job.status.name.toUpperCase(),
+                          isAlert: job.status == LogisticsStatus.open,
+                        );
+                      }),
+                    );
+                  },
+                  loading: () => const Center(
+                      child: CircularProgressIndicator(
+                          color: AdminColors.emeraldGreen)),
+                  error: (e, _) => Center(
+                      child: Text('Map Link Error: $e',
+                          style: const TextStyle(color: AdminColors.rubyRed))),
+                ),
               ],
             ),
           ),
 
-          // 2. Telemetry Sidebar (Right-hand side)
+          // Telemetry Sidebar
           Container(
             width: 300,
             decoration: const BoxDecoration(
@@ -92,40 +98,20 @@ class FleetMapPage extends StatelessWidget {
               children: [
                 const Padding(
                   padding: EdgeInsets.all(20),
-                  child: Text(
-                    'TELEMETRY STREAM',
-                    style: TextStyle(
-                      color: AdminColors.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
+                  child: Text('TELEMETRY STREAM',
+                      style: TextStyle(
+                          color: AdminColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2)),
                 ),
                 const Divider(height: 1, color: AdminColors.borderDefault),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: const [
-                      _TelemetryCard(
-                        title: 'Node-Alpha',
-                        detail: 'Position: 51.5074° N, 0.1278° W',
-                        metrics: 'Ping: 14ms | Load: 12%',
-                        isActive: true,
-                      ),
-                      _TelemetryCard(
-                        title: 'Node-Beta',
-                        detail: 'Moving: East toward Sector 7',
-                        metrics: 'Ping: 42ms | Velocity: 45km/h',
-                        isActive: true,
-                      ),
-                      _TelemetryCard(
-                        title: 'Node-Delta',
-                        detail: 'Connection lost in Sector 4',
-                        metrics: 'Last Seen: 4 mins ago',
-                        isAlert: true,
-                      ),
-                    ],
+                  child: fleetAsync.when(
+                    data: (jobs) => _TelemetryListView(jobs: jobs),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => const SizedBox.shrink(),
                   ),
                 ),
               ],
@@ -135,168 +121,82 @@ class FleetMapPage extends StatelessWidget {
       ),
     );
   }
+
+  double _projectLatitude(double lat) =>
+      1.0 - ((lat - 49.0) / 11.0).clamp(0.1, 0.9);
+  double _projectLongitude(double lng) =>
+      ((lng + 120.0) / 10.0).clamp(0.1, 0.9);
 }
 
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AdminColors.borderDefault.withValues(alpha: 0.2)
-      ..strokeWidth = 1.0;
-
-    const double spacing = 40.0;
-
-    // Draw Vertical Lines
-    for (double i = 0; i < size.width; i += spacing) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
-    }
-
-    // Draw Horizontal Lines
-    for (double i = 0; i < size.height; i += spacing) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
-
-    // Draw some "Map Contours"
-    final pathPaint = Paint()
-      ..color = AdminColors.emeraldGreen.withValues(alpha: 0.05)
-      ..style = PaintingStyle.fill;
-
-    final path = Path()
-      ..moveTo(size.width * 0.2, size.height * 0.3)
-      ..quadraticBezierTo(size.width * 0.4, size.height * 0.1, size.width * 0.6,
-          size.height * 0.4)
-      ..quadraticBezierTo(size.width * 0.8, size.height * 0.6, size.width * 0.5,
-          size.height * 0.8)
-      ..close();
-
-    canvas.drawPath(path, pathPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _AgentMarker extends StatefulWidget {
-  final double top;
-  final double left;
-  final String label;
-  final String status;
-  final bool isAlert;
-
-  const _AgentMarker({
-    required this.top,
-    required this.left,
-    required this.label,
-    required this.status,
-    this.isAlert = false,
-  });
-
-  @override
-  State<_AgentMarker> createState() => _AgentMarkerState();
-}
-
-class _AgentMarkerState extends State<_AgentMarker>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _FleetStatusCounter extends StatelessWidget {
+  final AsyncValue<List<LogisticsJobModel>> fleetAsync;
+  const _FleetStatusCounter({required this.fleetAsync});
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        widget.isAlert ? AdminColors.rubyRed : AdminColors.emeraldGreen;
-
-    // FIX: Switched from Positioned + LayoutBuilder to Align + FractionalOffset.
-    // This resolves the "Incorrect use of ParentDataWidget" error because Align
-    // works correctly as a direct child of Stack and manages its own layout offset.
-    return Align(
-      alignment: FractionalOffset(widget.left, widget.top),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              FadeTransition(
-                opacity: Tween(begin: 0.5, end: 0.0).animate(_controller),
-                child: ScaleTransition(
-                  scale: Tween(begin: 1.0, end: 3.0).animate(_controller),
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-              Container(
-                width: 10,
-                height: 10,
+    return fleetAsync.when(
+      data: (jobs) {
+        final count =
+            jobs.where((j) => j.status != LogisticsStatus.completed).length;
+        return Row(
+          children: [
+            Container(
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: AdminColors.slateDark.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AdminColors.borderDefault),
-            ),
-            child: Text(
-              widget.label,
-              style: const TextStyle(
-                  color: AdminColors.textPrimary,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
+                    color: count > 0
+                        ? AdminColors.emeraldGreen
+                        : AdminColors.textMuted,
+                    shape: BoxShape.circle)),
+            const SizedBox(width: 8),
+            Text('$count ACTIVE NODES IN RANGE',
+                style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1)),
+          ],
+        );
+      },
+      loading: () => const Text('CONNECTING...',
+          style: TextStyle(color: AdminColors.textMuted, fontSize: 11)),
+      error: (_, __) => const Text('OFFLINE',
+          style: TextStyle(color: AdminColors.rubyRed, fontSize: 11)),
+    );
+  }
+}
+
+class _TelemetryListView extends StatelessWidget {
+  final List<LogisticsJobModel> jobs;
+  const _TelemetryListView({required this.jobs});
+
+  @override
+  Widget build(BuildContext context) {
+    final activeJobs =
+        jobs.where((j) => j.status != LogisticsStatus.completed).toList();
+    if (activeJobs.isEmpty) {
+      return const Center(
+          child: Text("No active logistics jobs",
+              style: TextStyle(color: AdminColors.textMuted, fontSize: 12)));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: activeJobs.length,
+      itemBuilder: (context, index) => _TelemetryCard(job: activeJobs[index]),
     );
   }
 }
 
 class _TelemetryCard extends StatelessWidget {
-  final String title;
-  final String detail;
-  final String metrics;
-  final bool isActive;
-  final bool isAlert;
-
-  const _TelemetryCard({
-    required this.title,
-    required this.detail,
-    required this.metrics,
-    this.isActive = false,
-    this.isAlert = false,
-  });
+  final LogisticsJobModel job;
+  const _TelemetryCard({required this.job});
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = isAlert
-        ? AdminColors.rubyRed
-        : (isActive ? AdminColors.emeraldGreen : AdminColors.textSecondary);
+    final isAlert = job.status == LogisticsStatus.open;
+    final statusColor =
+        isAlert ? AdminColors.rubyRed : AdminColors.emeraldGreen;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -315,34 +215,149 @@ class _TelemetryCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                title,
-                style: const TextStyle(
-                    color: AdminColors.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold),
-              ),
+                  'Job: ${job.id.length > 6 ? job.id.substring(0, 6) : job.id}',
+                  style: const TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold)),
               const Spacer(),
               Container(
-                width: 6,
-                height: 6,
-                decoration:
-                    BoxDecoration(color: statusColor, shape: BoxShape.circle),
-              ),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                      color: statusColor, shape: BoxShape.circle)),
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            detail,
-            style:
-                const TextStyle(color: AdminColors.textSecondary, fontSize: 11),
-          ),
+          Text('Order: ${job.orderId}',
+              style: const TextStyle(
+                  color: AdminColors.textSecondary, fontSize: 11)),
           const SizedBox(height: 8),
-          Text(
-            metrics,
-            style: TextStyle(
-                color: statusColor.withValues(alpha: 0.8),
-                fontSize: 10,
-                fontWeight: FontWeight.w600),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(job.status.name.toUpperCase(),
+                  style: TextStyle(
+                      color: statusColor.withValues(alpha: 0.8),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+              Text('${(job.distanceMeters / 1000).toStringAsFixed(1)}km out',
+                  style: const TextStyle(
+                      color: AdminColors.textMuted, fontSize: 10)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AdminColors.borderDefault.withValues(alpha: 0.2)
+      ..strokeWidth = 1.0;
+    const double spacing = 40.0;
+    for (double i = 0; i < size.width; i += spacing) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+    for (double i = 0; i < size.height; i += spacing) {
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
+    }
+    final pathPaint = Paint()
+      ..color = AdminColors.emeraldGreen.withValues(alpha: 0.05)
+      ..style = PaintingStyle.fill;
+    final path = Path()
+      ..moveTo(size.width * 0.2, size.height * 0.3)
+      ..quadraticBezierTo(size.width * 0.4, size.height * 0.1, size.width * 0.6,
+          size.height * 0.4)
+      ..quadraticBezierTo(size.width * 0.8, size.height * 0.6, size.width * 0.5,
+          size.height * 0.8)
+      ..close();
+    canvas.drawPath(path, pathPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AgentMarker extends StatefulWidget {
+  final double top, left;
+  final String label, status;
+  final bool isAlert;
+  const _AgentMarker(
+      {super.key,
+      required this.top,
+      required this.left,
+      required this.label,
+      required this.status,
+      this.isAlert = false});
+  @override
+  State<_AgentMarker> createState() => _AgentMarkerState();
+}
+
+class _AgentMarkerState extends State<_AgentMarker>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        AnimationController(vsync: this, duration: const Duration(seconds: 2))
+          ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        widget.isAlert ? AdminColors.rubyRed : AdminColors.emeraldGreen;
+    return Align(
+      alignment: FractionalOffset(widget.left, widget.top),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              FadeTransition(
+                opacity: Tween(begin: 0.5, end: 0.0).animate(_controller),
+                child: ScaleTransition(
+                  scale: Tween(begin: 1.0, end: 3.0).animate(_controller),
+                  child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration:
+                          BoxDecoration(color: color, shape: BoxShape.circle)),
+                ),
+              ),
+              Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1))),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+                color: AdminColors.slateDark.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AdminColors.borderDefault)),
+            child: Text(widget.label,
+                style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),

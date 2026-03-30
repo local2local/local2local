@@ -30,6 +30,17 @@ class LogisticsJobModel {
     if (statusStr == 'arrived') status = LogisticsStatus.arrived;
     if (statusStr == 'completed') status = LogisticsStatus.completed;
 
+    // FIX: Robust Date Parsing for Timestamps or Strings
+    // This prevents the 'Timestamp is not a subtype of String' error
+    DateTime parsedUpdateDate = DateTime.now();
+    final updateValue = loc['updatedAt'] ?? data['createdAt'];
+
+    if (updateValue is Timestamp) {
+      parsedUpdateDate = updateValue.toDate();
+    } else if (updateValue is String) {
+      parsedUpdateDate = DateTime.tryParse(updateValue) ?? DateTime.now();
+    }
+
     return LogisticsJobModel(
       id: doc.id,
       orderId: (data['orderId'] ?? 'N/A').toString(),
@@ -40,9 +51,7 @@ class LogisticsJobModel {
       distanceMeters: (loc['distanceToDestinationMeters'] is num)
           ? (loc['distanceToDestinationMeters'] as num).toInt()
           : 0,
-      lastUpdate: loc['updatedAt'] != null
-          ? DateTime.tryParse(loc['updatedAt']) ?? DateTime.now()
-          : DateTime.now(),
+      lastUpdate: parsedUpdateDate,
     );
   }
 }
