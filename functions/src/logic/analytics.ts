@@ -122,17 +122,20 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER (Phase 27: Self-Healing Triggers)
- * Hardened: Monitors latency and autonomously triggers Context Folding.
+ * Hardened: Now uses onDocumentCreated to catch events immediately upon completion.
  */
-export const efficacyAuditWorkerV2 = onDocumentUpdated({
+export const efficacyAuditWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
-    const data = event.data?.after.data();
-    if (!data || data.control?.type !== "RESPONSE") return;
+    const data = event.data?.data();
+    // Only audit RESPONSE types that have completed telemetry
+    if (!data || data.control?.type !== "RESPONSE" || !data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
 
     const { appId } = event.params;
     const agentId = data.provenance.sender_id;
+    
+    // Calculate Latency
     const latency = new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime();
 
     try {
@@ -146,7 +149,6 @@ export const efficacyAuditWorkerV2 = onDocumentUpdated({
         });
 
         // --- PHASE 27: ATTENTION MONITORING ---
-        // Trigger a fold if latency exceeds 8 seconds (Simulating context fatigue)
         const LATENCY_THRESHOLD_MS = 8000;
         if (latency > LATENCY_THRESHOLD_MS) {
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
