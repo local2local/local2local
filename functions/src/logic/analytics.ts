@@ -1,4 +1,4 @@
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
@@ -122,25 +122,30 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER (Phase 27: Self-Healing Triggers)
- * Hardened: Now uses onDocumentCreated to catch events immediately upon completion.
+ * Hardened: Uses onDocumentWritten to handle both manual nudges and live agent responses.
  */
-export const efficacyAuditWorkerV2 = onDocumentCreated({
+export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
-    const data = event.data?.data();
-    // Only audit RESPONSE types that have completed telemetry
-    if (!data || data.control?.type !== "RESPONSE" || !data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
+    const data = event.data?.after.data();
+    
+    // Safety check: Ensure we are auditing a completed RESPONSE
+    if (!data || data.control?.type !== "RESPONSE") return;
+    if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
+
+    // Prevent infinite loops: Don't audit healing requests themselves
+    if (data.correlation_id.startsWith("healing-")) return;
 
     const { appId } = event.params;
     const agentId = data.provenance.sender_id;
     
-    // Calculate Latency
+    // Calculate Latency (ms)
     const latency = new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime();
 
     try {
-        const auditRef = db.collection(`artifacts/${appId}/public/data/efficacy_audit`).doc();
-        await auditRef.set({
+        // Log the audit
+        await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
             agentId,
             timestamp: new Date().toISOString(),
             latencyMs: latency,
@@ -148,9 +153,11 @@ export const efficacyAuditWorkerV2 = onDocumentCreated({
             correlation_id: data.correlation_id
         });
 
-        // --- PHASE 27: ATTENTION MONITORING ---
-        const LATENCY_THRESHOLD_MS = 8000;
-        if (latency > LATENCY_THRESHOLD_MS) {
+        // TRIGGER SELF-HEALING (8s threshold)
+        const THRESHOLD = 8000;
+        if (latency > THRESHOLD) {
+            console.log(`[SELF-HEALING] High latency detected (${latency}ms) for ${agentId}. Dispatching FOLD_CONTEXT.`);
+            
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
                 status: "pending",
@@ -165,7 +172,7 @@ export const efficacyAuditWorkerV2 = onDocumentCreated({
                 }
             });
         }
-    } catch (error) {
-        console.error("Audit Logging Error:", error);
+    } catch (error: any) {
+        console.error("[AUDIT_ERROR]", error.message);
     }
 });

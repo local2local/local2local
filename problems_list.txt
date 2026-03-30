@@ -1,2 +1,2 @@
 Analyzing local2local...                                        
-No issues found! (ran in 21.0s)
+No issues found! (ran in 39.9s)
