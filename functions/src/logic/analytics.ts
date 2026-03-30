@@ -122,7 +122,7 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER (Phase 27: Self-Healing Triggers)
- * Hardened: Uses onDocumentWritten to handle both manual nudges and live agent responses.
+ * Resilient Implementation: Added robust date parsing and explicit logging.
  */
 export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -130,21 +130,25 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
 }, async (event) => {
     const data = event.data?.after.data();
     
-    // Safety check: Ensure we are auditing a completed RESPONSE
     if (!data || data.control?.type !== "RESPONSE") return;
     if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
-
-    // Prevent infinite loops: Don't audit healing requests themselves
     if (data.correlation_id.startsWith("healing-")) return;
 
     const { appId } = event.params;
     const agentId = data.provenance.sender_id;
     
-    // Calculate Latency (ms)
-    const latency = new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime();
+    // Robust Date Parsing
+    const end = Date.parse(data.telemetry.completed_at);
+    const start = Date.parse(data.telemetry.processed_at);
+
+    if (isNaN(start) || isNaN(end)) {
+        console.warn(`[AUDIT_SKIPPED] Invalid ISO date format for ${data.correlation_id}`);
+        return;
+    }
+
+    const latency = end - start;
 
     try {
-        // Log the audit
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
             agentId,
             timestamp: new Date().toISOString(),
@@ -153,10 +157,9 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             correlation_id: data.correlation_id
         });
 
-        // TRIGGER SELF-HEALING (8s threshold)
         const THRESHOLD = 8000;
         if (latency > THRESHOLD) {
-            console.log(`[SELF-HEALING] High latency detected (${latency}ms) for ${agentId}. Dispatching FOLD_CONTEXT.`);
+            console.log(`[SELF-HEALING] Latency trigger: ${latency}ms for ${agentId}.`);
             
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
