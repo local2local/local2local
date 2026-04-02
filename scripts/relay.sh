@@ -1,25 +1,34 @@
 #!/bin/bash
 
-# L2LAAF Autonomous Relay v1.1
-# Orchestrates Code Patching, Git Synchronization, and Cloud Deployment.
+# L2LAAF Autonomous Relay v1.4
+# Updated: Custom commit naming convention [Phase X: Title]
 
 PHASE=$1
+TITLE=$2
 APP_ID="local2local-kaskflow"
 PROJECT_ID="local2local-dev"
 
-if [ -z "$PHASE" ]; then
-    echo "❌ Error: Please specify a Phase number (e.g., ./relay.sh 35)"
+# Get the absolute path of the script's directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
+if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
+    echo "❌ Error: Please specify Phase and Title."
+    echo "Usage: ./scripts/relay.sh 36 \"Global Memory (The Lessons Learned Vault)\""
     exit 1
 fi
 
 echo "🚀 INITIALIZING GUIDED AUTONOMY: PHASE $PHASE"
+echo "📝 TITLE: $TITLE"
 echo "--------------------------------------------"
+
+cd "$ROOT_DIR"
 
 # 1. Apply Code Shifts
 echo "Step 1: Extracting logic from clipboard..."
 pbpaste | node scripts/patcher.js
 if [ $? -ne 0 ]; then
-    echo "❌ Patching failed. Aborting deployment."
+    echo "❌ Patching failed."
     exit 1
 fi
 
@@ -29,16 +38,16 @@ if [ -d "functions" ]; then
     cd functions
     npm run build
     if [ $? -ne 0 ]; then
-        echo "❌ Build failed. Aborting deployment."
+        echo "❌ Build failed. Aborting."
         exit 1
     fi
     cd ..
 fi
 
 # 3. Git Synchronization
-echo "Step 3: Pushing logic to GitHub (develop)..."
+echo "Step 3: Pushing to GitHub (develop)..."
 git add .
-git commit -m "AUTONOMOUS: Phase $PHASE Implementation & Tooling"
+git commit -m "Phase $PHASE: $TITLE"
 git push origin develop
 
 # 4. Cloud Deployment
@@ -48,14 +57,13 @@ firebase deploy --only functions --project $PROJECT_ID
 # 5. Evolution Telemetry
 echo "Step 5: Logging milestone to Evolution Timeline..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
 firebase firestore:add "artifacts/$APP_ID/public/data/evolution_timeline" --data "{
   \"type\": \"PHASE_AUTONOMOUSLY_COMMITTED\",
-  \"details\": \"Guided Autonomy successfully synchronized Phase $PHASE logic and tools to the Cloud.\",
+  \"details\": \"$TITLE successfully synchronized.\",
   \"agentId\": \"RELAY_WORKER\",
   \"isAutonomous\": true,
   \"timestamp\": \"$TIMESTAMP\"
 }" --project $PROJECT_ID
 
 echo "--------------------------------------------"
-echo "✅ PHASE $PHASE IS LIVE. MONITOR EVOLUTION TIMELINE IN COCKPIT."
+echo "✅ PHASE $PHASE IS LIVE: $TITLE"
