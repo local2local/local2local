@@ -93,18 +93,18 @@ export const interventionTimelineWorkerV2 = onDocumentCreated({
 
 /**
  * 4. PROFIT ANALYSIS WORKER
- * Loop-Proof: Uses optional chaining and explicit manifest check.
+ * Hardened: Added state-transition guard to prevent infinite loops.
  */
-export const profitAnalysisWorkerV2 = onDocumentUpdated({
+export const profitAnalysisWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
+    const prev = event.data?.before.data();
     
-    // GUARD 1: Only process 'dispatched' REQUESTS
-    if (!data || data.status !== "dispatched" || data.control?.type !== "REQUEST") return;
-    // GUARD 2: Only process if receiver_id matches
-    if (data.provenance?.receiver_id !== "ANALYTICS_WORKER") return;
+    // GUARD: Only trigger when status TRANSITIONS to dispatched
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+    if (data.provenance?.receiver_id !== "ANALYTICS_WORKER" || data.control?.type !== "REQUEST") return;
 
     const client = new AgentBusClient({ 
         agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"], 
@@ -141,18 +141,23 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER
- * Hardened: Switched to onDocumentUpdated to better manage the dispatch lifecycle and prevent recursion.
+ * Fixed: Now uses onDocumentWritten with transition guard to support manual testing 
+ * without re-triggering loops.
  */
-export const efficacyAuditWorkerV2 = onDocumentUpdated({
+export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
+    const prev = event.data?.before.data();
     
-    // GUARD: Only audit final results that are NOT requests
-    if (!data || data.status !== "dispatched" || data.control?.type === "REQUEST") return;
+    // Transition Guard: Only audit when the status HAS CHANGED to 'dispatched'
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
     
-    // GUARD: Never audit a healing message (Infinite Loop Prevention)
+    const type = data.control?.type;
+    if (type !== "RESPONSE" && type !== "ERROR") return;
+    
+    if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
     if (data.correlation_id?.startsWith("healing-")) return;
 
     const { appId } = event.params;
@@ -192,7 +197,7 @@ export const efficacyAuditWorkerV2 = onDocumentUpdated({
         const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
 
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
-            agentId, timestamp: new Date().toISOString(), latencyMs, totalEfficacy, correlation_id: data.correlation_id
+            agentId, timestamp: new Date().toISOString(), latencyMs, performanceScore: perfScore, complianceScore, totalEfficacy, correlation_id: data.correlation_id
         });
 
         const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
@@ -203,6 +208,7 @@ export const efficacyAuditWorkerV2 = onDocumentUpdated({
         });
 
         if (totalEfficacy < 90) {
+            console.log(`[SELF-HEALING_TRIGGER] Efficacy drop to ${totalEfficacy.toFixed(1)}% for ${agentId}.`);
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
                 status: "pending",

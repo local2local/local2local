@@ -23,36 +23,51 @@ export class AgentBusClient {
   private config: AgentConfig;
   private appId: string;
 
-  /**
-   * @param config Agent metadata
-   * @param tenantId Optional App ID. If provided, overrides default env config.
-   */
   constructor(config: AgentConfig, tenantId?: string) {
     this.config = config;
     this.appId = tenantId || getAppId();
   }
 
+  /**
+   * register() - Phase 33 Hardening
+   * Fixed: Only initializes efficacy to 100 if the agent is new.
+   * Otherwise, only updates heartbeats and metadata to preserve performance metrics.
+   */
   async register() {
     const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
-    await registryRef.set({
-      agent_id: this.config.agentId,
-      type: this.config.role,
-      domain: this.config.domain,
-      capabilities: this.config.capabilities,
-      jurisdictions: this.config.jurisdictions,
-      substances: this.config.substances,
-      status: {
-        health: "green",
-        mode: "live",
-        current_efficacy: 100,
-        last_heartbeat: new Date().toISOString()
-      },
-      deployment: {
-        project: getProjectId(),
-        environment: "production",
-        last_deployed: new Date().toISOString()
-      }
-    }, { merge: true });
+    const doc = await registryRef.get();
+    
+    if (!doc.exists) {
+      // First-time deployment initialization
+      await registryRef.set({
+        agent_id: this.config.agentId,
+        type: this.config.role,
+        domain: this.config.domain,
+        capabilities: this.config.capabilities,
+        jurisdictions: this.config.jurisdictions,
+        substances: this.config.substances,
+        status: {
+          health: "green",
+          mode: "live",
+          current_efficacy: 100,
+          last_heartbeat: new Date().toISOString()
+        },
+        deployment: {
+          project: getProjectId(),
+          environment: "production",
+          last_deployed: new Date().toISOString()
+        }
+      });
+    } else {
+      // Update heartbeat and capabilities without overwriting efficacy scores
+      await registryRef.update({
+        "status.last_heartbeat": new Date().toISOString(),
+        capabilities: this.config.capabilities,
+        jurisdictions: this.config.jurisdictions,
+        substances: this.config.substances,
+        "deployment.last_deployed": new Date().toISOString()
+      });
+    }
   }
 
   async lookupCapability(capability: string, jurisdiction: string): Promise<string | null> {
@@ -70,7 +85,7 @@ export class AgentBusClient {
       .filter(data => data.jurisdictions.includes(jurisdiction));
 
     if (matches.length === 0) return null;
-    matches.sort((a, b) => b.status.current_efficacy - a.status.current_efficacy);
+    matches.sort((a, b) => (b.status.current_efficacy || 0) - (a.status.current_efficacy || 0));
     return matches[0].agent_id;
   }
 

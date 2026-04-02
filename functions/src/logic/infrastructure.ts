@@ -1,4 +1,4 @@
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { db, getProjectId } from "../config";
 import { AgentBusClient } from "../agentBusClient";
@@ -18,9 +18,8 @@ const scrubPII = (text: string): string => {
 };
 
 /**
- * 1. IDENTITY ANOMALY WORKER (Phase 16.3: Fraud Detection)
- * Detects 'Geography Pivots' where a user claims disparate locations 
- * across different marketplaces.
+ * 1. IDENTITY ANOMALY WORKER
+ * Detects 'Geography Pivots' where a user claims disparate locations.
  */
 export const identityAnomalyWorkerV2 = onDocumentUpdated({
     document: "artifacts/{appId}/users/{userId}"
@@ -35,7 +34,6 @@ export const identityAnomalyWorkerV2 = onDocumentUpdated({
     if (newLoc && oldLoc && (newLoc.latitude !== oldLoc.latitude || newLoc.longitude !== oldLoc.longitude)) {
         const distance = getDistanceMeters(newLoc.latitude, newLoc.longitude, oldLoc.latitude, oldLoc.longitude);
         
-        // Flag pivots greater than 50km
         if (distance > 50000) {
             const { appId, userId } = event.params;
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
@@ -87,7 +85,9 @@ export const safetyAlertWorkerV2 = onDocumentUpdated({
     const client = new AgentBusClient({ agentId: "SAFETY_WORKER", capabilities: ["threat_detection"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "SECURITY" }, appId);
     await client.register();
     try {
-        const { intent, severity, details } = data.payload.manifest;
+        const manifest = data.payload?.manifest;
+        if (!manifest) return;
+        const { intent, severity, details } = manifest;
         if (intent === "LOG_SAFETY_VIOLATION") {
             await db.collection(`artifacts/${appId}/public/data/interventions`).add({
                 type: "SAFETY_VIOLATION", severity: severity || "high", status: "active",
@@ -154,7 +154,9 @@ export const facilityMatchingWorkerV2 = onDocumentUpdated({
     const client = new AgentBusClient({ agentId: "FACILITY_MATCHING_WORKER", capabilities: ["technical_alignment"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "OPS" }, appId);
     await client.register();
     try {
-        const { venueId, requirements = [] } = data.payload.manifest;
+        const manifest = data.payload?.manifest;
+        if (!manifest) return;
+        const { venueId, requirements = [] } = manifest;
         const venueDoc = await db.doc(`artifacts/${appId}/users/${venueId}`).get();
         const facilities = venueDoc.data()?.facilityProfile?.onSiteFacilities || [];
         const missing = requirements.filter((req: string) => !facilities.includes(req));
@@ -194,17 +196,20 @@ export const agentHeartbeatMonitorV2 = onSchedule("every 5 minutes", async () =>
 
 /**
  * 9. CONTEXT FOLDING WORKER
- * Hardened: Added explicit manifest guards to prevent destructuring errors and infinite loops.
+ * Hardened: Uses onDocumentWritten with transition guard for loop-proofing.
  */
-export const contextFoldingWorkerV2 = onDocumentUpdated({
+export const contextFoldingWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
+    const prev = event.data?.before.data();
     
-    // GUARD 1: Only process 'dispatched' REQUESTS intended for this worker
-    if (!data || data.status !== "dispatched" || data.control?.type !== "REQUEST") return;
-    if (data.provenance?.receiver_id !== "INFRASTRUCTURE_WORKER") return;
+    // Transition Guard: Only process when transitioning TO dispatched
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+    
+    // Ensure this is a REQUEST for this worker
+    if (data.control?.type !== "REQUEST" || data.provenance?.receiver_id !== "INFRASTRUCTURE_WORKER") return;
 
     const { appId } = event.params;
     const client = new AgentBusClient({ 
@@ -216,7 +221,6 @@ export const contextFoldingWorkerV2 = onDocumentUpdated({
 
     try {
         const manifest = data.payload?.manifest;
-        // GUARD 2: Explicitly check for manifest to prevent destructuring crash
         if (!manifest) throw new Error("MISSING_MANIFEST");
 
         const { intent, correlationId, targetAgentId } = manifest;
@@ -255,8 +259,8 @@ export const contextFoldingWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 10. CROSS-TENANT SOVEREIGNTY AUDIT (Phase 32)
- * Ensures data silos are maintained by blocking cross-app references.
+ * 10. CROSS-TENANT SOVEREIGNTY AUDIT
+ * Blocks cross-app data leaks to ensure PIPA compliance.
  */
 export const sovereigntyAuditWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
