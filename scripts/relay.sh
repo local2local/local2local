@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # L2LAAF Autonomous Relay v1.6
-# Updated: Interactive commit prompting and linting enforcement.
+# Interactive commit prompting and linting enforcement.
 
 APP_ID="local2local-kaskflow"
 PROJECT_ID="local2local-dev"
@@ -30,7 +30,7 @@ if [ -d "functions" ]; then
     cd functions
     npm run lint
     if [ $? -ne 0 ]; then
-        echo "❌ Linting failed. Please fix the issues before deploying."
+        echo "❌ Linting failed. Please fix issues before deploying."
         exit 1
     fi
     
@@ -57,12 +57,10 @@ if [ -z "$COMMIT_MESSAGE" ]; then
     exit 1
 fi
 
-# Extract Phase and Title from the string for telemetry
-# Pattern expected: "Phase 36: Global Memory"
+# Extract Phase and Title for telemetry
 PHASE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
 TITLE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
 
-# Fallback for telemetry if the input doesn't follow the Phase: Title pattern
 if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
     PHASE="?"
     TITLE="$COMMIT_MESSAGE"
@@ -82,7 +80,6 @@ firebase deploy --only functions --project $PROJECT_ID
 echo "Step 7: Logging milestone to Evolution Timeline..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Create a telemetry record in Firestore via CLI
 firebase firestore:add "artifacts/$APP_ID/public/data/evolution_timeline" --data "{
   \"type\": \"PHASE_AUTONOMOUSLY_COMMITTED\",
   \"details\": \"$TITLE successfully synchronized.\",
