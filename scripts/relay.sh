@@ -1,78 +1,45 @@
 #!/bin/bash
 
-# L2LAAF Autonomous Relay v1.7
-# Fully Automated: Extracts commit messages from AI payload.
+# L2LAAF Relay v1.8
+# Orchestrates local sync, build, and deployment for Node.js 24 Functions.
+# Usage: ./scripts/relay.sh <payload_file.md>
 
-APP_ID="local2local-kaskflow"
-PROJECT_ID="local2local-dev"
+PAYLOAD=$1
 
-# Setup relative paths
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-
-echo "🚀 INITIALIZING GUIDED AUTONOMY (FULLY AUTOMATED)"
-echo "--------------------------------------------"
-
-cd "$ROOT_DIR"
-
-# 1. Apply Logic & Metadata
-echo "Step 1: Synchronizing logic and commit metadata..."
-pbpaste | node scripts/patcher.js
-if [ $? -ne 0 ]; then
-    echo "❌ Error: Logic synchronization failed."
+if [ -z "$PAYLOAD" ] || [ ! -f "$PAYLOAD" ]; then
+    echo "❌ Error: Valid payload markdown file required."
     exit 1
 fi
 
-# 2. Read Extracted Commit Message
-if [ -f ".commit_msg.tmp" ]; then
-    COMMIT_MESSAGE=$(cat .commit_msg.tmp)
-    rm .commit_msg.tmp
-    echo "📝 AUTO-COMMIT: $COMMIT_MESSAGE"
+echo "--- L2LAAF RELAY v1.8 START ---"
+
+# 1. Run Patcher via stdin pipe (The Vacuum Method)
+echo "📡 Vacuuming payload into local filesystem..."
+cat "$PAYLOAD" | node scripts/patcher.js
+if [ $? -ne 0 ]; then
+    echo "❌ Patcher failed. Aborting relay."
+    exit 1
+fi
+
+# 2. Build Functions
+echo "📦 Building Firebase Functions (Node.js 24)..."
+cd functions
+npm run build
+if [ $? -ne 0 ]; then
+    echo "❌ Build failed. Check compiler errors."
+    exit 1
+fi
+cd ..
+
+# 3. Deploy Phase 36/37 Logic
+echo "☁️ Deploying Guided Autonomy Evolution Logic..."
+firebase deploy --only functions:onProposalFinalized,functions:onResearchIntentCreated
+
+if [ $? -eq 0 ]; then
+    echo "🏁 RELAY SUCCESSFUL: Evolution Logic is Live."
 else
-    echo "⚠️ Warning: No embedded commit message found. Falling back to prompt."
-    echo "Enter commit message:"
-    read -r COMMIT_MESSAGE
+    echo "❌ Deployment failed."
+    exit 1
 fi
 
-# 3. Build Check
-if [ -d "functions" ]; then
-    echo "Step 3: Validating build..."
-    cd functions
-    npm run lint && npm run build
-    if [ $? -ne 0 ]; then
-        echo "❌ Error: Build/Lint failed."
-        exit 1
-    fi
-    cd ..
-fi
-
-# 4. Git Synchronization
-echo "Step 4: Pushing to GitHub (develop)..."
-git add .
-git commit -m "$COMMIT_MESSAGE"
-git push origin develop
-
-# 5. Cloud Deployment
-echo "Step 5: Deploying to Cloud..."
-firebase deploy --only functions --project $PROJECT_ID
-
-# 6. Telemetry Extraction
-PHASE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
-TITLE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
-
-if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
-    PHASE="?"
-    TITLE="$COMMIT_MESSAGE"
-fi
-
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-firebase firestore:add "artifacts/$APP_ID/public/data/evolution_timeline" --data "{
-  \"type\": \"PHASE_AUTONOMOUSLY_COMMITTED\",
-  \"details\": \"$TITLE successfully synchronized.\",
-  \"agentId\": \"RELAY_WORKER\",
-  \"isAutonomous\": true,
-  \"timestamp\": \"$TIMESTAMP\"
-}" --project $PROJECT_ID
-
-echo "--------------------------------------------"
-echo "✅ PHASE $PHASE IS LIVE: $TITLE"
+echo "--- L2LAAF RELAY END ---"
