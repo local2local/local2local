@@ -1,20 +1,24 @@
 #!/bin/bash
 
-# L2LAAF Autonomous Relay v1.4
-# Updated: Custom commit naming convention [Phase X: Title]
+# L2LAAF Autonomous Relay v1.5
+# Updated: Single-string argument handling "Phase X: Title"
 
-PHASE=$1
-TITLE=$2
+FULL_INPUT=$1
 APP_ID="local2local-kaskflow"
 PROJECT_ID="local2local-dev"
 
-# Get the absolute path of the script's directory
+# 1. Extract Phase and Title from the single string
+# Pattern expected: "Phase 36: Global Memory"
+PHASE=$(echo "$FULL_INPUT" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
+TITLE=$(echo "$FULL_INPUT" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
+
+# Get absolute path of the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
-    echo "❌ Error: Please specify Phase and Title."
-    echo "Usage: ./scripts/relay.sh 36 \"Global Memory (The Lessons Learned Vault)\""
+    echo "❌ Error: Invalid format. Please use \"Phase [Number]: [Title]\""
+    echo "Example: ./scripts/relay.sh \"Phase 36: Global Memory\""
     exit 1
 fi
 
@@ -26,9 +30,10 @@ cd "$ROOT_DIR"
 
 # 1. Apply Code Shifts
 echo "Step 1: Extracting logic from clipboard..."
+# On macOS, pbpaste gets the current clipboard content
 pbpaste | node scripts/patcher.js
 if [ $? -ne 0 ]; then
-    echo "❌ Patching failed."
+    echo "❌ Patching failed. Ensure scripts/patcher.js exists and you copied the FULL response."
     exit 1
 fi
 
@@ -38,7 +43,7 @@ if [ -d "functions" ]; then
     cd functions
     npm run build
     if [ $? -ne 0 ]; then
-        echo "❌ Build failed. Aborting."
+        echo "❌ Build failed. Aborting deployment."
         exit 1
     fi
     cd ..
@@ -57,6 +62,8 @@ firebase deploy --only functions --project $PROJECT_ID
 # 5. Evolution Telemetry
 echo "Step 5: Logging milestone to Evolution Timeline..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Create a telemetry record in Firestore via CLI
 firebase firestore:add "artifacts/$APP_ID/public/data/evolution_timeline" --data "{
   \"type\": \"PHASE_AUTONOMOUSLY_COMMITTED\",
   \"details\": \"$TITLE successfully synchronized.\",
