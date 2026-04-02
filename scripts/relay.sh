@@ -1,29 +1,16 @@
 #!/bin/bash
 
-# L2LAAF Autonomous Relay v1.5
-# Updated: Single-string argument handling "Phase X: Title"
+# L2LAAF Autonomous Relay v1.6
+# Updated: Interactive commit prompting and linting enforcement.
 
-FULL_INPUT=$1
 APP_ID="local2local-kaskflow"
 PROJECT_ID="local2local-dev"
-
-# 1. Extract Phase and Title from the single string
-# Pattern expected: "Phase 36: Global Memory"
-PHASE=$(echo "$FULL_INPUT" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
-TITLE=$(echo "$FULL_INPUT" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
 
 # Get absolute path of the script's directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
-    echo "❌ Error: Invalid format. Please use \"Phase [Number]: [Title]\""
-    echo "Example: ./scripts/relay.sh \"Phase 36: Global Memory\""
-    exit 1
-fi
-
-echo "🚀 INITIALIZING GUIDED AUTONOMY: PHASE $PHASE"
-echo "📝 TITLE: $TITLE"
+echo "🚀 INITIALIZING GUIDED AUTONOMY"
 echo "--------------------------------------------"
 
 cd "$ROOT_DIR"
@@ -37,30 +24,62 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 2. Local Build Validation
-echo "Step 2: Validating TypeScript build..."
+# 2. Linting Check
+echo "Step 2: Running linting check..."
 if [ -d "functions" ]; then
     cd functions
+    npm run lint
+    if [ $? -ne 0 ]; then
+        echo "❌ Linting failed. Please fix the issues before deploying."
+        exit 1
+    fi
+    
+    # 3. Local Build Validation
+    echo "Step 3: Validating TypeScript build..."
     npm run build
     if [ $? -ne 0 ]; then
         echo "❌ Build failed. Aborting deployment."
         exit 1
     fi
     cd ..
+else
+    echo "⚠️ No 'functions' directory found. Skipping lint/build."
 fi
 
-# 3. Git Synchronization
-echo "Step 3: Pushing to GitHub (develop)..."
+# 4. Prompt for Commit Message
+echo ""
+echo "--------------------------------------------"
+echo "Enter commit message (e.g., Phase 36: Global Memory):"
+read -r COMMIT_MESSAGE
+
+if [ -z "$COMMIT_MESSAGE" ]; then
+    echo "❌ Error: Commit message is required to proceed."
+    exit 1
+fi
+
+# Extract Phase and Title from the string for telemetry
+# Pattern expected: "Phase 36: Global Memory"
+PHASE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
+TITLE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
+
+# Fallback for telemetry if the input doesn't follow the Phase: Title pattern
+if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
+    PHASE="?"
+    TITLE="$COMMIT_MESSAGE"
+fi
+
+# 5. Git Synchronization
+echo "Step 5: Pushing to GitHub (develop)..."
 git add .
-git commit -m "Phase $PHASE: $TITLE"
+git commit -m "$COMMIT_MESSAGE"
 git push origin develop
 
-# 4. Cloud Deployment
-echo "Step 4: Deploying to Google Cloud ($PROJECT_ID)..."
+# 6. Cloud Deployment
+echo "Step 6: Deploying to Google Cloud ($PROJECT_ID)..."
 firebase deploy --only functions --project $PROJECT_ID
 
-# 5. Evolution Telemetry
-echo "Step 5: Logging milestone to Evolution Timeline..."
+# 7. Evolution Telemetry
+echo "Step 7: Logging milestone to Evolution Timeline..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Create a telemetry record in Firestore via CLI
