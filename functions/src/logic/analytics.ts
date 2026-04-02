@@ -122,7 +122,7 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 
 /**
  * 5. EFFICACY AUDIT WORKER (Phase 33: Instructional Drift)
- * Hardened: Now calculates both Performance (P) and Compliance (C).
+ * Fixed: Now audits both 'RESPONSE' and 'ERROR' types to detect drift.
  */
 export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -131,7 +131,11 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
     const data = event.data?.after.data();
     
     if (!data || data.status !== "dispatched") return;
-    if (data.control?.type !== "RESPONSE") return;
+    
+    // FIX: Allow both RESPONSE and ERROR types to be audited
+    const type = data.control?.type;
+    if (type !== "RESPONSE" && type !== "ERROR") return;
+    
     if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
     if (data.correlation_id.startsWith("healing-")) return;
 
@@ -162,22 +166,24 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             perfScore = Math.max(0, 1 - (latencyMs - BASELINE_MS) / 15000);
         }
 
-        // --- 2. COMPLIANCE SCORE (C) - Phase 33 ---
-        // Measures if the reasoning trace aligns with the 'instruction' (HBR)
+        // --- 2. COMPLIANCE SCORE (C) ---
         let complianceScore = 1.0;
-        const reasoningTrace = (data.payload?.error?.trace || "").toLowerCase();
-        const errorMsg = (data.payload?.error?.message || "").toLowerCase();
         
-        // Simulating Drift Detection: 
-        // If an error is returned but the trace is empty, compliance is penalized.
-        if (data.control?.type === "ERROR") {
-            if (reasoningTrace.length < 20) complianceScore = 0.5;
-            if (errorMsg.includes("unexpected") || errorMsg.includes("unknown")) complianceScore = 0.2;
+        // Audit the Error Quality for Drift
+        const errorData = data.payload?.error;
+        if (errorData) {
+            const trace = (errorData.trace || "").toLowerCase();
+            const msg = (errorData.message || "").toLowerCase();
+            
+            // Penalize vague reasoning (hallucination indicator)
+            if (trace.length < 20) complianceScore = 0.5;
+            if (msg.includes("unexpected") || msg.includes("unknown")) {
+                complianceScore = 0.2;
+            }
         }
 
         // --- 3. AGGREGATE EFFICACY (E) ---
-        // Formula: E = (0.4 * A) + (0.3 * C) + (0.2 * R) + (0.1 * P)
-        // For now, we weight C and P heavily until A and R trackers are fully implemented.
+        // Formula weighted towards Compliance (Logic Integrity)
         const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
 
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
@@ -190,7 +196,6 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             correlation_id: data.correlation_id
         });
 
-        // Sync with Registry
         const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
         await registryRef.update({
             "status.latency_ms": latencyMs,
@@ -198,9 +203,9 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             "status.last_heartbeat": new Date().toISOString()
         });
 
-        // Trigger Healing if Drift/Fatigue detected
+        // Trigger Healing if Drift detected
         if (totalEfficacy < 90) {
-            console.log(`[SELF-HEALING] Efficacy Drop (${totalEfficacy.toFixed(1)}%) for ${agentId}. (P: ${perfScore}, C: ${complianceScore})`);
+            console.log(`[SELF-HEALING_TRIGGER] Efficacy: ${totalEfficacy.toFixed(1)}%. Issuing FOLD_CONTEXT.`);
             
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
