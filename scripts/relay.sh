@@ -1,63 +1,62 @@
 #!/bin/bash
 
-# L2LAAF Autonomous Relay v1.6
-# Interactive commit prompting and linting enforcement.
+# L2LAAF Autonomous Relay v1.7
+# Fully Automated: Extracts commit messages from AI payload.
 
 APP_ID="local2local-kaskflow"
 PROJECT_ID="local2local-dev"
 
-# Get absolute path of the script's directory and project root
+# Setup relative paths
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "🚀 INITIALIZING GUIDED AUTONOMY"
+echo "🚀 INITIALIZING GUIDED AUTONOMY (FULLY AUTOMATED)"
 echo "--------------------------------------------"
 
 cd "$ROOT_DIR"
 
-# 1. Apply Code Shifts
-echo "Step 1: Extracting logic from clipboard..."
-# On macOS, pbpaste gets the current clipboard content
+# 1. Apply Logic & Metadata
+echo "Step 1: Synchronizing logic and commit metadata..."
 pbpaste | node scripts/patcher.js
 if [ $? -ne 0 ]; then
-    echo "❌ Patching failed. Ensure scripts/patcher.js exists and you copied the FULL response."
+    echo "❌ Error: Logic synchronization failed."
     exit 1
 fi
 
-# 2. Linting Check
-echo "Step 2: Running linting check..."
+# 2. Read Extracted Commit Message
+if [ -f ".commit_msg.tmp" ]; then
+    COMMIT_MESSAGE=$(cat .commit_msg.tmp)
+    rm .commit_msg.tmp
+    echo "📝 AUTO-COMMIT: $COMMIT_MESSAGE"
+else
+    echo "⚠️ Warning: No embedded commit message found. Falling back to prompt."
+    echo "Enter commit message:"
+    read -r COMMIT_MESSAGE
+fi
+
+# 3. Build Check
 if [ -d "functions" ]; then
+    echo "Step 3: Validating build..."
     cd functions
-    npm run lint
+    npm run lint && npm run build
     if [ $? -ne 0 ]; then
-        echo "❌ Linting failed. Please fix issues before deploying."
-        exit 1
-    fi
-    
-    # 3. Local Build Validation
-    echo "Step 3: Validating TypeScript build..."
-    npm run build
-    if [ $? -ne 0 ]; then
-        echo "❌ Build failed. Aborting deployment."
+        echo "❌ Error: Build/Lint failed."
         exit 1
     fi
     cd ..
-else
-    echo "⚠️ No 'functions' directory found. Skipping lint/build."
 fi
 
-# 4. Prompt for Commit Message
-echo ""
-echo "--------------------------------------------"
-echo "Enter commit message (e.g., Phase 36: Global Memory):"
-read -r COMMIT_MESSAGE
+# 4. Git Synchronization
+echo "Step 4: Pushing to GitHub (develop)..."
+git add .
+git commit -m "$COMMIT_MESSAGE"
+git push origin develop
 
-if [ -z "$COMMIT_MESSAGE" ]; then
-    echo "❌ Error: Commit message is required to proceed."
-    exit 1
-fi
+# 5. Cloud Deployment
+echo "Step 5: Deploying to Cloud..."
+firebase deploy --only functions --project $PROJECT_ID
 
-# Extract Phase and Title for telemetry
+# 6. Telemetry Extraction
 PHASE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase \([0-9]*\):.*/\1/p')
 TITLE=$(echo "$COMMIT_MESSAGE" | sed -n 's/Phase [0-9]*: \(.*\)/\1/p')
 
@@ -66,20 +65,7 @@ if [ -z "$PHASE" ] || [ -z "$TITLE" ]; then
     TITLE="$COMMIT_MESSAGE"
 fi
 
-# 5. Git Synchronization
-echo "Step 5: Pushing to GitHub (develop)..."
-git add .
-git commit -m "$COMMIT_MESSAGE"
-git push origin develop
-
-# 6. Cloud Deployment
-echo "Step 6: Deploying to Google Cloud ($PROJECT_ID)..."
-firebase deploy --only functions --project $PROJECT_ID
-
-# 7. Evolution Telemetry
-echo "Step 7: Logging milestone to Evolution Timeline..."
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
 firebase firestore:add "artifacts/$APP_ID/public/data/evolution_timeline" --data "{
   \"type\": \"PHASE_AUTONOMOUSLY_COMMITTED\",
   \"details\": \"$TITLE successfully synchronized.\",
