@@ -121,8 +121,8 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 5. EFFICACY AUDIT WORKER (Phase 31: Adaptive Thresholds)
- * Implements HBR-SAF-01 Efficacy Math.
+ * 5. EFFICACY AUDIT WORKER (Phase 33: Instructional Drift)
+ * Hardened: Now calculates both Performance (P) and Compliance (C).
  */
 export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -155,27 +155,42 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
     const latencyMs = end - start;
 
     try {
-        // --- HBR-SAF-01: EFFICACY CALCULATION ---
+        // --- 1. PERFORMANCE SCORE (P) ---
         const BASELINE_MS = 5000;
         let perfScore = 1.0;
         if (latencyMs > BASELINE_MS) {
             perfScore = Math.max(0, 1 - (latencyMs - BASELINE_MS) / 15000);
         }
 
-        // Aggregate Score (Simplified for initial rollout)
-        // Future: Add Accuracy (A) and Compliance (C) checks
-        const totalEfficacy = perfScore * 100;
+        // --- 2. COMPLIANCE SCORE (C) - Phase 33 ---
+        // Measures if the reasoning trace aligns with the 'instruction' (HBR)
+        let complianceScore = 1.0;
+        const reasoningTrace = (data.payload?.error?.trace || "").toLowerCase();
+        const errorMsg = (data.payload?.error?.message || "").toLowerCase();
+        
+        // Simulating Drift Detection: 
+        // If an error is returned but the trace is empty, compliance is penalized.
+        if (data.control?.type === "ERROR") {
+            if (reasoningTrace.length < 20) complianceScore = 0.5;
+            if (errorMsg.includes("unexpected") || errorMsg.includes("unknown")) complianceScore = 0.2;
+        }
+
+        // --- 3. AGGREGATE EFFICACY (E) ---
+        // Formula: E = (0.4 * A) + (0.3 * C) + (0.2 * R) + (0.1 * P)
+        // For now, we weight C and P heavily until A and R trackers are fully implemented.
+        const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
 
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
             agentId,
             timestamp: new Date().toISOString(),
             latencyMs,
             performanceScore: perfScore,
+            complianceScore: complianceScore,
             totalEfficacy,
             correlation_id: data.correlation_id
         });
 
-        // Update Registry with latest health
+        // Sync with Registry
         const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
         await registryRef.update({
             "status.latency_ms": latencyMs,
@@ -183,10 +198,9 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
             "status.last_heartbeat": new Date().toISOString()
         });
 
-        // --- PHASE 31: ADAPTIVE HEALING TRIGGER ---
-        // Instead of hard 8s, we trigger if efficacy drops below 90% (Yellow Status)
+        // Trigger Healing if Drift/Fatigue detected
         if (totalEfficacy < 90) {
-            console.log(`[SELF-HEALING] Efficacy Drop (${totalEfficacy.toFixed(1)}%) for ${agentId}.`);
+            console.log(`[SELF-HEALING] Efficacy Drop (${totalEfficacy.toFixed(1)}%) for ${agentId}. (P: ${perfScore}, C: ${complianceScore})`);
             
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
