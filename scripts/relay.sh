@@ -1,45 +1,38 @@
 #!/bin/bash
 
-# L2LAAF Relay v1.8
-# Orchestrates local sync, build, and deployment for Node.js 24 Functions.
+# L2LAAF Relay v1.9 (GitHub Actions Integration)
+# Orchestrates local sync and GitHub push to trigger deployment.
 # Usage: ./scripts/relay.sh <payload_file.md>
 
-PAYLOAD=$1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PAYLOAD=${1:-"logic_payload.md"}
 
-if [ -z "$PAYLOAD" ] || [ ! -f "$PAYLOAD" ]; then
-    echo "❌ Error: Valid payload markdown file required."
+if [ ! -f "$PAYLOAD" ]; then
+    echo "❌ Error: Payload file '$PAYLOAD' not found."
     exit 1
 fi
 
-echo "--- L2LAAF RELAY v1.8 START ---"
+echo "--- L2LAAF RELAY v1.9 (CI/CD MODE) ---"
 
-# 1. Run Patcher via stdin pipe (The Vacuum Method)
-echo "📡 Vacuuming payload into local filesystem..."
-cat "$PAYLOAD" | node scripts/patcher.js
+# 1. Run Patcher to update local files
+echo "📡 Synchronizing local repository..."
+cat "$PAYLOAD" | node "$SCRIPT_DIR/patcher.js"
 if [ $? -ne 0 ]; then
-    echo "❌ Patcher failed. Aborting relay."
+    echo "❌ Local sync failed."
     exit 1
 fi
 
-# 2. Build Functions
-echo "📦 Building Firebase Functions (Node.js 24)..."
-cd functions
-npm run build
-if [ $? -ne 0 ]; then
-    echo "❌ Build failed. Check compiler errors."
-    exit 1
-fi
-cd ..
-
-# 3. Deploy Phase 36/37 Logic
-echo "☁️ Deploying Guided Autonomy Evolution Logic..."
-firebase deploy --only functions:onProposalFinalized,functions:onResearchIntentCreated
-
-if [ $? -eq 0 ]; then
-    echo "🏁 RELAY SUCCESSFUL: Evolution Logic is Live."
-else
-    echo "❌ Deployment failed."
-    exit 1
+# 2. Extract Commit Message
+COMMIT_MSG="evolution: update guided autonomy logic"
+if [ -f ".commit_msg.tmp" ]; then
+    COMMIT_MSG=$(cat .commit_msg.tmp)
+    rm .commit_msg.tmp
 fi
 
-echo "--- L2LAAF RELAY END ---"
+# 3. Push to GitHub to trigger deploy.yml
+echo "🚀 Pushing to GitHub: $COMMIT_MSG"
+git add .
+git commit -m "$COMMIT_MSG"
+git push
+
+echo "🏁 Local Relay complete. Check GitHub Actions for deployment status."
