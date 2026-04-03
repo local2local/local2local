@@ -1,55 +1,51 @@
 #!/bin/bash
 
-# L2LAAF Relay v2.0 (Path Resolution & Context Fix)
-# Orchestrates local sync and GitHub push.
-# Usage: ./scripts/relay.sh <payload_file.md>
+# L2LAAF Relay v3.0 (NASA Standard - Pre-Flight Check)
+# Orchestrates local sync, validates TypeScript, and handles GitHub push.
 
-# Determine the absolute path to the project root
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT_DIR="$ROOT_DIR/scripts"
-
-# Default to logic_payload.md in scripts folder if no argument provided
 PAYLOAD_ARG=${1:-"scripts/logic_payload.md"}
 
-# Resolve absolute path for the payload
-if [[ "$PAYLOAD_ARG" = /* ]]; then
-    PAYLOAD_PATH="$PAYLOAD_ARG"
-else
-    # Try relative to current dir, then relative to root
-    if [ -f "$PAYLOAD_ARG" ]; then
-        PAYLOAD_PATH="$(pwd)/$PAYLOAD_ARG"
-    elif [ -f "$ROOT_DIR/$PAYLOAD_ARG" ]; then
-        PAYLOAD_PATH="$ROOT_DIR/$PAYLOAD_ARG"
-    else
-        echo "❌ Error: Payload file '$PAYLOAD_ARG' not found."
-        exit 1
-    fi
+if [ ! -f "$PAYLOAD_ARG" ]; then
+    echo "❌ Error: Payload file '$PAYLOAD_ARG' not found."
+    exit 1
 fi
 
-echo "--- L2LAAF RELAY v2.0 ---"
+echo "--- L2LAAF RELAY v3.0 ---"
 echo "📂 Project Root: $ROOT_DIR"
-echo "📄 Payload: $PAYLOAD_PATH"
 
-# 1. Run Patcher to update local files
+# 1. Run Patcher
 echo "📡 Synchronizing local repository..."
 cd "$ROOT_DIR"
-cat "$PAYLOAD_PATH" | node "$SCRIPT_DIR/patcher.js"
+cat "$PAYLOAD_ARG" | node "$SCRIPT_DIR/patcher.js"
 if [ $? -ne 0 ]; then
     echo "❌ Local sync failed."
     exit 1
 fi
 
-# 2. Extract Commit Message
+# 2. Pre-flight check (NASA Standard)
+echo "🔍 Pre-flight check: Validating Cloud Functions..."
+cd "$ROOT_DIR/functions"
+# Run tsc directly to verify logic integrity
+./node_modules/.bin/tsc --noEmit
+if [ $? -ne 0 ]; then
+    echo "❌ FATAL: TypeScript validation failed. Bad code will not be pushed."
+    exit 1
+fi
+echo "✅ Logic integrity verified."
+
+# 3. Git Operations
+cd "$ROOT_DIR"
 COMMIT_MSG="evolution: baseline phase 36 stabilization"
 if [ -f ".commit_msg.tmp" ]; then
     COMMIT_MSG=$(cat .commit_msg.tmp)
     rm .commit_msg.tmp
 fi
 
-# 3. Push to GitHub
 echo "🚀 Pushing to GitHub: $COMMIT_MSG"
 git add .
 git commit -m "$COMMIT_MSG"
 git push
 
-echo "🏁 Local Relay complete. Check GitHub Actions for deployment status."
+echo "🏁 Local Relay complete. System is stable."
