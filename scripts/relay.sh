@@ -1,35 +1,52 @@
 #!/bin/bash
 
-# L2LAAF Relay v1.9 (GitHub Actions Integration)
-# Orchestrates local sync and GitHub push to trigger deployment.
+# L2LAAF Relay v2.0 (Path Resolution & Context Fix)
+# Orchestrates local sync and GitHub push.
 # Usage: ./scripts/relay.sh <payload_file.md>
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PAYLOAD=${1:-"logic_payload.md"}
+# Determine the absolute path to the project root
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$ROOT_DIR/scripts"
 
-if [ ! -f "$PAYLOAD" ]; then
-    echo "❌ Error: Payload file '$PAYLOAD' not found."
-    exit 1
+# Default to logic_payload.md in scripts folder if no argument provided
+PAYLOAD_ARG=${1:-"scripts/logic_payload.md"}
+
+# Resolve absolute path for the payload
+if [[ "$PAYLOAD_ARG" = /* ]]; then
+    PAYLOAD_PATH="$PAYLOAD_ARG"
+else
+    # Try relative to current dir, then relative to root
+    if [ -f "$PAYLOAD_ARG" ]; then
+        PAYLOAD_PATH="$(pwd)/$PAYLOAD_ARG"
+    elif [ -f "$ROOT_DIR/$PAYLOAD_ARG" ]; then
+        PAYLOAD_PATH="$ROOT_DIR/$PAYLOAD_ARG"
+    else
+        echo "❌ Error: Payload file '$PAYLOAD_ARG' not found."
+        exit 1
+    fi
 fi
 
-echo "--- L2LAAF RELAY v1.9 (CI/CD MODE) ---"
+echo "--- L2LAAF RELAY v2.0 ---"
+echo "📂 Project Root: $ROOT_DIR"
+echo "📄 Payload: $PAYLOAD_PATH"
 
 # 1. Run Patcher to update local files
 echo "📡 Synchronizing local repository..."
-cat "$PAYLOAD" | node "$SCRIPT_DIR/patcher.js"
+cd "$ROOT_DIR"
+cat "$PAYLOAD_PATH" | node "$SCRIPT_DIR/patcher.js"
 if [ $? -ne 0 ]; then
     echo "❌ Local sync failed."
     exit 1
 fi
 
 # 2. Extract Commit Message
-COMMIT_MSG="evolution: update guided autonomy logic"
+COMMIT_MSG="evolution: baseline phase 36 stabilization"
 if [ -f ".commit_msg.tmp" ]; then
     COMMIT_MSG=$(cat .commit_msg.tmp)
     rm .commit_msg.tmp
 fi
 
-# 3. Push to GitHub to trigger deploy.yml
+# 3. Push to GitHub
 echo "🚀 Pushing to GitHub: $COMMIT_MSG"
 git add .
 git commit -m "$COMMIT_MSG"

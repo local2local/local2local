@@ -25,7 +25,7 @@ try {
         let content = '';
 
         if (encoding === 'base64') {
-            // Remove any whitespace introduced by line wrapping
+            // Remove any whitespace introduced by line wrapping or copy-paste
             content = Buffer.from(rawContent.replace(/\s/g, ''), 'base64').toString('utf8');
         } else {
             content = rawContent;
