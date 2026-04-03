@@ -1,128 +1,45 @@
-L2LAAF Phase 36 Stabilization Payload
+L2LAAF Phase 36 Stabilization PayloadDELIMITER_PROTOCOL: V2.6_SAFE_FLATL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 with forceBaseline diagnostic and path loggingL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import * as admin from "firebase-admin";/**L2LAAF Phase 36: Global Memory Commit LogicOptimized for local2local-kaskflow schema.Lead: Senior Cloud Architect*/const appIdStatic = "local2local-kaskflow";/**TRIGGER: onProposalFinalizedThis listens for updates to documents in the logic_proposals collection.Path: artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}*/export const onProposalFinalized = onDocumentUpdated("/artifacts/{appId}/public/data/logic_proposals/{proposalId}",async (event) => {const newData = event.data?.after.data();const proposalId = event.params.proposalId;const matchedAppId = event.params.appId;console.log([EVOLUTION-DIAGNOSTIC] Event received for ID: ${proposalId});console.log([EVOLUTION-DIAGNOSTIC] Path Matched AppID: ${matchedAppId});if (!newData) {console.log("[EVOLUTION-DIAGNOSTIC] Data payload is null or undefined.");return;}const currentStatus = (newData.status || "").toUpperCase();const isCommitPending = newData.commit_pending === true;console.log([EVOLUTION-DIAGNOSTIC] Current Status: ${currentStatus} | Commit Pending: ${isCommitPending});if (currentStatus === "APPROVED" && isCommitPending) {const db = admin.firestore();const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN_HBR";console.log([EVOLUTION-DIAGNOSTIC] Criteria Met. Initiating Batch for ${hbrTarget});try {const batch = db.batch();   // 1. Move to permanent vault
+   const lessonRef = db.collection("artifacts")
+     .doc(appIdStatic)
+     .collection("public")
+     .doc("data")
+     .collection("lessons_learned")
+     .doc();
 
-DELIMITER_PROTOCOL: V2.6_SAFE_FLAT
+   batch.set(lessonRef, {
+     reasoning_vault: newData.reasoning_vault || {},
+     applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
+     hbr_target: hbrTarget,
+     agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+     finalized_at: admin.FieldValue.serverTimestamp(),
+     tags: newData.reasoning_vault?.semantic_tags || [],
+     source_proposal: proposalId,
+     diagnostic_run: true
+   });
 
-L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): baseline phase 36 global memory commit logic with v2.6 safe patcher
-L2LAAF_BLOCK_END
+   // 2. Unlock HBR
+   const hbrRef = db.collection("artifacts")
+     .doc(appIdStatic)
+     .collection("public")
+     .doc("data")
+     .collection("hbr_registry")
+     .doc(hbrTarget);
 
-L2LAAF_BLOCK_START(bash:Relay:scripts/relay.sh)
-#!/bin/bash
+   batch.update(hbrRef, {
+     lock_status: "IDLE",
+     last_modified: admin.FieldValue.serverTimestamp(),
+     current_version: proposalId
+   });
 
-L2LAAF Relay v1.8
+   // 3. Delete Proposal
+   batch.delete(event.data!.after.ref);
 
-PAYLOAD=$1
-if [ -z "$PAYLOAD" ] || [ ! -f "$PAYLOAD" ]; then echo "❌ Error: Valid payload required."; exit 1; fi
-echo "--- L2LAAF RELAY v1.8 ---"
-echo "📡 Ingesting payload into local filesystem..."
-cat "$PAYLOAD" | node scripts/patcher.js
-if [ $? -ne 0 ]; then echo "❌ Patcher failed."; exit 1; fi
-if [ -f ".commit_msg.tmp" ]; then
-COMMIT_MSG=$(cat .commit_msg.tmp)
-rm .commit_msg.tmp
-echo "📝 Context: $COMMIT_MSG"
-fi
-echo "📦 Building Firebase Functions (Node.js 24)..."
-cd functions && npm run build && cd ..
-echo "☁️ Deploying Phase 36 Logic..."
-firebase deploy --only functions:onProposalFinalized
-echo "--- L2LAAF RELAY END ---"
-L2LAAF_BLOCK_END
+   await batch.commit();
+   console.log(`[EVOLUTION-DIAGNOSTIC] SUCCESS: Batch Committed. Collection 'lessons_learned' should now exist.`);
+} catch (error) {console.error([EVOLUTION-DIAGNOSTIC] BATCH FAIL:, error);}} else {console.log([EVOLUTION-DIAGNOSTIC] Bypass: Document updated but does not meet commit criteria.);}});/**EMERGENCY DIAGNOSTIC: forceBaselineIf the document listener fails, visit the URL for this function tomanually verify that the lessons_learned collection can be created.*/export const forceBaseline = onRequest(async (req, res) => {const db = admin.firestore();try {const docRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping"); await docRef.set({
+     message: "System baseline verified via HTTP trigger",
+     timestamp: admin.FieldValue.serverTimestamp()
+ });
 
-L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
-
-/**
-
-L2LAAF Phase 36: Global Memory Commit Logic
-
-Lead: Senior Cloud Architect
-
-ARCHITECTURAL OVERVIEW:
-
-This logic represents the 'Commit' phase of the Guided Autonomy loop.
-
-When an agent proposes a logic shift (Phase 35) and it is APPROVED,
-
-this function captures the full reasoning context, archives it into
-
-the 'lessons_learned' vault, and resets the HBR (Hardened Behavioral Registry)
-
-lock to allow for subsequent evolutions.
-*/
-
-const appId = process.env.APP_ID || "l2laaf-default";
-
-export const onProposalFinalized = onDocumentUpdated(
-"/artifacts/{appId}/public/data/proposals/{proposalId}",
-async (event) => {
-const newData = event.data?.after.data();
-
-// VALIDATION: Only act on approved proposals with a pending commit flag
-if (newData?.status === "APPROVED" && newData?.commit_pending === true) {
-  const db = admin.firestore();
-  const proposalId = event.params.proposalId;
-  const hbrTarget = newData.hbr_target;
-
-  console.log(`[Phase 36] Initializing Global Memory Archive for: ${proposalId}`);
-  const batch = db.batch();
-
-  /**
-   * STEP 1: ARCHIVE REASONING
-   * We persist the reasoning_vault (Semantic Tags, Context, Simulation Results)
-   * into the permanent Lessons Learned collection. This forms the 'Long-Term Memory'
-   * that Phase 37 will eventually query.
-   */
-  const lessonRef = db.collection("artifacts")
-    .doc(appId)
-    .collection("public")
-    .doc("data")
-    .collection("lessons_learned")
-    .doc();
-
-  batch.set(lessonRef, {
-    ...newData.reasoning_vault,
-    applied_logic: newData.proposal_logic,
-    hbr_target: hbrTarget,
-    agent_id: newData.agentId,
-    finalized_at: admin.FieldValue.serverTimestamp(),
-    tags: newData.reasoning_vault?.semantic_tags || [],
-    source_proposal: proposalId
-  });
-
-  /**
-   * STEP 2: RELEASE HBR LOCK
-   * The HBR is locked during the proposal phase to prevent race conditions.
-   * We now set it back to IDLE and update the version pointer.
-   */
-  const hbrRef = db.collection("artifacts")
-    .doc(appId)
-    .collection("public")
-    .doc("data")
-    .collection("hbr_registry")
-    .doc(hbrTarget);
-
-  batch.update(hbrRef, {
-    lock_status: "IDLE",
-    last_modified: admin.FieldValue.serverTimestamp(),
-    current_version: proposalId
-  });
-
-  /**
-   * STEP 3: CLEANUP
-   * Remove the ephemeral proposal document to keep the working set clean.
-   */
-  const proposalRef = event.data?.after.ref;
-  if (proposalRef) {
-      batch.delete(proposalRef);
-  }
-
-  await batch.commit();
-  console.log(`[Phase 36] Global Memory stabilized. HBR ${hbrTarget} released.`);
-}
-
-
-}
-);
-L2LAAF_BLOCK_END
+ res.status(200).send("✅ Baseline document created in 'lessons_learned'. Permissions verified.");
+} catch (e: any) {res.status(500).send(❌ Baseline failure: ${e.message});}});L2LAAF_BLOCK_END
