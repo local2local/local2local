@@ -94,7 +94,7 @@ export const logicCollisionWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
   memory: "512MiB"
 }, async (event) => {
-  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi);
+  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi;
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated({
@@ -106,34 +106,27 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
 
   const status = (newData.status || "").toUpperCase();
   if (status === "APPROVED" && newData.commit_pending === true) {
-      const dbInstance = admin.firestore();
-      const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
-      try {
-        const batch = dbInstance.batch();
-        const lessonRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+    const dbInstance = admin.firestore();
+    const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
+    try {
+      const batch = dbInstance.batch();
+      const lessonRef = dbInstance.batch().collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
 
-        batch.set(lessonRef, {
-          reasoning_vault: newData.reasoning_vault || {},
-          applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
-          hbr_target: hbrTarget,
+      batch.set(lessonRef, {
+        reasoning_vault: newData.reasoning_vault || {},
+        applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
+        hbr_target: hbrTarget,
         agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
-         finalized_at: FieldValue.serverTimestamp(),
-         source_proposal: event.params.proposalId
+        finalized_at: FieldValue.serverTimestamp(),
+        source_proposal: event.params.proposalId
       });
 
-        const hbrRef = dbInstance.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrTarget}`);
-        batch.update(hbrRef, {
-          lock_status: "IDLE",
-          last_modified: FieldValue.serverTimestamp()
-        });
-
-        batchdelete(event.data!.after.ref);
-        await batch.commit();
-        console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
-      } catch (e) {
-        console.error("[BATCH-ERROR]", e);
-      }
-    }
+      const hbrRef = dbInstance.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrTarget}`);
+      batch.update(hbrRef, { lock_status: "IDLE", last_modified: FieldValue.serverTimestamp() });
+      batch.delete(event.data!.after.ref);
+      await batch.commit();
+      console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
+    } catch (e) { console.error("Batch Error", e); }
   }
 });
 
