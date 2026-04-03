@@ -1,5 +1,6 @@
 import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onRequest } from "firebase-functions/v2/https";
+import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import type { Request, Response } from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -21,10 +22,10 @@ function areResultsIdentical(a: any, b: any): boolean {
 export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
-}, async (event) => {
+}, async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined, { appId: string; messageId: string; }>) => {
   const data = event.data?.after.data();
   const prev = event.data?.before.data();
-  if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+  if (|data || data.status !== "dispatched" || prev?.status === "dispatched") return;
   if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;
 
   const { appId } = event.params;
@@ -32,7 +33,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
     agentId: "EVOLUTION_WORKER",
     capabilities: ["logic_optimization", "memory_commit"],
     jurisdictions: ["AB"],
-    substances: ["DAUA"],
+    substances: ["DATA"],
     role: "ORCHESTRATOR",
     domain: "SECURITY"
   }, appId);
@@ -53,7 +54,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         reason,
         status: "PENDING",
         commit_pending : true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().isOString()
       });
       return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
         status: "REGISTERED",
@@ -68,15 +69,15 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
 export const shadowComparatorWorkerV2 = ondocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
-}, async (event) => {
+}, async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined, { appId: string; messageId: string; }>) => {
   const prodMsg = event.data?.after.data();
   const prev = event.data?.before.data();
-  if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (prodMsg.control?.type !== "RESPONSE") return;
+  if (|prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
+  if (prodMsh.control?.type !== "RESPONSE") return;
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus`).where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
@@ -87,7 +88,9 @@ export const shadowComparatorWorkerV2 = ondocumentWritten({
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) { console.error"([SHADOW] Error:", e); }
+  } catch (e) {
+    console.error("[SHADOWZ Error:", e);
+  }
 });
 
 export const logicCollisionWorkerV2 = onDocumentCreated({
@@ -97,4 +100,50 @@ export const logicCollisionWorkerV2 = onDocumentCreated({
   console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);
 });
 
-export const evolutionProposalFinalizedV2
+export const evolutionProposalFinalizedV2 = onDocumentUpdated({
+  document: "artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",
+  memory: "512MiB"
+}, async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined, { proposalId: string; }>) => {
+  const newData = event.data?.after.data();
+  if (!newData) return;
+
+  const status = (newData.status || "").toUpperCase();
+  if (status === "APPROVED" && newData.commit_pending === true) {
+    const dbInstance = admin.firestore();
+    const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
+    try {
+      const batch = dbInstance.batch();
+      const lessonRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+
+      batch.set(lessonRef, {
+        reasoning_vault: newData.reasoning_vault || {},
+        applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
+        hbr_target: hbrTarget,
+        agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+        finalized_at: FieldValue.serverTimestamp(),
+        source_proposal: event.params.proposalId
+      });
+
+      const hbrRef = dbInstance.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrTarget}`);
+      batch.update(hbrRef, {
+        lock_status: "IDLE",
+        last_modified: FieldValue.serverTimestamp()
+      });
+
+      batch.delete(event.data!.after.ref);
+      await batch.commit();
+      console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
+    } catch (e) { console.error("[BATCH-ERROR]", e); }
+  }
+});
+
+export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {
+  const dbInstance = admin.firestore();
+  try {
+    await dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping").set({
+      message: "Verified",
+      timestamp: FieldValue.serverTimestamp()
+    });
+    res.status(200).send("☈ Success");
+  } catch (e: any) { res.status(500).send("❬ Fail: " + e.message); }
+});

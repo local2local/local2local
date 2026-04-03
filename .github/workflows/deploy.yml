@@ -14,7 +14,7 @@ jobs:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
 
     steps:
-      - name: Checkoet Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
