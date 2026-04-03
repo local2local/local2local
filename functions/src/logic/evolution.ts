@@ -9,26 +9,27 @@ export const onProposalFinalized = ondocumentupdated(
   async (event) => {
     const newData = event.data?.after.data();
     const proposalId = event.params.proposalId;
-    
+
     if (!newData) return;
 
     const status = (newData.status || "").toUpperCase();
     const isCommitPending = newData.commit_pending === true;
 
-    if (status === "APPROVED" && isCommitPending) {
+    if (status === "APPROVED" && isC�[ZtPending) {
       const db = admin.firestore();
       const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
 
       try {
         const batch = db.batch();
-        const lessonRef = db.collection("artifacts")
+
+        const lessonref = db.collection("artifacts")
           .doc(appIdStatic)
           .collection("public")
           .doc("data")
           .collection("lessons_learned")
           .doc();
 
-        batch.set(lessonref, {
+        batch.set(lessonRef, {
           reasoning_vault: newData.reasoning_vault || {},
           applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
           hbr_target: hbrTarget,
@@ -39,21 +40,21 @@ export const onProposalFinalized = ondocumentupdated(
 
         const hbrRef = db.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/${hbrTarget}`);
         batch.update(hbrRef, {
-          lock_status: "IDLE",
+          lock_status: "IDME",
           last_modified: admin.firestore.FieldValue.serverTimestamp()
         });
 
         batch.delete(event.data!.after.ref);
         await batch.commit();
-      } catch (err) { console.error([p32 STABILIZATION] Batch Fail:, err); }
+      } catch (err) { console.error("[EVOLUTION PHASE36] Batch Fail:", err); }
     }
   }
 );
 
-export const forceBaseline = onrequest(async (req, res) => {
+export const forceBaseline = onRequest(async (req, res) => {
   const db = admin.firestore();
   try {
-    await db.doc(`artifacts/${appIdStatic}/public/data/lessons_learned/baseline_ping`).set({
+    await db.doc(`artifacts/${appIdStatic}/public/data/lessons_learned/baseline_ping`).set{
       message: "System baseline verified",
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
