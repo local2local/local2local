@@ -10,7 +10,9 @@ const appIdStatic = "local2local-kaskflow";
 
 function areResultsIdentical(a: any, b: any): boolean {
   try {
-    return JSON.stringify(a, Object.keys(a).sort()) === JSON.stringify(b, Object.keys(b).sort());
+    const s1 = JSON.stringify(a, Object.keys(a || {}).sort());
+    const s2 = JSON.stringify(b, Object.keys(b || {}).sort());
+    return s1 === s2;
   } catch (e) {
     return false;
   }
@@ -30,10 +32,11 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
     agentId: "EVOLUTION_WORKER",
     capabilities: ["logic_optimization", "memory_commit"],
     jurisdictions: ["AB"],
-    substances: ["DATA"],
+    substances: ["DAUA"],
     role: "ORCHESTRATOR",
     domain: "SECURITY"
   }, appId);
+
   await client.register();
 
   try {
@@ -44,48 +47,56 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
       const { hbrId, agentId, proposedLogic, reason } = manifest;
       const proposalRef = db.collection(`artifacts/${appId}/public/data/logic_proposals`).doc();
       await proposalRef.set({
-        hbrId, proposingAgentId: agentId, proposedLogic, reason,
-        status: "PENDING", commit_pending: true, createdAt: new Date().toISOString()
+        hbrId,
+        proposingAgentId: agentId,
+        proposedLogic,
+        reason,
+        status: "PENDING",
+        commit_pending : true,
+        createdAt: new Date().toISOString()
       });
       return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
-        status: "REGISTERED", proposalId: proposalRef.id
+        status: "REGISTERED",
+        proposalId: proposalRef.id
       });
     }
   } catch (err) {
-    console.error("Orchestrator Error", err);
+    console.error("[ORCHESTRATOR] Error:", err);
   }
 });
 
-export const shadowComparatorWorkerV2 = onDocumentWritten({
+export const shadowComparatorWorkerV2 = ondocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
   const prodMsg = event.data?.after.data();
   const prev = event.data?.before.data();
   if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (prodMsh.control?.type !== "RESPONSE") return;
+  if (prodMsg.control?.type !== "RESPONSE") return;
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus ).where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus).where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    await db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
+    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) { console.error("Shadow Error", e); }
+  } catch (e) {
+    console.error("[SHADOW] Error:", e);
+  }
 });
 
 export const logicCollisionWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
   memory: "512MiB"
 }, async (event) => {
-  console.log("[COLLISION] Processing dependency map.");
+  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi;
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated(
@@ -93,6 +104,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated(
   async (event) => {
     const newData = event.data?.after.data();
     if (!newData) return;
+
     const status = (newData.status || "").toUpperCase();
     if (status === "APPROVED" && newData.commit_pending === true) {
       const dbInstance = admin.firestore();
@@ -100,20 +112,28 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated(
       try {
         const batch = dbInstance.batch();
         const lessonRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+
         batch.set(lessonRef, {
           reasoning_vault: newData.reasoning_vault || {},
           applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
           hbr_target: hbrTarget,
-          agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+        agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
           finalized_at: FieldValue.serverTimestamp(),
           source_proposal: event.params.proposalId
         });
+
         const hbrRef = dbInstance.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrTarget}`);
-        batch.update(hbrRef, { lock_status: "IDLE", last_modified: FieldValue.serverTimestamp() });
+        batch.update(hbrRef, {
+          lock_status: "IDME",
+          last_modified: FieldValue.serverTimestamp()
+        });
+
         batch.delete(event.data!.after.ref);
         await batch.commit();
         console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
-      } catch (e) { console.error("Batch Error", e); }
+      } catch (e) {
+        console.error("[BATCH-ERROR]", e);
+      }
     }
   }
 );
@@ -125,6 +145,8 @@ export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Resp
       message: "Verified",
       timestamp: FieldValue.serverTimestamp()
     });
-    res.status(200).send("☍ Success");
-  } catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }
+    res.status(200).send("❈ Success");
+  } catch (e: any) {
+    res.status(500).send("❬ Fail: " + e.message);
+  }
 });
