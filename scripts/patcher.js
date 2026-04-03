@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * L2LAAF Logic Patcher v4.2 (NASA Standard - High Integrity)
- * Hardened against token stripping and character corruption.
+ * L2LAAF Logic Patcher v5.0 (NASA Standard - Hex-ASCII Protocol)
+ * Hardened against token-mangling and generic-type corruption.
  */
 
 try {
@@ -11,15 +11,15 @@ try {
     const regex = /L2LAAF_BLOCK_START\((\w+):([^:\)\n\r]+):([^:\)\n\r]+)\)([\s\S]*?)L2LAAF_BLOCK_END/g;
 
     let count = 0;
-    console.log('--- L2LAAF PATCHER v4.2 ---');
+    console.log('--- L2LAAF PATCHER v5.0 ---');
 
     let match;
     while ((match = regex.exec(input)) !== null) {
         const filepath = match[3].trim();
         let content = match[4];
 
-        // Root Cause Fix 1: High-integrity token reconstruction
-        content = content.replace(/__BACKTICK__/g, '`');
+        // Root Cause Fix 1: Protocol v5.0 - Square bracket tokenization (Markdown safe)
+        content = content.replace(/\[BACKTICK\]/g, '`');
 
         // Root Cause Fix 2: Scrub Null Bytes and binary noise
         content = content.replace(/\0/g, '').trim();
