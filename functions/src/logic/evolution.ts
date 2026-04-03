@@ -24,19 +24,22 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   const prev = event.data?.before.data();
   if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
   if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;
+
   const { appId } = event.params;
   const client = new AgentBusClient({
     agentId: "EVOLUTION_WORKER",
     capabilities: ["logic_optimization", "memory_commit"],
     jurisdictions: ["AB"],
-    substances: ["DAUA"],
+    substances: ["DATA"],
     role: "ORCHESTRATOR",
     domain: "SECURITY"
   }, appId);
   await client.register();
+
   try {
     const manifest = data.payload?.manifest;
     if (!manifest) return;
+
     if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
       const { hbrId, agentId, proposedLogic, reason } = manifest;
       const proposalRef = db.collection(`artifacts/${appId}/public/data/logic_proposals`).doc();
@@ -53,22 +56,27 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
-export const shadowComparatorWorkerV2 = onDocumentWritten({
+export const shadowComparatorWorkerV2 = onDocumentWritten{
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
   const prodMsg = event.data?.after.data();
   const prev = event.data?.before.data();
   if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (prodMsh.control?.type !== "RESPONSE") return;
+  if (prodMsg.control?.type !== "RESPONSE") return;
+
   const { appId } = event.params;
   try {
     const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus`).where("correlation_id", "==", prodMsg.correlation_id).get();
-  if (shadowSnap.empty) return;
-  const shadowMsg = shadowSnap.docs[0].data();
-  const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
-  await db.collection(artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
-      correlation_id: prodMsg.correlation_id, status: isMatch ? "validated" : "failed", timestamp: new Date().toISOString()
+    if (shadowSnap.empty) return;
+
+    const shadowMsg = shadowSnap.docs[0].data();
+    const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
+
+    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
+      correlation_id: prodMsg.correlation_id,
+      status: isMatch ? "validated" : "failed",
+      timestamp: new Date().toISOString()
     });
   } catch (e) { console.error("Shadow Error", e); }
 });
