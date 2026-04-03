@@ -1,45 +1,32 @@
-L2LAAF Phase 36 Stabilization PayloadDELIMITER_PROTOCOL: V2.6_SAFE_FLATL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 with static path trigger and permission checkL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import * as admin from "firebase-admin";/**L2LAAF Phase 36: Global Memory Commit LogicOptimized for local2local-kaskflow.Lead: Senior Cloud Architect*/const appIdStatic = "local2local-kaskflow";/**TRIGGER: onProposalFinalizedHARDENED: Using static path for local2local-kaskflow to bypass wildcard resolution issues.Target: artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}*/export const onProposalFinalized = onDocumentUpdated("artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",async (event) => {// Immediate log to verify trigger hitconsole.log([EVOLUTION-DIAGNOSTIC] !!! TRIGGER WAKEUP !!!);const newData = event.data?.after.data();const proposalId = event.params.proposalId;console.log([EVOLUTION-DIAGNOSTIC] Processing ID: ${proposalId});if (!newData) {console.log("[EVOLUTION-DIAGNOSTIC] No data found in payload.");return;}const currentStatus = (newData.status || "").toUpperCase();const isCommitPending = newData.commit_pending === true;console.log([EVOLUTION-DIAGNOSTIC] Status: ${currentStatus} | Commit: ${isCommitPending});if (currentStatus === "APPROVED" && isCommitPending) {const db = admin.firestore();const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN_HBR";try {const batch = db.batch();   // 1. Move to permanent vault
-   const lessonRef = db.collection("artifacts")
-     .doc(appIdStatic)
-     .collection("public")
-     .doc("data")
-     .collection("lessons_learned")
-     .doc();
-
-   batch.set(lessonRef, {
-     reasoning_vault: newData.reasoning_vault || {},
-     applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
-     hbr_target: hbrTarget,
-     agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
-     finalized_at: admin.FieldValue.serverTimestamp(),
-     tags: newData.reasoning_vault?.semantic_tags || [],
-     source_proposal: proposalId,
-     diagnostic_run: true
-   });
-
-   // 2. Unlock HBR
-   const hbrRef = db.collection("artifacts")
-     .doc(appIdStatic)
-     .collection("public")
-     .doc("data")
-     .collection("hbr_registry")
-     .doc(hbrTarget);
-
-   batch.update(hbrRef, {
-     lock_status: "IDLE",
-     last_modified: admin.FieldValue.serverTimestamp(),
-     current_version: proposalId
-   });
-
-   // 3. Delete Proposal
-   batch.delete(event.data!.after.ref);
-
-   await batch.commit();
-   console.log(`[EVOLUTION-DIAGNOSTIC] SUCCESS: Commit finalized for ${hbrTarget}.`);
-} catch (error) {console.error([EVOLUTION-DIAGNOSTIC] BATCH FAIL:, error);}} else {console.log([EVOLUTION-DIAGNOSTIC] Filtered: Conditions not met.);}});/**DIAGNOSTIC: forceBaselineHTTP Ping to verify collection permissions independently of triggers.Visit the URL in browser to test.*/export const forceBaseline = onRequest(async (req, res) => {const db = admin.firestore();try {const docRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping"); await docRef.set({
-     message: "System baseline verified via HTTP",
-     timestamp: admin.FieldValue.serverTimestamp()
- });
-
- res.status(200).send("✅ Baseline document created successfully in 'lessons_learned'. Permissions OK.");
-} catch (e: any) {res.status(500).send(❌ Baseline failure: ${e.message});}});L2LAAF_BLOCK_END
+L2LAAF Phase 36 Stabilization PayloadDELIMITER_PROTOCOL: V2.6_SAFE_FLATL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 with hardened exports and diagnostic workersL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:GitHub Deploy Action:deploy.yml)name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:- name: Checkout Repositoryuses: actions/checkout@v4- name: Setup Node.jsuses: actions/setup-node@v4with:node-version: '24'cache: 'npm'cache-dependency-path: functions/package-lock.json- name: Setup Flutteruses: subosito/flutter-action@v2with:channel: 'stable'flutter-version: '3.38.5'- name: Install Dependenciesrun: |cd functions && npm installcd ..flutter pub get- name: Build Flutter Webrun: flutter build web --release- name: Authenticate to Google Cloudid: authuses: google-github-actions/auth@v2with:credentials_json: ${{ secrets.GCP_SA_KEY }}
+- name: Install Firebase CLI
+run: npm install -g firebase-tools
+- name: Deploy to Target Project
+env:
+GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+run: |
+if [[ "${{ github.ref_name }}" == "main" ]]; then
+PROJECT_ID="local2local-prod"
+elif [[ "${{ github.ref_name }}" == "staging" ]]; thenPROJECT_ID="local2local-staging"elsePROJECT_ID="local2local-dev"fifirebase deploy --only functions --project $PROJECT_ID --non-interactive --forceL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Index:functions/src/index.ts)export * from "./logic/infrastructure";export * from "./logic/compliance";export * from "./logic/finance";export * from "./logic/orchestration";export * from "./logic/fulfillment";export * from "./logic/dispatch";export * from "./logic/ombudsman";export * from "./logic/analytics";export * from "./logic/treasury";export * from "./logic/evolution";export * from "./utilities/listSubcollections";export * from "./utilities/deleteSubcollection";L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import * as admin from "firebase-admin";const appIdStatic = "local2local-kaskflow";export const evolutionOnProposalV2 = onDocumentUpdated("artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",async (event) => {console.log("[EVOLUTION-V2] Wakeup: " + event.params.proposalId);const newData = event.data?.after.data();if (!newData) return;const status = (newData.status || "").toUpperCase();
+if (status === "APPROVED" && newData.commit_pending === true) {
+  const db = admin.firestore();
+  const hbr = newData.hbrId || "UNKNOWN";
+  try {
+    const batch = db.batch();
+    const lessonRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+    batch.set(lessonRef, {
+      reasoning_vault: newData.reasoning_vault || {},
+      applied_logic: newData.proposedLogic || "N/A",
+      hbr_target: hbr,
+      agent_id: newData.proposingAgentId || "SYSTEM",
+      finalized_at: admin.FieldValue.serverTimestamp(),
+      source_proposal: event.params.proposalId
+    });
+    const hbrRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").doc("hbr_registry").collection("registry").doc(hbr);
+    batch.update(hbrRef, { lock_status: "IDLE", last_modified: admin.FieldValue.serverTimestamp() });
+    batch.delete(event.data!.after.ref);
+    await batch.commit();
+    console.log("[EVOLUTION-V2] Success");
+  } catch (e) { console.error("[EVOLUTION-V2] Error", e); }
+}
+});export const evolutionForceBaselineV2 = onRequest(async (req, res) => {const db = admin.firestore();try {await db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping").set({message: "Verified",timestamp: admin.FieldValue.serverTimestamp()});res.status(200).send("✅ Success");} catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }});L2LAAF_BLOCK_END

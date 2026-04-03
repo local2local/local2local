@@ -1,0 +1,10 @@
+name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:- name: Checkout Repositoryuses: actions/checkout@v4- name: Setup Node.jsuses: actions/setup-node@v4with:node-version: '24'cache: 'npm'cache-dependency-path: functions/package-lock.json- name: Setup Flutteruses: subosito/flutter-action@v2with:channel: 'stable'flutter-version: '3.38.5'- name: Install Dependenciesrun: |cd functions && npm installcd ..flutter pub get- name: Build Flutter Webrun: flutter build web --release- name: Authenticate to Google Cloudid: authuses: google-github-actions/auth@v2with:credentials_json: ${{ secrets.GCP_SA_KEY }}
+- name: Install Firebase CLI
+run: npm install -g firebase-tools
+- name: Deploy to Target Project
+env:
+GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+run: |
+if [[ "${{ github.ref_name }}" == "main" ]]; then
+PROJECT_ID="local2local-prod"
+elif [[ "${{ github.ref_name }}" == "staging" ]]; thenPROJECT_ID="local2local-staging"elsePROJECT_ID="local2local-dev"fifirebase deploy --only functions --project $PROJECT_ID --non-interactive --force
