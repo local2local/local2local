@@ -2,20 +2,17 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * L2LAAF Logic Patcher v2.9 (Base64 Hardened Edition)
- * Supports standard text blocks and Base64 encoded blocks to prevent 
- * "Wall of Text" newline stripping issues.
+ * L2LAAF Logic Patcher v3.0 (Corruption-Resistant Edition)
+ * Actively scrubs Null Bytes and invisible control characters to prevent
+ * "File appears to be binary" errors and YAML parsing failures.
  */
 
 try {
     const input = fs.readFileSync(0, 'utf8');
-    
-    // Pattern: L2LAAF_BLOCK_START(TYPE:TITLE:PATH:ENCODING)CONTENT...L2LAAF_BLOCK_END
     const regex = /L2LAAF_BLOCK_START\((\w+):([^:\)\n\r]+):([^:\)\n\r]+)(?::(\w+))?\)([\s\S]*?)L2LAAF_BLOCK_END/g;
 
     let count = 0;
-    console.log('--- L2LAAF PATCHER v2.9 ---');
-    console.log(`Stream size: ${input.length} characters.`);
+    console.log('--- L2LAAF PATCHER v3.0 ---');
 
     let match;
     while ((match = regex.exec(input)) !== null) {
@@ -25,16 +22,20 @@ try {
         let content = '';
 
         if (encoding === 'base64') {
-            // Remove any whitespace introduced by line wrapping or copy-paste
-            content = Buffer.from(rawContent.replace(/\s/g, ''), 'base64').toString('utf8');
+            // Scrub any whitespace or hidden chars before decoding
+            const cleanBase64 = rawContent.replace(/[^A-Za-z0-9+/=]/g, '');
+            content = Buffer.from(cleanBase64, 'base64').toString('utf8');
         } else {
             content = rawContent;
         }
 
-        // Handle Metadata
+        // --- ANTI-CORRUPTION LAYER ---
+        // Strip Null Bytes (\0) and ensure valid UTF-8 for YAML/TS
+        content = content.replace(/\0/g, '').trim();
+
         if (filepath === 'COMMIT_MSG') {
-            fs.writeFileSync('.commit_msg.tmp', content);
-            console.log(`✅ Metadata captured for git commit.`);
+            fs.writeFileSync('.commit_msg.tmp', content, 'utf8');
+            console.log(`✅ Metadata: COMMIT_MSG captured.`);
             continue; 
         }
 
@@ -42,8 +43,9 @@ try {
         const dir = path.dirname(fullPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-        fs.writeFileSync(fullPath, content, 'utf8');
-        console.log(`✅ [${++count}] Synchronized: ${filepath} (${encoding})`);
+        // Force write as clean UTF-8
+        fs.writeFileSync(fullPath, content, { encoding: 'utf8', flag: 'w' });
+        console.log(`✅ [${++count}] Synchronized: ${filepath}`);
     }
 
     if (count === 0) {

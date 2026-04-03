@@ -10,15 +10,15 @@ const appIdStatic = "local2local-kaskflow";
 
 function areResultsIdentical(a: any, b: any): boolean {
   try {
-    const s1 = JSON.stringify(a, Object.keys(a || {}).sort());
-    const s2 = JSON.stringify(b, Object.keys(b || {}).sort());
+    const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());
+    const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());
     return s1 === s2;
   } catch (e) {
     return false;
   }
 }
 
-export const evolutionOrchestratorV2 = onDocumentWritten({
+export const evolutionOrchestratorV2 = ondocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
@@ -36,7 +36,6 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
     role: "ORCHESTRATOR",
     domain: "SECURITY"
   }, appId);
-
   await client.register();
 
   try {
@@ -52,7 +51,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         proposedLogic,
         reason,
         status: "PENDING",
-        commit_pending : true,
+        commit_pending: true,
         createdAt: new Date().toISOString()
       });
       return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
@@ -61,7 +60,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
       });
     }
   } catch (err) {
-    console.error("[ORCHESTRATOR] Error:", err);
+    console.error("Orchestrator Error", err);
   }
 });
 
@@ -76,25 +75,25 @@ export const shadowComparatorWorkerV2 = onDocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsh.correlation_id).get();
+    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus`).where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    await db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
+    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) { console.error"([SHADOW] Error:", e); }
+  } catch (e) { console.error("Shadow Error", e); }
 });
 
 export const logicCollisionWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
   memory: "512MiB"
 }, async (event) => {
-  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi;
+  console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated({
@@ -117,10 +116,10 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
         applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
         hbr_target: hbrUF&vWB��vV�E��C��WtFF�&��6��tvV�D�B���WtFF�vV�E��B��%5�5DT�"��f��Ɨ�VE�C�f�V�Ef�VR�6W'fW%F��W7F�����6�W&6U�&��6âWfV�B�&�2�&��6Ė@�ғ���6��7B�'%&Vb�F$��7F�6R�F�2�'F�f7G2�G��E7FF�7��V&Ɩ2�FF��'%�&Vv�7G'��&Vv�7G'��G��'%F&vWG����&F6��WFFR��'%&Vb�����6��7FGW3�$�D�R"���7E���F�f�VC�f�V�Ef�VR�6W'fW%F��W7F����ғ���&F6��FV�WFR�WfV�B�FF�gFW"�&Vb���v�B&F6��6��֗B����6��6��R���r��Ud��UD����3e�&�6W76VBG��'%Target}`);
     } catch (e) {
-      console.error("[BATCH-ERROR]", e);
+      console.error("Batch Error", e);
     }
   }
-});
+);
 
 export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {
   const dbInstance = admin.firestore();
