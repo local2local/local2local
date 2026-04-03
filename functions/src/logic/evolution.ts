@@ -18,7 +18,7 @@ function areResultsIdentical(a: any, b: any): boolean {
   }
 }
 
-export const evolutionOrchestratorV2 = ondocumentWritten({
+export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
@@ -36,6 +36,7 @@ export const evolutionOrchestratorV2 = ondocumentWritten({
     role: "ORCHESTRATOR",
     domain: "SECURITY"
   }, appId);
+
   await client.register();
 
   try {
@@ -51,7 +52,7 @@ export const evolutionOrchestratorV2 = ondocumentWritten({
         proposedLogic,
         reason,
         status: "PENDING",
-        commit_pending: true,
+        commit_pending : true,
         createdAt: new Date().toISOString()
       });
       return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
@@ -60,11 +61,11 @@ export const evolutionOrchestratorV2 = ondocumentWritten({
       });
     }
   } catch (err) {
-    console.error("Orchestrator Error", err);
+    console.error("[ORCHESTRATOR] Error:", err);
   }
 });
 
-export const shadowComparatorWorkerV2 = onDocumentWritten({
+export const shadowComparatorWorkerV2 = ondocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
@@ -75,25 +76,25 @@ export const shadowComparatorWorkerV2 = onDocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus`).where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
+    await db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) { console.error("Shadow Error", e); }
+  } catch (e) { console.error"([SHADOW] Error:", e); }
 });
 
 export const logicCollisionWorkerV2 = onDocumentCreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
   memory: "512MiB"
 }, async (event) => {
-  console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);
+  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi);
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated({
@@ -105,21 +106,36 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
 
   const status = (newData.status || "").toUpperCase();
   if (status === "APPROVED" && newData.commit_pending === true) {
-    const dbInstance = admin.firestore();
-    const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
-    try {
-      const batch = dbInstance.batch();
-      const lessonRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+      const dbInstance = admin.firestore();
+      const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
+      try {
+        const batch = dbInstance.batch();
+        const lessonRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
 
-      batch.set(lessonRef, {
-        reasoning_vault: newData.reasoning_vault || {},
-        applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
-        hbr_target: hbrUF&vWB��vV�E��C��WtFF�&��6��tvV�D�B���WtFF�vV�E��B��%5�5DT�"��f��Ɨ�VE�C�f�V�Ef�VR�6W'fW%F��W7F�����6�W&6U�&��6âWfV�B�&�2�&��6Ė@�ғ���6��7B�'%&Vb�F$��7F�6R�F�2�'F�f7G2�G��E7FF�7��V&Ɩ2�FF��'%�&Vv�7G'��&Vv�7G'��G��'%F&vWG����&F6��WFFR��'%&Vb�����6��7FGW3�$�D�R"���7E���F�f�VC�f�V�Ef�VR�6W'fW%F��W7F����ғ���&F6��FV�WFR�WfV�B�FF�gFW"�&Vb���v�B&F6��6��֗B����6��6��R���r��Ud��UD����3e�&�6W76VBG��'%Target}`);
-    } catch (e) {
-      console.error("Batch Error", e);
+        batch.set(lessonRef, {
+          reasoning_vault: newData.reasoning_vault || {},
+          applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
+          hbr_target: hbrTarget,
+        agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+         finalized_at: FieldValue.serverTimestamp(),
+         source_proposal: event.params.proposalId
+      });
+
+        const hbrRef = dbInstance.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrTarget}`);
+        batch.update(hbrRef, {
+          lock_status: "IDLE",
+          last_modified: FieldValue.serverTimestamp()
+        });
+
+        batchdelete(event.data!.after.ref);
+        await batch.commit();
+        console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
+      } catch (e) {
+        console.error("[BATCH-ERROR]", e);
+      }
     }
   }
-);
+});
 
 export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {
   const dbInstance = admin.firestore();
@@ -128,8 +144,6 @@ export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Resp
       message: "Verified",
       timestamp: FieldValue.serverTimestamp()
     });
-    res.status(200).send("❈ Success");
-  } catch (e: any) {
-    res.status(500).send("❬ Fail: " + e.message);
-  }
+    res.status(200).send("☍ Success");
+  } catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }
 });
