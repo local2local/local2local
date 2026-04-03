@@ -1,50 +1,62 @@
-L2LAAF Phase 36 Master Stabilization (v6.0)PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZEDL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% lint-free restoration with strict genericsL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:
-  - name: Checkout Repository
-    uses: actions/checkout@v4
+L2LAAF Phase 36 Master Stabilization (v6.0)PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZEDL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% lint-free restoration with strict genericsL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, staging, develop ]
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-  - name: Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '24'
-      cache: 'npm'
-      cache-dependency-path: functions/package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
 
-  - name: Setup Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      channel: 'stable'
-      flutter-version: '3.38.5'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
 
-  - name: Install Dependencies
-    run: |
-      cd functions && npm install
-      cd ..
-      flutter pub get
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
 
-  - name: Build Flutter Web
-    run: flutter build web --release
+      - name: Build Flutter Web
+        run: flutter build web --release
 
-  - name: Authenticate to Google Cloud
-    id: auth
-    uses: google-github-actions/auth@v2
-    with:
-      credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-  - name: Install Firebase CLI
-    run: npm install -g firebase-tools
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
 
-  - name: Deploy to Target Project
-    env:
-      GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-    run: |
-      if [[ "${{ github.ref_name }}" == "main" ]]; then
-        PROJECT_ID="local2local-prod"
-      elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-        PROJECT_ID="local2local-staging"
-      else
-        PROJECT_ID="local2local-dev"
-      fi
-      firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+      - name: Deploy to Target Project
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";import type { Request, Response } from "firebase-functions/v1";import * as admin from "firebase-admin";import { FieldValue } from "firebase-admin/firestore";import { db } from "../config";import { AgentBusClient } from "../agentBusClient";const appIdStatic = "local2local-kaskflow";function areResultsIdentical(a: any, b: any): boolean {try {const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());return s1 === s2;} catch (e) {return false;}}export const evolutionOrchestratorV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change<QueryDocumentSnapshot>, Record<string, string>>) => {const data = event.data?.after.data();const prev = event.data?.before.data();if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;const { appId } = event.params;const client = new AgentBusClient({agentId: "EVOLUTION_WORKER",capabilities: ["logic_optimization", "memory_commit"],jurisdictions: ["AB"],substances: ["DAUA"],role: "ORCHESTRATOR",domain: "SECURITY"}, appId);await client.register();try {const manifest = data.payload?.manifest;if (!manifest) return;if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
   const { hbrId, agentId, proposedLogic, reason } = manifest;
   const proposalPath = [BACKTICK]artifacts/${appId}/public/data/logic_proposals[BACKTICK];
