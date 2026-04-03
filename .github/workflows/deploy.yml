@@ -24,39 +24,4 @@ jobs:
           cache: 'npm'
           cache-dependency-path: functions/package-lock.json
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-
-      - name: Build Flutter Web
-        run: flutter build web --release
-
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Deploy to Target Project
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+  -��[YN��]\�]\��\�\Έ�X���]�ٛ]\�XX�[ې����]���[��[�	��X�I�]\�]�\��[ێ�	�ˌ��I�H�[YN�[��[\[�[��Y\�[�����[��[ۜ�	���H[��[������]\�X��]��H�[YN��Z[�]\��X���[���]\��Z[�X�K\�[X\�B��H�[YN�]][�X�]H�����H��Y�Y�]]�\�\Έ����KY�]X�XX�[ۜ��]]����]��ܙY[�X[�ڜ�ێ�	���Xܙ]ˑ����W��VH_B��H�[YN�[��[�\�X�\�H�B��[���H[��[Y��\�X�\�K]���H�[YN�\�H�\��]�ڙX��[��������W�TP�USӗ�ԑQS�PSΈ	���\˘]]��]]˘ܙY[�X[�ٚ[W�]_B��[���Y�������]X���Y�ۘ[YH_H�OH�XZ[��WN�[���ґP��QH���[���[\����[Y�������]X���Y�ۘ[YH_H�OH��Y�[�ȈWN�[���ґP��QH���[���[\�Y�[�Ȃ�[�B��ґP��QH���[���[Y]����B��\�X�\�H\�HK[ۛH�[��[ۜ�K\�ڙX�	�ґP��QK[�ۋZ[�\�X�]�HKY�ܘ�B
