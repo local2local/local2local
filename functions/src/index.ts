@@ -6,6 +6,7 @@ export * from "./logic/fulfillment";
 export * from "./logic/dispatch";
 export * from "./logic/ombudsman";
 export * from "./logic/analytics";
+export * from "./logic/fulfillment";
 export * from "./logic/treasury";
 export * from "./logic/evolution";
 export * from "./utilities/listSubcollections";
