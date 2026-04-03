@@ -115,6 +115,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated(
         console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
       } catch (e) { console.error("Batch Error", e); }
     }
+    return;
   }
 );
 
