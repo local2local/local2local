@@ -44,5 +44,5 @@ name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop 
       else
         PROJECT_ID="local2local-dev"
       fi
-      # Deploying all functions to ensure the new exports are discovered
+      # Targeted deployment of all functions to ensure V2 diagnostic workers are live
       firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
