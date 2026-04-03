@@ -2,23 +2,26 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * L2LAAF Logic Patcher v2.6 (Renderer-Safe Edition)
- * Optimized for local filesystem synchronization before GitHub Push.
- * Uses non-backtick delimiters to prevent UI truncation.
+ * L2LAAF Logic Patcher v2.7 (Hardened Regex Edition)
+ * Fixed issue where path/title capture was over-greedy on single-line inputs.
+ * Excludes ')' from path capture to ensure it stops at the header end.
  */
 
 try {
     const input = fs.readFileSync(0, 'utf8');
     
     // Pattern: L2LAAF_BLOCK_START(TYPE:TITLE:PATH)CONTENT...L2LAAF_BLOCK_END
-    const regex = /L2LAAF_BLOCK_START\((\w+):([^:\n\r]+):([^:\n\r]+)\)([\s\S]*?)L2LAAF_BLOCK_END/g;
+    // Path and Title now explicitly exclude ')' to prevent over-capture
+    const regex = /L2LAAF_BLOCK_START\((\w+):([^:\)\n\r]+):([^:\)\n\r]+)\)([\s\S]*?)L2LAAF_BLOCK_END/g;
 
     let count = 0;
-    console.log('--- L2LAAF PATCHER v2.6 ---');
+    console.log('--- L2LAAF PATCHER v2.7 ---');
     console.log(`Stream size: ${input.length} characters.`);
 
     let match;
     while ((match = regex.exec(input)) !== null) {
+        const type = match[1];
+        const title = match[2].trim();
         const filepath = match[3].trim();
         const content = match[4].trim();
 
@@ -45,6 +48,7 @@ try {
 
     if (count === 0) {
         console.error('❌ Error: No valid L2LAAF logic blocks detected.');
+        console.error('This often happens if the block header is malformed.');
         process.exit(1);
     }
 } catch (err) {
