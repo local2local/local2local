@@ -39,7 +39,7 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
-      - name: Authenticate to Google Cloud
+     - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -59,4 +59,4 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+          firebase depelo --only functions:onProposalFinalized,functions:forceBaseline --project $PROJECT_ID --non-interactive --force

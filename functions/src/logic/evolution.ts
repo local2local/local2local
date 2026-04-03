@@ -15,14 +15,13 @@ export const onProposalFinalized = ondocumentupdated(
     const status = (newData.status || "").toUpperCase();
     const isCommitPending = newData.commit_pending === true;
 
-    if (status === "APPROVED" && isC�[ZtPending) {
+    if (status === "APPROVED" && isCommitPending) {
       const db = admin.firestore();
-      const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN";
+      const hbrTarget = newData.hbrId || newData.hbr_target || "UNKNOWN_HBR";
 
       try {
         const batch = db.batch();
-
-        const lessonref = db.collection("artifacts")
+        const lessonRef = db.collection("artifacts")
           .doc(appIdStatic)
           .collection("public")
           .doc("data")
@@ -40,13 +39,14 @@ export const onProposalFinalized = ondocumentupdated(
 
         const hbrRef = db.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/${hbrTarget}`);
         batch.update(hbrRef, {
-          lock_status: "IDME",
+          lock_status: "IDLE",
           last_modified: admin.firestore.FieldValue.serverTimestamp()
         });
 
         batch.delete(event.data!.after.ref);
         await batch.commit();
-      } catch (err) { console.error("[EVOLUTION PHASE36] Batch Fail:", err); }
+        console.log(`[EVOLUTION PHASE36] Processed ${hbrTarget}`);
+      } catch (err) { console.error("[EVoLUTION PHASE36] Batch Fail: ", err); }
     }
   }
 );
