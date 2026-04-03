@@ -1,91 +1,65 @@
-L2LAAF Phase 36 Final StabilizationDELIMITER_PROTOCOL: V2.6_SAFE_BASE64L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:GitHub Deploy Action:.github/workflows/deploy.yml:base64)bmFtZTogTDJMQURGIE11bHRpLVByb2plY3QgRGVwbG95bWVudAoKb246CiAgcHVzaDoKICAgIGJyYW5jaGVzOiBbIG1haW4sIHN0YWdpbmcsIGRldmVsb3AgXQoKZW52OgogIEZPUkNFX0pBVkFTQ1JJUFRfQUNUSU9OU19UT19OT0RFMjQ6IHRydWUKCmpvYnM6CiAgZGVwbG95OgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgZW52aXJvbm1lbnQ6CiAgICAgIG5hbWU6ICR7eyAoZ2l0aHViLnJlZl9uYW1lID09ICdtYWluJyAmJiAnUHJvZHVjdGlvbicpIHx8IChnaXRodWIucmVmX25hbWUgPT0gJ3N0YWdpbmcnICYmICdTdGFnaW5nJykgfHwgJ0RldmVsb3BtZW50JyB9fQoKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0IFJlcG9zaXRvcnkKICAgICAgICB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QHY0CgogICAgICAtIG5hbWU6IFNldHVwIE5vZGUuanMKICAgICAgICB1c2VzOiBhY3Rpb25zL3NldHVwLW5vZGVAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbm9kZS12ZXJzaW9uOiAnMjQnCiAgICAgICAgICBjYWNoZTogJ25wbScKICAgICAgICAgIGNhY2hlLWRlcGVuZGVuY3ktcGF0aDogZnVuY3Rpb25zL3BhY2thZ2UtbG9jay5qc29uCgogICAgICAtIG5hbWU6IFNldHVwIEZsdXR0ZXIKICAgICAgICB1c2VzOiBzdWJvc2l0by9mbHV0dGVyLWFjdGlvbkB2MgogICAgICAgIHdpdGg6CiAgICAgICAgICBjaGFubmVsOiAnc3RhYmxlJwogICAgICAgICAgZmx1dHRlci12ZXJzaW9uOiAnMy4zOC41JwoKICAgICAgLSBuYW1lOiBJbnN0YWxsIERlcGVuZGVuY2llcwogICAgICAgIHJ1bjogfAogICAgICAgICAgY2QgZnVuY3Rpb25zICYmIG5wbSBpbnN0YWxsCiAgICAgICAgICBjZCAuLgogICAgICAgICAgZmx1dHRlciBwdWIgZ2V0CgogICAgICAtIG5hbWU6IEJ1aWxkIEZsdXR0ZXIgV2ViCiAgICAgICAgcnVuOiBmbHV0dGVyIGJ1aWxkIHdlYiAtLXJlbGVhc2UKCiAgICAgIC0gbmFtZTogQXV0aGVudGljYXRlIHRvIEdvb2dsZSBDbG91ZAogICAgICAgIGlkOiBhdXRoCiAgICAgICAgdXNlczogZ29vZ2xlLWdpdGh1Yi1hY3Rpb25zL2F1dGhAdjIKICAgICAgICB3aXRoOgogICAgICAgICAgY3JlZGVudGlhbHNfanNvbjogJHt7IHNlY3JldHMuR0NQX1NBX0tFWSB9fQoKICAgICAgLSBuYW1lOiBJbnN0YWxsIEZpcmViYXNlIENMSQogICAgICAgIHJ1bjogbnBtIGluc3RhbGwgLWcgZmlyZWJhc2UtdG9vbHMKCiAgICAgIC0gbmFtZTogRGVwbG95IHRvIFRhcmdldCBQcm9qZWN0CiAgICAgICAgZW52OgogICAgICAgICAgR09PR0xFX0FQUExJQ0FUSU9OX0NSRURFTlRJQUxTOiAke3sgc3RlcHMuYXV0aC5vdXRwdXRzLmNyZWRlbnRpYWxzX2ZpbGVfcGF0aCB9fQogICAgICAgIHJ1bjogfAogICAgICAgICAgaWYgW1sgIiR7eyBnaXRodWIucmVmX25hbWUgfX0iID09ICJtYWluIiBdXTsgdGhlbgogICAgICAgICAgICBQUk9KRUNUX0lEPSJsb2NhbDJsb2NhbC1wcm9kIgogICAgICAgICAgZWxpZiBbWyAiJHt7IGdpdGh1Yi5yZWZfbmFtZSB9fSIgPT0gInN0YWdpbmciIF1dOyB0aGVuCiAgICAgICAgICAgIFBST0pFQ1RfSUQ9ImxvY2FsMmxvY2FsLXN0YWdpbmciCiAgICAgICAgICBlbHNlCiAgICAgICAgICAgIFBST0pFQ1RfSUQ9ImxvY2FsMmxvY2FsLWRldiIKICAgICAgICAgIGZpCiAgICAgICAgICBmaXJlYmFzZSBkZXBsb3kgLS1vbmx5IGZ1bmN0aW9ucyAtLXByb2plY3QgJFBST0pFQ1RfSUQgLS1ub24taW50ZXJhY3RpdmUgLS1mb3JjCg==L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts:base64)aW1wb3J0IHsgb25Eb2N1bWVudFdyaXR0ZW4sIG9uRG9jdW1lbnRDcmVhdGVkLCBvbkRvY3VtZW50VXBkYXRlZCB9IGZyb20gImZpcmViYXNlLWZ1bmN0aW9ucy92Mi9maXJlc3RvcmUiOwppbXBvcnQgeyBvblJl
-cXVlc3QgfSBmcm9tICJmaXJlYmFzZS1mdW5jdGlvbnMvdjIvaHR0cHMiOwppbXBvcnQgdHlwZSB7IFJl
-cXVlc3QsIFJlc3BvbnNlIH0gZnJvbSAiZmlyZWJhc2UtZnVuY3Rpb25zL3YxIjsKaW1wb3J0ICogYXMg
-YWRtaW4gZnJvbSAiZmlyZWJhc2UtYWRtaW4iOwppbXBvcnQgeyBGaWVsZFZhbHVlIH0gZnJvbSAiZmly
-ZWJhc2UtYWRtaW4vZmlyZXN0b3JlIjsKaW1wb3J0IHsgZGIgfSBmcm9tICIuLi9jb25maWciOwppbXBv
-cnQgeyBBZ2VudEJ1c0NsaWVudCB9IGZyb20gIi4uL2FnZW50QnVzQ2xpZW50IjsKCmNvbnN0IGFwcElk
-U3RhdGljID0gImxvY2FsMmxvY2FsLWthc2tmbG93IjsKCmZ1bmN0aW9uIGFyZVJlc3VsdHNJZGVudGlj
-YWwoYTogYW55LCBiOiBhbnkpOiBib29sZWFuIHsKICB0cnkgewogICAgY29uc3QgczEgPSBKU09OLnN0
-cmluZ2lmeShhIHx8IHt9LCBPYmplY3Qua2V5cyhhIHx8IHt9KS5zb3J0KCkpOwogICAgY29uc3QgczIg
-PSBKU09OLnN0cmluZ2lmeShiIHx8IHt9LCBPYmplY3Qua2V5cyhiIHx8IHt9KS5zb3J0KCkpOwogICAg
-cmV0dXJuIHMxID09PSBzMjsKICB9IGNhdGNoIChlKSB7CiAgICByZXR1cm4gZmFsc2U7CiAgfQp9Cgpl
-eHBvcnQgY29uc3QgZXZvbHV0aW9uT3JjaGVzdHJhdG9yVjIgPSBvbkRvY3VtZW50V3JpdHRlbih7CiAgZG9jdW1lbnQ6ICJhcnRpZmFjdHMve2FwcElkfS9wdWJsaWMvZGF0YS9hZ2VudF9idXMve21lc3NhZ2VJ
-ZH0iLAogIG1lbW9yeTogIjUxMk1pQiIKfSwgYXN5bmMgKGV2ZW50KSA9PiB7CiAgY29uc3QgZGF0YSA9
-IGV2ZW50LmRhdGE/LmFmdGVyLmRhdGEoKTsKICBjb25zdCBwcmV2ID0gZXZlbnQuZGF0YT8uYmVmb3Jl
-LmRhdGEoKTsKICBpZiAoIWRhdGEgfHwgZGF0YS5zdGF0dXMgIT09ICJkaXNwYXRjaGVkIiB8fCBwcmV2
-Py5zdGF0dXMgPT09ICJkaXNwYXRjaGVkIikgcmV0dXJuOwogIGlmIChkYXRhLnByb3ZlbmFuY2U/LnJl
-Y2VpdmVyX2lkICE9PSAiRVZPTFVUSU9OX1dPUktFUiIpIHJldHVybjsKCiAgY29uc3QgeyBhcHBJZCB9
-ID0gZXZlbnQucGFyYW1zOwogIGNvbnN0IGNsaWVudCA9IG5ldyBBZ2VudEJ1c0NsaWVudCh7CiAgICBh
-Z2VudElkOiAiRVZPTFVUSU9OX1dPUktFUiIsCiAgICBjYXBhYmlsaXRpZXM6IFsibG9naWNfb3B0aW1p
-emF0aW9uIiwgIm1lbW9yeV9jb21taXQiXSwKICAgIGp1cmlzZGljdGlvbnM6IFsiQUIiXSwKICAgIHN1
-YnN0YW5jZXM6IFsiREFVQSJdLAogICAgcm9sZTogIk9SQ0hFU1RSQVRPUiIsCiAgICBkb21haW46ICJT
-RUNVUklUWSIKICB9LCBhcHBJZCk7CiAgYXdhaXQgY2xpZW50LnJlZ2lzdGVyKCk7CgogIHRyeSB7CiAg
-ICBjb25zdCBtYW5pZmVzdCA9IGRhdGEucGF5bG9hZD8ubWFuaWZlc3Q7CiAgICBpZiAoIW1hbmlmZXN0
-KSByZXR1cm47CgogICAgaWYgKG1hbmlmZXN0LmludGVudCA9PT0gIlBST1BPU0VfTE9HSUNfQ0hBTkdF
-IikgewogICAgICBjb25zdCB7IGhicklkLCBhZ2VudElkLCBwcm9wb3NlZExvZ2ljLCByZWFzb24gfSA9
-IG1hbmlmZXN0OwogICAgICBjb25zdCBwcm9wb3NhbFJlZiA9IGRiLmNvbGxlY3Rpb24oYGFydGlmYWN0
-cy8ke2FwcElkfS9wdWJsaWMvZGF0YS9sb2dpY19wcm9wb3NhbHNgKS5kb2MoKTsKICAgICAgYXdhaXQg
-cHJvcG9zYWxSZWYuc2V0KHsKICAgICAgICBoYnJJZCwKICAgICAgICBwcm9wb3NpbmdBZ2VudElkOiBh
-Z2VudElkLAogICAgICAgIHByb3Bvc2VkTG9naWMsCiAgICAgICAgcmVhc29uLAogICAgICAgIHN0YXR1
-czogIlBFTkRJTkciLAogICAgICAgIGNvbW1pdF9wZW5kaW5nOiB0cnVlLAogICAgICAgIGNyZWF0ZWRB
-dDogbmV3IERhdGUoKS50b0lTT1N0cmluZygpCiAgICAgIH0pOwogICAgICByZXR1cm4gY2xpZW50LnNl
-bmRSZXNwb25zZShkYXRhLmNvcnJlbGF0aW9uX2lkLCBkYXRhLnByb3ZlbmFuY2Uuc2VuZGVyX2lkLCB7
-CiAgICAgICAgc3RhdHVzOiAiUkVHSVNURVJFRCIsCiAgICAgICAgcHJvcG9zYWxJZDogcHJvcG9zYWxS
-ZWYuaWQKICAgICAgfSk7CiAgICB9CiAgfSBjYXRjaCAoZXJyKSB7CiAgICBjb25zb2xlLmVycm9yKCJP
-cmNoZXN0cmF0b3IgRXJyb3IiLCBlcnIpOwogIH0KfSk7CgpleHBvcnQgY29uc3Qgc2hhZG93Q29tcGFy
-YXRvcldvcmtlclYyID0gb25Eb2N1bWVudFdyaXR0ZW4oewogIGRvY3VtZW50OiAiYXJ0aWZhY3RzL3th
-cHBJZH0vcHVibGljL2RhdGEvYWdlbnRfYnVzL3ttZXNzYWdlSWR9IiwKICBtZW1vcnk6ICI1MTJNaUIi
-Cn0sIGFzeW5jIChldmVudCkgPT4gewogIGNvbnN0IHByb2RNc2cgPSBldmVudC5kYXRhPy5hZnRlci5k
-YXRhKCk7CiAgY29uc3QgcHJldiA9IGV2ZW50LmRhdGE/LmJlZm9yZS5kYXRhKCk7CiAgaWYgKCFwcm9k
-TXNnIHx8IHByb2RNc2cuc3RhdHVzICE9PSAiZGlzcGF0Y2hlZCIgfHwgcHJldj8uc3RhdHVzID09PSAi
-ZGlzcGF0Y2hlZCIpIHJldHVybjsKICBpZiAocHJvZE1zZy5jb250cm9sPy50eXBlICE9PSAiUkVTUE9O
-U0UiKSByZXR1cm47CgogIGNvbnN0IHsgYXBwSWQgfSA9IGV2ZW50LnBhcmFtczsKICB0cnkgewogICAg
-Y29uc3Qgc2hhZG93U25hcCA9IGF3YWl0IGRiLmNvbGxlY3Rpb24oYGFydGlmYWN0cy8ke2FwcElkfS9w
-dWJsaWMvZGF0YS9zaGFkb3dfYnVzYCkud2hlcmUoImNvcnJlbGF0aW9uX2lkIiwgIj09IiwgcHJvZE1z
-Zy5jb3JyZWxhdGlvbl9pZCkuZ2V0KCk7CiAgICBpZiAoc2hhZG93U25hcC5lbXB0eSkgcmV0dXJuOwoK
-ICAgIGNvbnN0IHNoYWRvd01zZyA9IHNoYWRvd1NuYXAuZG9jc1swXS5kYXRhKCk7CiAgICBjb25zdCBp
-c01hdGNoID0gYXJlUmVzdWx0c0lkZW50aWNhbChwcm9kTXNnLnBheWxvYWQ/LnJlc3VsdCB8fCB7fSwg
-c2hhZG93TXNnLnBheWxvYWQ/LnJlc3VsdCB8fCB7fSk7CgogICAgYXdhaXQgZGIuY29sbGVjdGlvbihh
-cnRpZmFjdHMvJHthcHBJZH0vcHVibGljL2RhdGEvc2hhZG93X3J1bnMpLmRvYyhwcm9kTXNnLmNvcnJl
-bGF0aW9uX2lkKS5zZXQoewogICAgICBjb3JyZWxhdGlvbl9pZDogcHJvZE1zZy5jb3JyZWxhdGlvbl9p
-ZCwKICAgICAgc3RhdHVzOiBpc01hdGNoID8gInZhbGlkYXRlZCIgOiAiZmFpbGVkIiwKICAgICAgdGlt
-ZXN0YW1wOiBuZXcgRGF0ZSgpLnRvSVNPU3RyaW5nKCkKICAgIH0pOwogIH0gY2F0Y2ggKGUpIHsgY29u
-c29sZS5lcnJvcigiU2hhZG93IEVycm9yIiwgZSk7IH0KfSk7CgpleHBvcnQgY29uc3QgbG9naWNDb2xs
-aXNpb25Xb3JrZXJWMiA9IG9uRG9jdW1lbnRDcmVhdGVkKHsKICBkb2N1bWVudDogImFydGlmYWN0cy97
-YXBwSWR9L3B1YmxpYy9kYXRhL2xvZ2ljX2RlcGVuZGVuY2llcy97aGJySWR9IiwKICBtZW1vcnk6ICI1
-MTJNaUIiCn0sIGFzeW5jIChldmVudCkgPT4gewogIGNvbnNvbGUubG9nKCJbQ09MTElTSU9OXSBQcm9j
-ZXNzaW5nIGRlcGVuZGVuY3kgbWFwIGZvcjoiLCBldmVudC5wYXJhbXMuaGJySWRpOwp9KTsKCmV4cG9y
-dCBjb25zdCBldm9sdXRpb25Qcm9wb3NhbEZpbmFsaXplZFYyID0gb25Eb2N1bWVudFVwZGF0ZWQoewog
-IGRvY3VtZW50OiAiYXJ0aWZhY3RzL2xvY2FsMmxvY2FsLWthc2tmbG93L3B1YmxpYy9kYXRhL2xvZ2lj
-X3Byb3Bvc2Fscy97cHJvcG9zYWxJZH0iLAogIG1lbW9yeTogIjUxMk1pQiIKfSwgYXN5bmMgKGV2ZW50
-KSA9PiB7CiAgY29uc3QgbmV3RGF0YSA9IGV2ZW50LmRhdGE/LmFmdGVyLmRhdGEoKTsKICBpZiAoIW5l
-d0RhdGEpIHJldHVybjsKCiAgY29uc3Qgc3RhdHVzID0gKG5ld0RhdGEuc3RhdHVzIHx8ICIiKS50b1Vw
-cGVyQ2FzZSgpOwogIGlmIChzdGF0dXMgPT09ICJBUFBST1ZFRCIgJiYgbmV3RGF0YS5jb21taXRfcGVu
-ZGluZyA9PT0gdHJ1ZSkgewogICAgY29uc3QgZGJJbnN0YW5jZSA9IGFkbWluLmZpcmVzdG9yZSgpOwog
-ICAgY29uc3QgaGJyVGFyZ2V0ID0gbmV3RGF0YS5oYnJJZCB8fCBuZXdEYXRhLmhicl90YXJnZXQgfHwg
-IlVOS05PV04iOwogICAgdHJ5IHsKICAgICAgY29uc3QgYmF0Y2ggPSBkYkluc3RhbmNlLmJhdGNoKCk7
-CiAgICAgIGNvbnN0IGxlc3NvblJlZiA9IGRiSW5zdGFuY2UuY29sbGVjdGlvbigiYXJ0aWZhY3RzIiku
-ZG9jKGFwcElkU3RhdGljKS5jb2xsZWN0aW9uKCJwdWJsaWMiKS5kb2MoImRhdGEiKS5jb2xsZWN0aW9u
-KCJsZXNzb25zX2xlYXJuZWQiKS5kb2MoKTsKCiAgICAgIGJhdGNoLnNldChsZXNzb25SZWYsIHsKICAg
-ICAgICByZWFzb25pbmdfdmF1bHQ6IG5ld0RhdGEucmVhc29uaW5nX3ZhdWx0IHx8IHt9LAogICAgICAg
-IGFwcGxpZWRfbG9naWM6IG5ld0RhdGEucHJvcG9zZWRMb2dpYyB8fCBuZXdEYXRhLnByb3Bvc2VkX2xv
-Z2ljIHx8ICJOL0EiLAogICAgICAgIGhicl90YXJnZXQ6IGhiclVGFyZ2V0LAogICAgICAgIGFnZW50
-X2lkOiBuZXdEYXRhLnByb3Bvc2luZ0FnZW50SWQgfHwgbmV3RGF0YS5hZ2VudF9pZCB8fCAiU1lTVEVN
-IiwKICAgICAgICBmaW5hbGl6ZWRfYXQ6IEZpZWxkVmFsdWUuc2VydmVyVGltZXN0YW1wKCksCiAgICAg
-ICAgc291cmNlX3Byb3Bvc2FsOiBldmVudC5wYXJhbXMucHJvcG9zYWxJZAogICAgICB9KTsKCiAgICAg
-IGNvbnN0IGhiclJlZiA9IGRiSW5zdGFuY2UuZG9jKGBhcnRpZmFjdHMvJHthcHBJZFN0YXRpY30vcHVi
-bGljL2RhdGEvaGJyX3JlZ2lzdHJ5L3JlZ2lzdHJ5LyR7aGJyVGFyZ2V0fWApOwogICAgICBiYXRjaC51
-cGRhdGUoaGJyUmVmLCB7CiAgICAgICAgbG9ja19zdGF0dXM6ICJJRExFIiwKICAgICAgICBsYXN0X21v
-ZGlmaWVkOiBGaWVsZFZhbHVlLnNlcnZlclRpbWVzdGFtcCgpCiAgICAgIH0pOwoKICAgICAgYmF0Y2gu
-ZGVsZXRlKGV2ZW50LmRhdGEhLmFmdGVyLnJlZik7CiAgICAgIGF3YWl0IGJhdGNoLmNvbW1pdCgpOwog
-ICAgICBjb25zb2xlLmxvZyhgW0VWT0xVVElPTi1QMzZdIFByb2Nlc3NlZCAke2hiclVGFyZ2V0fWAp
-OwogICAgfSBjYXRjaCAoZSkgewogICAgICBjb25zb2xlLmVycm9yKCJCYXRjaCBFcnJvciIsIGUpOwog
-ICAgfQogIH0KfSk7CgpleHBvcnQgY29uc3QgZXZvbHV0aW9uRm9yY2VCYXNlbGluZVYyID0gb25SZXF1
-ZXN0KGFzeW5jIChyZXE6IFJlcXVlc3QsIHJlczogUmVzcG9uc2UpID0+IHsKICBjb25zdCBkYkluc3Rh
-bmNlID0gYWRtaW4uZmlyZXN0b3JlKCk7CiAgdHJ5IHsKICAgIGF3YWl0IGRiSW5zdGFuY2UuY29sbGVj
-dGlvbigiYXJ0aWZhY3RzIikuZG9jKGFwcElkU3RhdGljKS5jb2xsZWN0aW9uKCJwdWJsaWMiKS5kb2Mo
-ImRhdGEiKS5jb2xsZWN0aW9uKCJsZXNzb25zX2xlYXJuZWQiKS5kb2MoImJhc2VsaW5lX3BpbmciKS5z
-ZXQoewogICAgICBtZXNzYWdlOiAiVmVyaWZpZWQiLAogICAgICB0aW1lc3RhbXA6IEZpZWxkVmFsdWUu
-c2VydmVyVGltZXN0YW1wKCkKICAgIH0pOwogICAgcmVzLnN0YXR1cygyMDApLnNlbmQoIuKYiCBTdWNj
-ZXNzIik7CiAgfSBjYXRjaCAoZTogYW55KSB7IHJlcy5zdGF0dXMoNTAwKS5zZW5kKCLinawgRmFpbDog
-IiArIGUubWVzc2FnZSk7IH0KfSk7Cg==L2LAAF_BLOCK_END
+L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";import type { Request, Response } from "firebase-functions/v1";import * as admin from "firebase-admin";import { FieldValue } from "firebase-admin/firestore";import { db } from "../config";import { AgentBusClient } from "../agentBusClient";const appIdStatic = "local2local-kaskflow";function areResultsIdentical(a: any, b: any): boolean {try {const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());return s1 === s2;} catch (e) {return false;}}export const evolutionOrchestratorV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const data = event.data?.after.data();const prev = event.data?.before.data();if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;const { appId } = event.params;const client = new AgentBusClient({agentId: "EVOLUTION_WORKER",capabilities: ["logic_optimization", "memory_commit"],jurisdictions: ["AB"],substances: ["DAUA"],role: "ORCHESTRATOR",domain: "SECURITY"}, appId);await client.register();try {const manifest = data.payload?.manifest;if (!manifest) return;if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
+  const { hbrId, agentId, proposedLogic, reason } = manifest;
+  const proposalRef = db.collection(_BT_artifacts/${appId}/public/data/logic_proposals_BT_).doc();
+  await proposalRef.set({
+    hbrId,
+    proposingAgentId: agentId,
+    proposedLogic,
+    reason,
+    status: "PENDING",
+    commit_pending: true,
+    createdAt: new Date().toISOString()
+  });
+  return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+    status: "REGISTERED",
+    proposalId: proposalRef.id
+  });
+}
+} catch (err) {console.error("[ORCHESTRATOR] Error:", err);}});export const shadowComparatorWorkerV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const prodMsg = event.data?.after.data();const prev = event.data?.before.data();if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;if (prodMsg.control?.type !== "RESPONSE") return;const { appId } = event.params;try {const shadowSnap = await db.collection(BT_artifacts/${appId}/public/data/shadow_bus_BT).where("correlation_id", "==", prodMsg.correlation_id).get();if (shadowSnap.empty) return;const shadowMsg = shadowSnap.docs[0].data();
+const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
+
+await db.collection(_BT_artifacts/${appId}/public/data/shadow_runs_BT_).doc(prodMsg.correlation_id).set({
+  correlation_id: prodMsg.correlation_id,
+  status: isMatch ? "validated" : "failed",
+  timestamp: new Date().toISOString()
+});
+} catch (e) {console.error("[SHADOW] Error:", e);}});export const logicCollisionWorkerV2 = onDocumentCreated({document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",memory: "512MiB"}, async (event: FirestoreEvent<QueryDocumentSnapshot | undefined, { appId: string; hbrId: string }>) => {console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);});export const evolutionProposalFinalizedV2 = onDocumentUpdated({document: "artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { proposalId: string }>) => {const newData = event.data?.after.data();if (!newData) return;const status = (newData.status || "").toUpperCase();if (status === "APPROVED" && newData.commit_pending === true) {const dbInstance = admin.firestore();const hbrId = newData.hbrId || newData.hbr_target || "UNKNOWN";try {
+  const batch = dbInstance.batch();
+  
+  const lessonRef = dbInstance.collection("artifacts")
+    .doc(appIdStatic)
+    .collection("public")
+    .doc("data")
+    .collection("lessons_learned")
+    .doc();
+
+  batch.set(lessonRef, {
+    reasoning_vault: newData.reasoning_vault || {},
+    applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
+    hbr_target: hbrId,
+    agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+    finalized_at: FieldValue.serverTimestamp(),
+    source_proposal: event.params.proposalId
+  });
+
+  const hbrRef = dbInstance.doc(_BT_artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrId}_BT_);
+  batch.update(hbrRef, {
+    lock_status: "IDLE",
+    last_modified: FieldValue.serverTimestamp()
+  });
+
+  if (event.data?.after.ref) {
+    batch.delete(event.data.after.ref);
+  }
+
+  await batch.commit();
+  console.log(_BT_[EVOLUTION-P36] Processed ${hbrId}_BT_);
+} catch (e) {
+  console.error("[BATCH-ERROR]", e);
+}
+}});export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {const dbInstance = admin.firestore();try {const pingRef = dbInstance.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping");await pingRef.set({
+  message: "Verified",
+  timestamp: FieldValue.serverTimestamp()
+});
+res.status(200).send("✅ Success");
+} catch (e: any) {res.status(500).send("❌ Fail: " + e.message);}});L2LAAF_BLOCK_END
