@@ -1,4 +1,4 @@
-L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4_NASAL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:
+L2LAAF Phase 36 Final StabilizationPROTOCOL: NASA_STANDARD_V4.2L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:
   - name: Checkout Repository
     uses: actions/checkout@v4
 
@@ -47,8 +47,8 @@ L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4_NASAL2LAAF_BLOCK_S
       firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";import type { Request, Response } from "firebase-functions/v1";import * as admin from "firebase-admin";import { FieldValue } from "firebase-admin/firestore";import { db } from "../config";import { AgentBusClient } from "../agentBusClient";const appIdStatic = "local2local-kaskflow";function areResultsIdentical(a: any, b: any): boolean {try {const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());return s1 === s2;} catch (e) {return false;}}export const evolutionOrchestratorV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const data = event.data?.after.data();const prev = event.data?.before.data();if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;const { appId } = event.params;const client = new AgentBusClient({agentId: "EVOLUTION_WORKER",capabilities: ["logic_optimization", "memory_commit"],jurisdictions: ["AB"],substances: ["DAUA"],role: "ORCHESTRATOR",domain: "SECURITY"}, appId);await client.register();try {const manifest = data.payload?.manifest;if (!manifest) return;if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
   const { hbrId, agentId, proposedLogic, reason } = manifest;
-  const path = _BT_artifacts/${appId}/public/data/logic_proposals_BT_;
-  const proposalRef = db.collection(path).doc();
+  const proposalPath = __BACKTICK__artifacts/${appId}/public/data/logic_proposals__BACKTICK__;
+  const proposalRef = db.collection(proposalPath).doc();
   await proposalRef.set({
     hbrId,
     proposingAgentId: agentId,
@@ -63,10 +63,10 @@ L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evol
     proposalId: proposalRef.id
   });
 }
-} catch (err) {console.error("[ORCHESTRATOR] Error:", err);}});export const shadowComparatorWorkerV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const prodMsg = event.data?.after.data();const prev = event.data?.before.data();if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;if (prodMsg.control?.type !== "RESPONSE") return;const { appId } = event.params;try {const shadowPath = BT_artifacts/${appId}/public/data/shadow_bus_BT;const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();if (shadowSnap.empty) return;const shadowMsg = shadowSnap.docs[0].data();
+} catch (err) {console.error("[ORCHESTRATOR] Error:", err);}});export const shadowComparatorWorkerV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const prodMsg = event.data?.after.data();const prev = event.data?.before.data();if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;if (prodMsg.control?.type !== "RESPONSE") return;const { appId } = event.params;try {const shadowPath = BACKTICK__artifacts/${appId}/public/data/shadow_bus__BACKTICK;const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();if (shadowSnap.empty) return;const shadowMsg = shadowSnap.docs[0].data();
 const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-const runPath = _BT_artifacts/${appId}/public/data/shadow_runs_BT_;
+const runPath = __BACKTICK__artifacts/${appId}/public/data/shadow_runs__BACKTICK__;
 await db.collection(runPath).doc(prodMsg.correlation_id).set({
   correlation_id: prodMsg.correlation_id,
   status: isMatch ? "validated" : "failed",
@@ -90,8 +90,8 @@ await db.collection(runPath).doc(prodMsg.correlation_id).set({
     source_proposal: event.params.proposalId
   });
 
-  const hbrPath = _BT_artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrId}_BT_;
-  const hbrRef = dbInstance.doc(hbrPath);
+  const registryPath = __BACKTICK__artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrId}__BACKTICK__;
+  const hbrRef = dbInstance.doc(registryPath);
   batch.update(hbrRef, {
     lock_status: "IDLE",
     last_modified: FieldValue.serverTimestamp()
@@ -102,7 +102,7 @@ await db.collection(runPath).doc(prodMsg.correlation_id).set({
   }
 
   await batch.commit();
-  console.log(_BT_[EVOLUTION-P36] Processed ${hbrId}_BT_);
+  console.log(`[EVOLUTION-P36] Processed ${hbrId}`);
 } catch (e) {
   console.error("[BATCH-ERROR]", e);
 }
