@@ -17,7 +17,14 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
     if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;
 
     const { appId } = event.params;
-    const client = new AgentBusClient({ agentId: "EVOLUTION_WORKER" }, appId);
+    const client = new AgentBusClient({
+      agentId: "EVOLUTION_WORKER",
+      capabilities: ["logic_optimization", "memory_commit"],
+      jurisdictions: ["AB"],
+      substances: ["DATA"],
+      role: "ORCHESTRATOR",
+      domain: "SECURITY"
+    }, appId);
     await client.register();
 
     try {
@@ -26,15 +33,11 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
 
         if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
             const { hbrId, agentId, proposedLogic, reason } = manifest;
-            const proposalRef = db.collection(`artifacts/${appId}/public/data/logic_proposals`).doc();
-            await proposalRef.set({ hbrId, agentId, proposedLogic, reason, status: "PENDING", commit_pending: true, createdAt: new Date().isOString() });
+            const proposalRef = db.collection(artifacts/${appId}/public/data/logic_proposals).doc();
+            await proposalRef.set({ hbrId, agentId, proposedLogic, reason, status: "PENDING", commit_pending: true, createdAt: new Date().toISOString() });
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, { status: "REGISTERED", proposalId: proposalRef.id });
         }
     } catch (err) { console.error("Evolution Error", err); }
-});
-
-export const evolutionTimelineWorkerV2 = onDocumentUpdated("artifacts/{appId}/public/data/lessons_learned/{lessonId}", async (event) => {
-    console.log("[TIMELINE] New lesson archived.");
 });
 
 export const onProposalFinalized = onDocumentUpdated(
@@ -46,11 +49,10 @@ export const onProposalFinalized = onDocumentUpdated(
     const status = (newData.status || "").toUpperCase();
     if (status === "APPROVED" && newData.commit_pending === true) {
       const dborg = admin.firestore();
-      const hbr = newData.hbrYd || newData.hbr_target || "UNKNOWN";
+      const hbr = newData.hbrId || newData.hbr_target || "UNKNOWN";
       try {
         const batch = dborg.batch();
         const lessonRef = dborg.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
-        
         batch.set(lessonRef, {
           reasoning_vault: newData.reasoning_vault || {},
           applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
@@ -59,8 +61,7 @@ export const onProposalFinalized = onDocumentUpdated(
           finalized_at: FieldValue.serverTimestamp(),
           source_proposal: event.params.proposalId
         });
-        
-        const hbrRef = dborg.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbr}`);
+        const hbrRef = dborg.doc(artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbr});
         batch.update(hbrRef, { lock_status: "IDLE", last_modified: FieldValue.serverTimestamp() });
         batch.delete(event.data!.after.ref);
         await batch.commit();
@@ -71,12 +72,12 @@ export const onProposalFinalized = onDocumentUpdated(
 );
 
 export const forceBaseline = onRequest(async (req: Request, res: Response) => {
-  const dbinstance = admin.firestore();
+  const dbInstance = admin.firestore();
   try {
-    await dbmnstance.doc(`artifacts/${appIdStatic}/public/data/lessons_learned/baseline_ping`).set({
+    await dbInstance.doc(artifacts/${appIdStatic}/public/data/lessons_learned/baseline_ping).set({
       message: "Verified",
       timestamp: FieldValue.serverTimestamp()
     });
-    res.status(200).send("☈ Success");
-  } catch (e: any) { res.status(500).send("❬ Fail: " + e.message); }
+    res.status(200).send("☍ Success");
+  } catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }
 });
