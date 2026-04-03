@@ -1,6 +1,54 @@
-L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";import type { Request, Response } from "firebase-functions/v1";import * as admin from "firebase-admin";import { FieldValue } from "firebase-admin/firestore";import { db } from "../config";import { AgentBusClient } from "../agentBusClient";const appIdStatic = "local2local-kaskflow";function areResultsIdentical(a: any, b: any): boolean {try {const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());return s1 === s2;} catch (e) {return false;}}export const evolutionOrchestratorV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const data = event.data?.after.data();const prev = event.data?.before.data();if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;const { appId } = event.params;const client = new AgentBusClient({agentId: "EVOLUTION_WORKER",capabilities: ["logic_optimization", "memory_commit"],jurisdictions: ["AB"],substances: ["DAUA"],role: "ORCHESTRATOR",domain: "SECURITY"}, appId);await client.register();try {const manifest = data.payload?.manifest;if (!manifest) return;if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
+L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4_NASAL2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)feat(evolution): baseline phase 36 master suite 100% error-free restorationL2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)name: L2LAAF Multi-Project Deploymenton:push:branches: [ main, staging, develop ]env:FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: truejobs:deploy:runs-on: ubuntu-latestenvironment:name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
+
+  - name: Setup Node.js
+    uses: actions/setup-node@v4
+    with:
+      node-version: '24'
+      cache: 'npm'
+      cache-dependency-path: functions/package-lock.json
+
+  - name: Setup Flutter
+    uses: subosito/flutter-action@v2
+    with:
+      channel: 'stable'
+      flutter-version: '3.38.5'
+
+  - name: Install Dependencies
+    run: |
+      cd functions && npm install
+      cd ..
+      flutter pub get
+
+  - name: Build Flutter Web
+    run: flutter build web --release
+
+  - name: Authenticate to Google Cloud
+    id: auth
+    uses: google-github-actions/auth@v2
+    with:
+      credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+  - name: Install Firebase CLI
+    run: npm install -g firebase-tools
+
+  - name: Deploy to Target Project
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+    run: |
+      if [[ "${{ github.ref_name }}" == "main" ]]; then
+        PROJECT_ID="local2local-prod"
+      elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+        PROJECT_ID="local2local-staging"
+      else
+        PROJECT_ID="local2local-dev"
+      fi
+      firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+L2LAAF_BLOCK_ENDL2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";import type { Request, Response } from "firebase-functions/v1";import * as admin from "firebase-admin";import { FieldValue } from "firebase-admin/firestore";import { db } from "../config";import { AgentBusClient } from "../agentBusClient";const appIdStatic = "local2local-kaskflow";function areResultsIdentical(a: any, b: any): boolean {try {const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());return s1 === s2;} catch (e) {return false;}}export const evolutionOrchestratorV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const data = event.data?.after.data();const prev = event.data?.before.data();if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;const { appId } = event.params;const client = new AgentBusClient({agentId: "EVOLUTION_WORKER",capabilities: ["logic_optimization", "memory_commit"],jurisdictions: ["AB"],substances: ["DAUA"],role: "ORCHESTRATOR",domain: "SECURITY"}, appId);await client.register();try {const manifest = data.payload?.manifest;if (!manifest) return;if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
   const { hbrId, agentId, proposedLogic, reason } = manifest;
-  const proposalRef = db.collection(_BT_artifacts/${appId}/public/data/logic_proposals_BT_).doc();
+  const path = _BT_artifacts/${appId}/public/data/logic_proposals_BT_;
+  const proposalRef = db.collection(path).doc();
   await proposalRef.set({
     hbrId,
     proposingAgentId: agentId,
@@ -15,17 +63,17 @@ L2LAAF Phase 36 Final StabilizationPROTOCOL: LITERAL_TOKEN_V4L2LAAF_BLOCK_START(
     proposalId: proposalRef.id
   });
 }
-} catch (err) {console.error("[ORCHESTRATOR] Error:", err);}});export const shadowComparatorWorkerV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const prodMsg = event.data?.after.data();const prev = event.data?.before.data();if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;if (prodMsg.control?.type !== "RESPONSE") return;const { appId } = event.params;try {const shadowSnap = await db.collection(BT_artifacts/${appId}/public/data/shadow_bus_BT).where("correlation_id", "==", prodMsg.correlation_id).get();if (shadowSnap.empty) return;const shadowMsg = shadowSnap.docs[0].data();
+} catch (err) {console.error("[ORCHESTRATOR] Error:", err);}});export const shadowComparatorWorkerV2 = onDocumentWritten({document: "artifacts/{appId}/public/data/agent_bus/{messageId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { appId: string; messageId: string }>) => {const prodMsg = event.data?.after.data();const prev = event.data?.before.data();if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;if (prodMsg.control?.type !== "RESPONSE") return;const { appId } = event.params;try {const shadowPath = BT_artifacts/${appId}/public/data/shadow_bus_BT;const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();if (shadowSnap.empty) return;const shadowMsg = shadowSnap.docs[0].data();
 const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-await db.collection(_BT_artifacts/${appId}/public/data/shadow_runs_BT_).doc(prodMsg.correlation_id).set({
+const runPath = _BT_artifacts/${appId}/public/data/shadow_runs_BT_;
+await db.collection(runPath).doc(prodMsg.correlation_id).set({
   correlation_id: prodMsg.correlation_id,
   status: isMatch ? "validated" : "failed",
   timestamp: new Date().toISOString()
 });
 } catch (e) {console.error("[SHADOW] Error:", e);}});export const logicCollisionWorkerV2 = onDocumentCreated({document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",memory: "512MiB"}, async (event: FirestoreEvent<QueryDocumentSnapshot | undefined, { appId: string; hbrId: string }>) => {console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);});export const evolutionProposalFinalizedV2 = onDocumentUpdated({document: "artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",memory: "512MiB"}, async (event: FirestoreEvent<Change | undefined, { proposalId: string }>) => {const newData = event.data?.after.data();if (!newData) return;const status = (newData.status || "").toUpperCase();if (status === "APPROVED" && newData.commit_pending === true) {const dbInstance = admin.firestore();const hbrId = newData.hbrId || newData.hbr_target || "UNKNOWN";try {
   const batch = dbInstance.batch();
-  
   const lessonRef = dbInstance.collection("artifacts")
     .doc(appIdStatic)
     .collection("public")
@@ -42,7 +90,8 @@ await db.collection(_BT_artifacts/${appId}/public/data/shadow_runs_BT_).doc(prod
     source_proposal: event.params.proposalId
   });
 
-  const hbrRef = dbInstance.doc(_BT_artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrId}_BT_);
+  const hbrPath = _BT_artifacts/${appIdStatic}/public/data/hbr_registry/registry/${hbrId}_BT_;
+  const hbrRef = dbInstance.doc(hbrPath);
   batch.update(hbrRef, {
     lock_status: "IDLE",
     last_modified: FieldValue.serverTimestamp()
