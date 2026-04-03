@@ -1,6 +1,9 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onRequest } from "firebase-functions/v2/http";
+import { onRequest } from "firebase-functions/v2/https";
+import type { Request, Response } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+
+import { FieldValue } from "firebase-admin/firestore";
 
 const appIdStatic = "local2local-kaskflow";
 
@@ -17,16 +20,18 @@ export const evolutionOnProposalWorkerV2 = onDocumentUpdated(
       try {
         const batch = db.batch();
         const lessonRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+        
         batch.set(lessonRef, {
           reasoning_vault: newData.reasoning_vault || {},
           applied_logic: newData.proposedLogic || "N/A",
           hbr_target: hbr,
           agent_id: newData.proposingAgentId || "SYSTEM",
-          finalized_at: admin.FieldValue.serverTimestamp(),
+          finalized_at: FieldValue.serverTimestamp(),
           source_proposal: event.params.proposalId
         });
-        const hbrRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").doc("hbr_registry").collection("registry").doc(hbr);
-        batch.update(hbrRef, { lock_status: "IDLE", last_modified: admin.FieldValue.serverTimestamp() });
+        
+        const hbrRef = db.doc(`artifacts/${appIdStatic}/public/data/hbr_registry/${hbr}`);
+        batch.update(hbrRef, { lock_status: "IDLE", last_modified: FieldValue.serverTimestamp() });
         batch.delete(event.data!.after.ref);
         await batch.commit();
       } catch (e) { console.error("Batch Error", e); }
@@ -34,12 +39,12 @@ export const evolutionOnProposalWorkerV2 = onDocumentUpdated(
   }
 );
 
-export const evolutionForceBaselineV2 = onRequest(async (req, res) => {
+export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {
   const db = admin.firestore();
   try {
     await db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping").set({
       message: "Verified",
-      timestamp: admin.FieldValue.serverTimestamp()
+      timestamp: FieldValue.serverTimestamp()
     });
     res.status(200).send("☍ Success");
   } catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }
