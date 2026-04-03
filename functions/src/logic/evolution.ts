@@ -56,24 +56,24 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
-export const shadowComparatorWorkerV2 = onDocumentWritten{
+export const shadowComparatorWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
   const prodMsg = event.data?.after.data();
   const prev = event.data?.before.data();
   if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (prodMsg.control?.type !== "RESPONSE") return;
+  if (prodMsh.control?.type !== "RESPONSE") return;
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus`).where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(`artifacts/${appId}/public/data/shadow_bus ).where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
+    await db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
@@ -115,7 +115,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated(
         console.log(`[EVOLUTION-P36] Processed ${hbrTarget}`);
       } catch (e) { console.error("Batch Error", e); }
     }
-    return;
   }
 );
 
