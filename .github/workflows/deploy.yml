@@ -53,4 +53,10 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
           if [[ "${{ github.ref_name }}" == "main" ]]; then
-        -��ґP��QH���[���[\����[Y�������]X���Y�ۘ[YH_H�OH��Y�[�ȈWN�[���ґP��QH���[���[\�Y�[�Ȃ�[�B��ґP��QH���[���[Y]����B��\�X�\�H\[�K[ۛH�[��[ۜ�K\�ڙX�	�ґP��QK[�ۋZ[�\�X�]�HKY�ܘ�B
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force

@@ -65,7 +65,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
-export const shadowComparatorWorkerV2 = ondocumentWritten({
+export const shadowComparatorWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
@@ -76,7 +76,7 @@ export const shadowComparatorWorkerV2 = ondocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsh.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
@@ -87,7 +87,7 @@ export const shadowComparatorWorkerV2 = ondocumentWritten({
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) { console.error("[SHADOW] Error:", e); }
+  } catch (e) { console.error"([SHADOW] Error:", e); }
 });
 
 export const logicCollisionWorkerV2 = onDocumentCreated({
