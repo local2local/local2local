@@ -1,30 +1,46 @@
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";import { onRequest } from "firebase-functions/v2/https";import * as admin from "firebase-admin";const appIdStatic = "local2local-kaskflow";export const evolutionOnProposalWorkerV2 = onDocumentUpdated("artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",async (event) => {const newData = event.data?.after.data();if (!newData) return;const status = (newData.status || "").toUpperCase();
-if (status === "APPROVED" && newData.commit_pending === true) {
-  const db = admin.firestore();
-  const hbr = newData.hbrId || "UNKNOWN";
-  try {
-    const batch = db.batch();
-    const lessonRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
-    
-    batch.set(lessonRef, {
-      reasoning_vault: newData.reasoning_vault || {},
-      applied_logic: newData.proposedLogic || "N/A",
-      hbr_target: hbr,
-      agent_id: newData.proposingAgentId || "SYSTEM",
-      finalized_at: admin.FieldValue.serverTimestamp(),
-      source_proposal: event.params.proposalId
-    });
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onRequest } from "firebase-functions/v2/http";
+import * as admin from "firebase-admin";
 
-    const hbrRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").doc("hbr_registry").collection("registry").doc(hbr);
-    batch.update(hbrRef, { 
-        lock_status: "IDLE", 
-        last_modified: admin.FieldValue.serverTimestamp() 
-    });
+const appIdStatic = "local2local-kaskflow";
 
-    batch.delete(event.data!.after.ref);
-    await batch.commit();
-  } catch (e) { 
-      console.error("Batch Error", e); 
+export const evolutionOnProposalWorkerV2 = onDocumentUpdated(
+  "artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",
+  async (event) => {
+    const newData = event.data?.after.data();
+    if (!newData) return;
+
+    const status = (newData.status || "").toUpperCase();
+    if (status === "APPROVED" && newData.commit_pending === true) {
+      const db = admin.firestore();
+      const hbr = newData.hbrId || "UNKNOWN";
+      try {
+        const batch = db.batch();
+        const lessonRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc();
+        batch.set(lessonRef, {
+          reasoning_vault: newData.reasoning_vault || {},
+          applied_logic: newData.proposedLogic || "N/A",
+          hbr_target: hbr,
+          agent_id: newData.proposingAgentId || "SYSTEM",
+          finalized_at: admin.FieldValue.serverTimestamp(),
+          source_proposal: event.params.proposalId
+        });
+        const hbrRef = db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").doc("hbr_registry").collection("registry").doc(hbr);
+        batch.update(hbrRef, { lock_status: "IDLE", last_modified: admin.FieldValue.serverTimestamp() });
+        batch.delete(event.data!.after.ref);
+        await batch.commit();
+      } catch (e) { console.error("Batch Error", e); }
+    }
   }
-}
-});export const evolutionForceBaselineV2 = onRequest(async (req, res) => {const db = admin.firestore();try {await db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping").set({message: "Evolution baseline verified",timestamp: admin.FieldValue.serverTimestamp()});res.status(200).send("✅ Success");} catch (e: any) {res.status(500).send("❌ Fail: " + e.message);}});
+);
+
+export const evolutionForceBaselineV2 = onRequest(async (req, res) => {
+  const db = admin.firestore();
+  try {
+    await db.collection("artifacts").doc(appIdStatic).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping").set({
+      message: "Verified",
+      timestamp: admin.FieldValue.serverTimestamp()
+    });
+    res.status(200).send("☍ Success");
+  } catch (e: any) { res.status(500).send("❌ Fail: " + e.message); }
+});
