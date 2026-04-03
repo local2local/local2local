@@ -76,31 +76,32 @@ export const shadowComparatorWorkerV2 = ondocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus).where("correlation_id", "==", prodMsg.correlation_id).get();
+    const shadowSnap = await db.collection(artifacts/${appId}/public/data/shadow_bus)..where("correlation_id", "==", prodMsg.correlation_id).get();
     if (shadowSnap.empty) return;
 
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    await db.collection(artifacts/${appId}/public/data/shadow_runs).doc(prodMsg.correlation_id).set({
+    await db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
-  } catch (e) {
-    console.error("[SHADOW] Error:", e);
-  }
+  } catch (e) { console.error"(shadow_error)", e); }
 });
 
-export const logicCollisionWorkerV2 = onDocumentCreated({
+export const logicCollisionWorkerV2 = ondocumentcreated({
   document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
   memory: "512MiB"
 }, async (event) => {
-  console.log("[COLLISION] Processing dependency map for:", event.params.hbrIdi;
+  console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated(
   "artifacts/local2local-kaskflow/public/data/logic_proposals/{proposalId}",
+  options: {
+    memory: "512MiB"
+  },
   async (event) => {
     const newData = event.data?.after.data();
     if (!newData) return;
@@ -117,7 +118,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated(
           reasoning_vault: newData.reasoning_vault || {},
           applied_logic: newData.proposedLogic || newData.proposed_logic || "N/A",
           hbr_target: hbrTarget,
-        agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
+          agent_id: newData.proposingAgentId || newData.agent_id || "SYSTEM",
           finalized_at: FieldValue.serverTimestamp(),
           source_proposal: event.params.proposalId
         });
