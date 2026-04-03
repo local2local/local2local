@@ -59,4 +59,4 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          firebase deploy --only functions:onProposalFinalized,functions:forceBaseline --project $PROJECT_ID --non-interactive --force
+          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
