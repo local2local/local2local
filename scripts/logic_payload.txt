@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.33)
+L2LAAF Phase 36 Master Stabilization (v11.34)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:feat(evolution) - Cockpit stabilization and project switching v11.33:COMMIT_MSG)
-feat(evolution): finalize project switching logic, versioning, and environment safety
+L2LAAF_BLOCK_START(text:feat(evolution) v11.34 stabilization:COMMIT_MSG)
+feat(evolution): scope deployment to functions and hosting and fix relay mapping
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)
@@ -56,8 +56,8 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          # Deploying both hosting assets and cloud functions
-          firebase deploy --project $PROJECT_ID --non-interactive --force
+          # Scoped deployment to avoid firestore.indexes.json errors
+          firebase deploy --only functions,hosting --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -330,7 +330,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.33.36',
+      version: 'v11.34.36',
     );
   }
 
@@ -358,7 +358,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.33.36',
+      version: 'v11.34.36',
     );
   }
 

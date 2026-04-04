@@ -48,5 +48,5 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          # Deploying both hosting assets and cloud functions
-          firebase deploy --project $PROJECT_ID --non-interactive --force
+          # Scoped deployment to avoid firestore.indexes.json errors
+          firebase deploy --only functions,hosting --project $PROJECT_ID --non-interactive --force
