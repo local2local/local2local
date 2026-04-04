@@ -1,1 +1,1 @@
-fix(evolution): correct hbr_registry document path in finalization batch
+fix(evolution): force redeploy to resolve finalization path bug
