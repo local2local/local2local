@@ -7,9 +7,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
-/**
- * TYPE ALIASES: Native Generic Syntax for Zero-Touch Patcher.
- */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
@@ -168,7 +165,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
   try {
     const batch = dbInstance.batch();
 
-    // 1. ARCHIVE TO LESSONS LEARNED
     const lessonRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -185,7 +181,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Logic Summary)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -201,14 +196,13 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      details: strategicSummary, // Architecture Sync: Use 'details' key
-      is_autonomous: true,       // Architecture Sync: Use snake_case
-      source: "EVOLUTION_WORKER", // Architecture Sync: Use 'source' key
+      details: strategicSummary,
+      is_autonomous: true,
+      source: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
       hbr_id: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.set(hbrRef, {

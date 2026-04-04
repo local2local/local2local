@@ -35,11 +35,8 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Architecture Fix: Look for 'details' to capture the business rule summary
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      // Architecture Fix: Look for 'source' to match project convention
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      // Architecture Fix: Look for 'is_autonomous' snake_case key
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );

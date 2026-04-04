@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.27)
+L2LAAF Phase 36 Master Stabilization (v11.29)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): align details/source mapping and inject strategic rule summaries
+L2LAAF_BLOCK_START(text:feat(evolution) - Cockpit v11.29 Deployment:COMMIT_MSG)
+feat(evolution): cockpit versioning and project-switching logic
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -15,9 +15,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
-/**
- * TYPE ALIASES: Native Generic Syntax for Zero-Touch Patcher.
- */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
@@ -176,7 +173,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
   try {
     const batch = dbInstance.batch();
 
-    // 1. ARCHIVE TO LESSONS LEARNED
     const lessonRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -193,7 +189,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Logic Summary)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -209,14 +204,13 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      details: strategicSummary, // Architecture Sync: Use 'details' key
-      is_autonomous: true,       // Architecture Sync: Use snake_case
-      source: "EVOLUTION_WORKER", // Architecture Sync: Use 'source' key
+      details: strategicSummary,
+      is_autonomous: true,
+      source: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
       hbr_id: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.set(hbrRef, {
@@ -294,11 +288,8 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Architecture Fix: Look for 'details' to capture the business rule summary
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      // Architecture Fix: Look for 'source' to match project convention
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      // Architecture Fix: Look for 'is_autonomous' snake_case key
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -335,6 +326,211 @@ class EvolutionEventModel {
     if (ts is Timestamp) return ts.toDate();
     if (ts is String) return DateTime.tryParse(ts) ?? DateTime.now();
     return DateTime.now();
+  }
+}
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:Project Switcher Logic:lib/features/triage_hub/providers/environment_provider.dart)
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
+
+enum L2LEnvironment { dev, staging, prod }
+
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
+  final String version;
+
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+    required this.version,
+  });
+
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+      version: 'v11.29.36',
+    );
+  }
+
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.staging: return 'local2local-staging';
+      case L2LEnvironment.prod: return 'local2local-prod';
+      default: return 'local2local-dev';
+    }
+  }
+
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return const Color(0xFFFF1744); // VIBRANT RED FOR PROD
+      case L2LEnvironment.staging: return const Color(0xFFFF9100); // ORANGE FOR STAGING
+      default: return const Color(0xFF1E1E2C); // SLATE FOR DEV
+    }
+  }
+}
+
+class EnvironmentNotifier extends StateNotifier<EnvironmentState> {
+  EnvironmentNotifier() : super(EnvironmentState(
+    environment: L2LEnvironment.dev,
+    projectId: 'local2local-dev',
+    headerColor: const Color(0xFF1E1E2C),
+    version: 'v11.29.36',
+  ));
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
+          content: const Text('You are entering the LIVE production environment. Any data changes or logic commits will affect active users and financial transactions. Proceed with extreme caution.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('BACK TO SAFETY'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('I UNDERSTAND, ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider = StateNotifierProvider<EnvironmentNotifier, EnvironmentState>((ref) {
+  return EnvironmentNotifier();
+});
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:Header Component:lib/features/triage_hub/presentation/widgets/cockpit_header.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+class CockpitHeader extends ConsumerWidget {
+  const CockpitHeader({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final envState = ref.watch(environmentProvider);
+    final isProd = envState.environment == L2LEnvironment.prod;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: envState.headerColor,
+        boxShadow: isProd ? [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.5),
+            blurRadius: 20,
+            spreadRadius: 5,
+          )
+        ] : null,
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'L2LAAF Cockpit',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isProd) ...[
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'LIVE PRODUCTION',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 10,
+                          fontWeight: FontWeight.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              Text(
+                'System Build: ${envState.version}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 10,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<L2LEnvironment>(
+                    value: envState.environment,
+                    dropdownColor: AdminColors.slateDarkest,
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                    onChanged: (val) => ref.read(environmentProvider.notifier).setEnvironment(val!, context),
+                    items: L2LEnvironment.values.map((e) => DropdownMenuItem(
+                      value: e,
+                      child: Text(
+                        e.name.toUpperCase(),
+                        style: TextStyle(
+                          color: e == L2LEnvironment.prod ? Colors.redAccent : Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'PROJECT: ${envState.projectId}',
+                style: TextStyle(
+                  color: isProd ? Colors.white : Colors.emeraldAccent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 L2LAAF_BLOCK_END
