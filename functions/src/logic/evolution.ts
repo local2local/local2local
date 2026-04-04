@@ -168,6 +168,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
   try {
     const batch = dbInstance.batch();
 
+    // 1. ARCHIVE TO LESSONS LEARNED
     const lessonRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -182,6 +183,24 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       agent_id: newData.proposingAgentId || "SYSTEM",
       finalized_at: FieldValue.serverTimestamp(),
       source_proposal: proposalId
+    });
+
+    // 2. BROADCAST TO COCKPIT TIMELINE
+    const timelineRef = dbInstance.collection("artifacts")
+      .doc(appId)
+      .collection("public")
+      .doc("data")
+      .collection("evolution_timeline")
+      .doc();
+
+    batch.set(timelineRef, {
+      type: "LOGIC_COMMIT_SUCCESS",
+      title: "LOGIC COMMITTED",
+      description: `Successfully archived optimized logic for ${hbrId}. Mutex lock released.`,
+      isAutonomous: true,
+      agentName: "EVOLUTION_WORKER",
+      timestamp: new Date().toISOString(),
+      hbrId: hbrId
     });
 
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`;
