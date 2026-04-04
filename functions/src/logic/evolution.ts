@@ -185,7 +185,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Logic Summary)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -193,16 +193,17 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
-    const bizSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
-      `Strategic Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles; ` +
-      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates.`;
+    const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
+      `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
+      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates. ` +
+      `Logic transition atomic and finalized.`;
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: bizSummary,
-      is_autonomous: true,
-      agent_name: "EVOLUTION_WORKER",
+      details: strategicSummary, // Architecture Sync: Use 'details' key
+      is_autonomous: true,       // Architecture Sync: Use snake_case
+      source: "EVOLUTION_WORKER", // Architecture Sync: Use 'source' key
       timestamp: new Date().toISOString(),
       hbr_id: hbrId
     });

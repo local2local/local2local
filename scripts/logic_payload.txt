@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.26)
+L2LAAF Phase 36 Master Stabilization (v11.27)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): align cockpit mapping and inject high-fidelity business summaries
+feat(evolution): align details/source mapping and inject strategic rule summaries
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -193,7 +193,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Logic Summary)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -201,16 +201,17 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
-    const bizSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
-      `Strategic Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles; ` +
-      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates.`;
+    const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
+      `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
+      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates. ` +
+      `Logic transition atomic and finalized.`;
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: bizSummary,
-      is_autonomous: true,
-      agent_name: "EVOLUTION_WORKER",
+      details: strategicSummary, // Architecture Sync: Use 'details' key
+      is_autonomous: true,       // Architecture Sync: Use snake_case
+      source: "EVOLUTION_WORKER", // Architecture Sync: Use 'source' key
       timestamp: new Date().toISOString(),
       hbr_id: hbrId
     });
@@ -293,11 +294,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Fixed: Explicitly look for 'description' field written by backend
-      description: data['description'] as String? ?? 'Autonomous logic update committed.',
-      // Fixed: Explicitly look for 'agent_name' snake_case key
-      agentName: data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      // Fixed: Explicitly look for 'is_autonomous' snake_case key
+      // Architecture Fix: Look for 'details' to capture the business rule summary
+      description: data['details'] as String? ?? 'Autonomous logic update committed.',
+      // Architecture Fix: Look for 'source' to match project convention
+      agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
+      // Architecture Fix: Look for 'is_autonomous' snake_case key
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
