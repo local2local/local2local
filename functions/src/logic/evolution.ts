@@ -203,7 +203,8 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       hbrId: hbrId
     });
 
-    const registryPath = `artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`;
+    // 3. UPDATE REGISTRY STATUS (PATH FIX: 6 components)
+    const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.update(hbrRef, {
       lock_status: "IDLE",
