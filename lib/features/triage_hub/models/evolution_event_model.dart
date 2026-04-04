@@ -35,11 +35,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Fixed: Use 'description' to match backend business summary
-      description: data['description'] as String? ?? 'Autonomous state transition recorded.',
-      // Fixed: Use 'agent_name' to match backend snake_case
+      // Fixed: Explicitly look for 'description' field mapped from backend
+      description: data['description'] as String? ?? 'Autonomous logic update committed.',
+      // Fixed: Explicitly look for 'agent_name' snake_case key
       agentName: data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      // Fixed: Use 'is_autonomous' to match backend snake_case
+      // Fixed: Explicitly look for 'is_autonomous' snake_case key
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
