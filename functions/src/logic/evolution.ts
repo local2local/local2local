@@ -185,7 +185,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE
+    // 2. BROADCAST TO COCKPIT TIMELINE (Enhanced Business Summary)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -195,15 +195,15 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
-      title: "LOGIC COMMITTED",
-      description: `Successfully archived optimized logic for ${hbrId}. Mutex lock released.`,
+      title: "LOGIC COMMIT SUCCESS",
+      description: `Phase 36 Operational Baseline: Successfully committed optimized logic for ${hbrId}. Business Rule Enforcement: (1) Active Mutex collision prevention verified (2) Ombudsman automated shadow-audit protocol confirmed logic integrity. Atomic state transition completed and Mutex lock released.`,
       isAutonomous: true,
       agentName: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
       hbrId: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS (Safe Update using Set Merge)
+    // 3. UPDATE REGISTRY STATUS
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.set(hbrRef, {
