@@ -1,10 +1,10 @@
-L2LAAF Phase 36 Master Stabilization (v11.1)
+L2LAAF Phase 36 Master Stabilization (v11.9)
 
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
 
-fix(evolution): resolve TSC validation and relay hang via .js payload workaround
+fix(evolution): remove patcher sanitization and restore native TS generic syntax
 
 L2LAAF_BLOCK_END
 
@@ -97,16 +97,12 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Enforcing strict generic compliance for TSC validation.
- * RESTORATION: patcher.js v6.2+ restores {{/}} internally.
+ * TYPE ALIASES: Native Generic Syntax restored.
  */
-type L2LChange = Change{{QueryDocumentSnapshot}};
-
-type L2LWrittenEvent = FirestoreEvent{{L2LChange | undefined, Record{{string, string}} }};
-
-type L2LCreatedEvent = FirestoreEvent{{QueryDocumentSnapshot | undefined, Record{{string, string}} }};
-
-type L2LUpdatedEvent = FirestoreEvent{{L2LChange | undefined, Record{{string, string}} }};
+type L2LChange = Change<QueryDocumentSnapshot>;
+type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
+type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
+type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 function areResultsIdentical(a: any, b: any): boolean {
   try {
@@ -145,7 +141,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
 
     if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
       const { hbrId, agentId, proposedLogic, reason } = manifest;
-      const proposalPath = [BACKTICK]artifacts/${appId}/public/data/logic_proposals[BACKTICK];
+      const proposalPath = `artifacts/${appId}/public/data/logic_proposals`;
       const proposalRef = db.collection(proposalPath).doc();
       
       await proposalRef.set({
@@ -179,14 +175,14 @@ export const shadowComparatorWorkerV2 = onDocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowPath = [BACKTICK]artifacts/${appId}/public/data/shadow_bus[BACKTICK];
+    const shadowPath = `artifacts/${appId}/public/data/shadow_bus`;
     const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();
     
     if (shadowSnap.empty) return;
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    const runPath = [BACKTICK]artifacts/${appId}/public/data/shadow_runs[BACKTICK];
+    const runPath = `artifacts/${appId}/public/data/shadow_runs`;
     await db.collection(runPath).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
@@ -243,14 +239,14 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    const registryPath = [BACKTICK]artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}[BACKTICK];
+    const registryPath = `artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.update(hbrRef, {
       lock_status: "IDLE",
       last_modified: FieldValue.serverTimestamp()
     });
 
-    const lockPath = [BACKTICK]artifacts/${appId}/public/data/logic_locks/${hbrId}[BACKTICK];
+    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
     const lockRef = dbInstance.doc(lockPath);
     batch.delete(lockRef);
 

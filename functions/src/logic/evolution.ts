@@ -19,16 +19,12 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Enforcing strict generic compliance for TSC validation.
- * RESTORATION: patcher.js v6.2+ restores </> internally.
+ * TYPE ALIASES: Native Generic Syntax restored.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
-
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string> >;
-
-type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string> >;
-
-type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string> >;
+type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
+type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
+type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 function areResultsIdentical(a: any, b: any): boolean {
   try {

@@ -1,1 +1,1 @@
-fix(evolution): resolve TSC validation and relay hang via .js payload workaround
+fix(evolution): remove patcher sanitization and restore native TS generic syntax
