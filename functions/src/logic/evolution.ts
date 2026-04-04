@@ -1,17 +1,6 @@
-import { 
-  onDocumentWritten, 
-  onDocumentCreated, 
-  onDocumentUpdated 
-} from "firebase-functions/v2/firestore";
-
+import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onRequest } from "firebase-functions/v2/https";
-
-import type { 
-  FirestoreEvent, 
-  Change, 
-  QueryDocumentSnapshot 
-} from "firebase-functions/v2/firestore";
-
+import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import type { Request, Response } from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -19,7 +8,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Native Generic Syntax restored.
+ * TYPE ALIASES: Native Syntax Implementation
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -63,6 +52,14 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
 
     if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
       const { hbrId, agentId, proposedLogic, reason } = manifest;
+
+      const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
+      const lockSnap = await lockRef.get();
+      if (lockSnap.exists) {
+        console.warn(`[ORCHESTRATOR] Collision: HBR ${hbrId} is currently locked.`);
+        return;
+      }
+
       const proposalPath = `artifacts/${appId}/public/data/logic_proposals`;
       const proposalRef = db.collection(proposalPath).doc();
       
@@ -72,6 +69,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         proposedLogic,
         reason,
         status: "PENDING",
+        correlation_id: data.correlation_id,
         commit_pending: false,
         createdAt: new Date().toISOString()
       });
@@ -83,6 +81,38 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
     }
   } catch (err) {
     console.error("[ORCHESTRATOR] Error:", err);
+  }
+});
+
+export const ombudsmanValidatorV2 = onDocumentCreated({
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
+  memory: "512MiB"
+}, async (event: L2LCreatedEvent) => {
+  const data = event.data?.data();
+  if (!data || data.status !== "validated") return;
+
+  const { appId } = event.params;
+  const correlationId = data.correlation_id;
+
+  try {
+    const proposalsPath = `artifacts/${appId}/public/data/logic_proposals`;
+    const proposalSnap = await db.collection(proposalsPath)
+      .where("correlation_id", "==", correlationId)
+      .get();
+
+    if (proposalSnap.empty) return;
+
+    const proposalRef = proposalSnap.docs[0].ref;
+    await proposalRef.update({
+      status: "APPROVED",
+      commit_pending: true,
+      validated_at: new Date().toISOString(),
+      validation_source: "OMBUDSMAN_AUTO_RUN"
+    });
+
+    console.log(`[OMBUDSMAN] Auto-approved proposal for correlation: ${correlationId}`);
+  } catch (err) {
+    console.error("[OMBUDSMAN] Error:", err);
   }
 });
 

@@ -1,1 +1,1 @@
-fix(evolution): remove patcher sanitization and restore native TS generic syntax
+feat(evolution): finalize Phase 36 with native syntax implementation
