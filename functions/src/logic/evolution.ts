@@ -8,7 +8,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Native Generic Syntax.
+ * TYPE ALIASES: Enforcing strict generic compliance.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -185,7 +185,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Descriptive Business Rule Summary)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -193,17 +193,22 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
+    const bizSummary = `Successfully committed optimized logic for ${hbrId}. ` +
+      `Enforcement Profile: (1) Mutex collision prevention active; ` +
+      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates. ` +
+      `Atomic state transition completed.`;
+
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: `Phase 36 Stabilization: Successfully committed optimized logic for ${hbrId}. Business Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles, and (2) Ombudsman shadow-verification protocol successfully bypassed manual gates via autonomous integrity audit.`,
-      isAutonomous: true,
-      agentName: "EVOLUTION_WORKER",
+      description: bizSummary,
+      is_autonomous: true,
+      agent_name: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
-      hbrId: hbrId
+      hbr_id: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS (Set Merge to prevent NOT_FOUND)
+    // 3. UPDATE REGISTRY STATUS
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.set(hbrRef, {

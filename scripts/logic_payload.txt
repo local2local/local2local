@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.21)
+L2LAAF Phase 36 Master Stabilization (v11.24)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): finalize Phase 36 with high-fidelity business rule summaries
+feat(evolution): align cross-stack mapping and inject high-fidelity business summaries
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -16,7 +16,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Native Generic Syntax.
+ * TYPE ALIASES: Enforcing strict generic compliance.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -193,7 +193,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (Descriptive Business Rule Summary)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -201,17 +201,22 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
+    const bizSummary = `Successfully committed optimized logic for ${hbrId}. ` +
+      `Enforcement Profile: (1) Mutex collision prevention active; ` +
+      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates. ` +
+      `Atomic state transition completed.`;
+
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: `Phase 36 Stabilization: Successfully committed optimized logic for ${hbrId}. Business Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles, and (2) Ombudsman shadow-verification protocol successfully bypassed manual gates via autonomous integrity audit.`,
-      isAutonomous: true,
-      agentName: "EVOLUTION_WORKER",
+      description: bizSummary,
+      is_autonomous: true,
+      agent_name: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
-      hbrId: hbrId
+      hbr_id: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS (Set Merge to prevent NOT_FOUND)
+    // 3. UPDATE REGISTRY STATUS
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
     batch.set(hbrRef, {
@@ -249,4 +254,87 @@ export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Resp
     res.status(500).send("❌ Fail: " + e.message);
   }
 });
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:Evolution Model:lib/features/triage_hub/models/evolution_event_model.dart)
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum EvolutionEventType {
+  criticalIntervention,
+  rollback,
+  humanOverride,
+  agentDeployed,
+  logicCommitSuccess,
+  unknown
+}
+
+class EvolutionEventModel {
+  final String id;
+  final EvolutionEventType type;
+  final String title;
+  final String description;
+  final String agentName;
+  final bool isAutonomous;
+  final DateTime timestamp;
+
+  EvolutionEventModel({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.description,
+    required this.agentName,
+    required this.isAutonomous,
+    required this.timestamp,
+  });
+
+  factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    return EvolutionEventModel(
+      id: doc.id,
+      type: _parseType(data['type'] as String?),
+      title: data['title'] as String? ?? 'System Evolution Event',
+      // Fixed: Use 'description' to match backend business summary
+      description: data['description'] as String? ?? 'Autonomous state transition recorded.',
+      // Fixed: Use 'agent_name' to match backend snake_case
+      agentName: data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      // Fixed: Use 'is_autonomous' to match backend snake_case
+      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      timestamp: _parseTimestamp(data['timestamp']),
+    );
+  }
+
+  String get timeDisplay {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inMinutes < 1) return 'Just Now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${timestamp.month}/${timestamp.day}';
+  }
+
+  static EvolutionEventType _parseType(String? type) {
+    switch (type) {
+      case 'CRITICAL_INTERVENTION_REQUIRED':
+        return EvolutionEventType.criticalIntervention;
+      case 'LOGIC_ROLLBACK':
+        return EvolutionEventType.rollback;
+      case 'HUMAN_OVERRIDE_COMMITTED':
+        return EvolutionEventType.humanOverride;
+      case 'AGENT_DEPLOYED':
+        return EvolutionEventType.agentDeployed;
+      case 'LOGIC_COMMIT_SUCCESS':
+        return EvolutionEventType.logicCommitSuccess;
+      default:
+        return EvolutionEventType.unknown;
+    }
+  }
+
+  static DateTime _parseTimestamp(dynamic ts) {
+    if (ts is Timestamp) return ts.toDate();
+    if (ts is String) return DateTime.tryParse(ts) ?? DateTime.now();
+    return DateTime.now();
+  }
+}
 L2LAAF_BLOCK_END
