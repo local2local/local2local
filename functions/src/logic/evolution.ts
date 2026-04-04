@@ -8,7 +8,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Native Syntax Implementation
+ * TYPE ALIASES
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -137,20 +137,13 @@ export const shadowComparatorWorkerV2 = onDocumentWritten({
     const runPath = `artifacts/${appId}/public/data/shadow_runs`;
     await db.collection(runPath).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
+      agentId: prodMsg.provenance.sender_id,
       status: isMatch ? "validated" : "failed",
       timestamp: new Date().toISOString()
     });
   } catch (e) {
     console.error("[SHADOW] Error:", e);
   }
-});
-
-export const logicCollisionWorkerV2 = onDocumentCreated({
-  document: "artifacts/{appId}/public/data/logic_dependencies/{hbrId}",
-  memory: "512MiB"
-}, async (event: L2LCreatedEvent) => {
-  if (!event) return;
-  console.log("[COLLISION] Processing dependency map for:", event.params.hbrId);
 });
 
 export const evolutionProposalFinalizedV2 = onDocumentUpdated({
