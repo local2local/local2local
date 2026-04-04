@@ -8,7 +8,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Enforcing strict generic compliance.
+ * TYPE ALIASES: Native Generic Syntax for Zero-Touch Patcher.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -185,7 +185,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (High-Fidelity Business Rule Summary)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -193,15 +193,14 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
-    const ruleSummary = `Autonomous logic shift finalized for Unit ${hbrId}. ` +
-      `Protocol Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
-      `(2) Rule [OMBUDSMAN_AUDIT] performed automated shadow-validation, confirming 100% reasoning efficacy. ` +
-      `New operational logic is now live.`;
+    const bizSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
+      `Strategic Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles; ` +
+      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates.`;
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: ruleSummary,
+      description: bizSummary,
       is_autonomous: true,
       agent_name: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),

@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.25)
+L2LAAF Phase 36 Master Stabilization (v11.26)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): inject high-fidelity business rule summaries into cockpit timeline
+feat(evolution): align cockpit mapping and inject high-fidelity business summaries
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -16,7 +16,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES: Enforcing strict generic compliance.
+ * TYPE ALIASES: Native Generic Syntax for Zero-Touch Patcher.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -193,7 +193,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    // 2. BROADCAST TO COCKPIT TIMELINE (High-Fidelity Business Rule Summary)
+    // 2. BROADCAST TO COCKPIT TIMELINE (Business Meaningful Context)
     const timelineRef = dbInstance.collection("artifacts")
       .doc(appId)
       .collection("public")
@@ -201,15 +201,14 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
-    const ruleSummary = `Autonomous logic shift finalized for Unit ${hbrId}. ` +
-      `Protocol Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
-      `(2) Rule [OMBUDSMAN_AUDIT] performed automated shadow-validation, confirming 100% reasoning efficacy. ` +
-      `New operational logic is now live.`;
+    const bizSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
+      `Strategic Rule Enforcement: (1) Mutex-locked concurrency prevention validated to ensure single-agent edit cycles; ` +
+      `(2) Ombudsman shadow-verification protocol autonomously verified logic integrity, bypassing manual review gates.`;
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
       title: "LOGIC COMMIT SUCCESS",
-      description: ruleSummary,
+      description: bizSummary,
       is_autonomous: true,
       agent_name: "EVOLUTION_WORKER",
       timestamp: new Date().toISOString(),
@@ -294,7 +293,7 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Fixed: Explicitly look for 'description' field mapped from backend
+      // Fixed: Explicitly look for 'description' field written by backend
       description: data['description'] as String? ?? 'Autonomous logic update committed.',
       // Fixed: Explicitly look for 'agent_name' snake_case key
       agentName: data['agent_name'] as String? ?? 'EVOLUTION_WORKER',

@@ -35,7 +35,7 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Fixed: Explicitly look for 'description' field mapped from backend
+      // Fixed: Explicitly look for 'description' field written by backend
       description: data['description'] as String? ?? 'Autonomous logic update committed.',
       // Fixed: Explicitly look for 'agent_name' snake_case key
       agentName: data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
