@@ -1,5 +1,5 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum L2LEnvironment { dev, staging, prod }
 
@@ -22,7 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.29.36',
+      version: 'v11.31.36',
     );
   }
 
@@ -36,20 +36,23 @@ class EnvironmentState {
 
   static Color _getHeaderColor(L2LEnvironment env) {
     switch (env) {
-      case L2LEnvironment.prod: return const Color(0xFFFF1744); // VIBRANT RED FOR PROD
-      case L2LEnvironment.staging: return const Color(0xFFFF9100); // ORANGE FOR STAGING
-      default: return const Color(0xFF1E1E2C); // SLATE FOR DEV
+      case L2LEnvironment.prod: return const Color(0xFFFF1744);
+      case L2LEnvironment.staging: return const Color(0xFFFF9100);
+      default: return const Color(0xFF1E1E2C);
     }
   }
 }
 
-class EnvironmentNotifier extends StateNotifier<EnvironmentState> {
-  EnvironmentNotifier() : super(EnvironmentState(
-    environment: L2LEnvironment.dev,
-    projectId: 'local2local-dev',
-    headerColor: const Color(0xFF1E1E2C),
-    version: 'v11.29.36',
-  ));
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-dev',
+      headerColor: const Color(0xFF1E1E2C),
+      version: 'v11.31.36',
+    );
+  }
 
   void setEnvironment(L2LEnvironment env, BuildContext context) async {
     if (env == L2LEnvironment.prod) {
@@ -57,16 +60,13 @@ class EnvironmentNotifier extends StateNotifier<EnvironmentState> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('You are entering the LIVE production environment. Any data changes or logic commits will affect active users and financial transactions. Proceed with extreme caution.'),
+          content: const Text('Entering LIVE production environment. Extreme caution required.'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('BACK TO SAFETY'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('I UNDERSTAND, ENTER PROD'),
+              child: const Text('ENTER PROD'),
             ),
           ],
         ),
@@ -77,6 +77,6 @@ class EnvironmentNotifier extends StateNotifier<EnvironmentState> {
   }
 }
 
-final environmentProvider = StateNotifierProvider<EnvironmentNotifier, EnvironmentState>((ref) {
+final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
   return EnvironmentNotifier();
 });

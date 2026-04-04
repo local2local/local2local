@@ -18,7 +18,7 @@ class CockpitHeader extends ConsumerWidget {
         color: envState.headerColor,
         boxShadow: isProd ? [
           BoxShadow(
-            color: Colors.red.withOpacity(0.5),
+            color: Colors.red.withValues(alpha: 0.5),
             blurRadius: 20,
             spreadRadius: 5,
           )
@@ -52,7 +52,7 @@ class CockpitHeader extends ConsumerWidget {
                         style: TextStyle(
                           color: Colors.red,
                           fontSize: 10,
-                          fontWeight: FontWeight.black,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
@@ -62,7 +62,7 @@ class CockpitHeader extends ConsumerWidget {
               Text(
                 'System Build: ${envState.version}',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 10,
                   letterSpacing: 0.5,
                 ),
@@ -76,7 +76,7 @@ class CockpitHeader extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButtonHideUnderline(
@@ -102,8 +102,8 @@ class CockpitHeader extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 'PROJECT: ${envState.projectId}',
-                style: TextStyle(
-                  color: isProd ? Colors.white : Colors.emeraldAccent,
+                style: const TextStyle(
+                  color: Colors.greenAccent,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),

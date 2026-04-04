@@ -1,1 +1,1 @@
-feat(evolution): cockpit versioning and project-switching logic
+feat(evolution): fix flutter notifier lint errors and implement project-switching safety
