@@ -1,8 +1,63 @@
-L2LAAF Phase 36 Master Stabilization (v11.31)
+L2LAAF Phase 36 Master Stabilization (v11.33)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:feat(evolution) - Final Audit stabilization v11.31:COMMIT_MSG)
-feat(evolution): fix flutter notifier lint errors and implement project-switching safety
+L2LAAF_BLOCK_START(text:feat(evolution) - Cockpit stabilization and project switching v11.33:COMMIT_MSG)
+feat(evolution): finalize project switching logic, versioning, and environment safety
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, staging, develop ]
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+      - name: Build Flutter Web
+        run: flutter build web --release
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+      - name: Deploy to Target Project
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          # Deploying both hosting assets and cloud functions
+          firebase deploy --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -250,86 +305,6 @@ export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Resp
 });
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:Evolution Model:lib/features/triage_hub/models/evolution_event_model.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-enum EvolutionEventType {
-  criticalIntervention,
-  rollback,
-  humanOverride,
-  agentDeployed,
-  logicCommitSuccess,
-  unknown
-}
-
-class EvolutionEventModel {
-  final String id;
-  final EvolutionEventType type;
-  final String title;
-  final String description;
-  final String agentName;
-  final bool isAutonomous;
-  final DateTime timestamp;
-
-  EvolutionEventModel({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.description,
-    required this.agentName,
-    required this.isAutonomous,
-    required this.timestamp,
-  });
-
-  factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    return EvolutionEventModel(
-      id: doc.id,
-      type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Evolution Event',
-      description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
-      timestamp: _parseTimestamp(data['timestamp']),
-    );
-  }
-
-  String get timeDisplay {
-    final now = DateTime.now();
-    final diff = now.difference(timestamp);
-
-    if (diff.inMinutes < 1) return 'Just Now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    return '${timestamp.month}/${timestamp.day}';
-  }
-
-  static EvolutionEventType _parseType(String? type) {
-    switch (type) {
-      case 'CRITICAL_INTERVENTION_REQUIRED':
-        return EvolutionEventType.criticalIntervention;
-      case 'LOGIC_ROLLBACK':
-        return EvolutionEventType.rollback;
-      case 'HUMAN_OVERRIDE_COMMITTED':
-        return EvolutionEventType.humanOverride;
-      case 'AGENT_DEPLOYED':
-        return EvolutionEventType.agentDeployed;
-      case 'LOGIC_COMMIT_SUCCESS':
-        return EvolutionEventType.logicCommitSuccess;
-      default:
-        return EvolutionEventType.unknown;
-    }
-  }
-
-  static DateTime _parseTimestamp(dynamic ts) {
-    if (ts is Timestamp) return ts.toDate();
-    if (ts is String) return DateTime.tryParse(ts) ?? DateTime.now();
-    return DateTime.now();
-  }
-}
-L2LAAF_BLOCK_END
-
 L2LAAF_BLOCK_START(dart:Project Switcher Logic:lib/features/triage_hub/providers/environment_provider.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -355,7 +330,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.31.36',
+      version: 'v11.33.36',
     );
   }
 
@@ -383,7 +358,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.31.36',
+      version: 'v11.33.36',
     );
   }
 
@@ -393,7 +368,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          content: const Text('You are switching to the LIVE production environment. Data changes will be permanent.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
             ElevatedButton(
@@ -451,27 +426,16 @@ class CockpitHeader extends ConsumerWidget {
                 children: [
                   const Text(
                     'L2LAAF Cockpit',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   if (isProd) ...[
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                       child: const Text(
                         'LIVE PRODUCTION',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900),
                       ),
                     ),
                   ],
@@ -479,11 +443,7 @@ class CockpitHeader extends ConsumerWidget {
               ),
               Text(
                 'System Build: ${envState.version}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 10,
-                  letterSpacing: 0.5,
-                ),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 10, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -493,10 +453,7 @@ class CockpitHeader extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<L2LEnvironment>(
                     value: envState.environment,
@@ -520,11 +477,7 @@ class CockpitHeader extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 'PROJECT: ${envState.projectId}',
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ],
           ),

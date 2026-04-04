@@ -33,27 +33,16 @@ class CockpitHeader extends ConsumerWidget {
                 children: [
                   const Text(
                     'L2LAAF Cockpit',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   if (isProd) ...[
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
                       child: const Text(
                         'LIVE PRODUCTION',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900),
                       ),
                     ),
                   ],
@@ -61,11 +50,7 @@ class CockpitHeader extends ConsumerWidget {
               ),
               Text(
                 'System Build: ${envState.version}',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 10,
-                  letterSpacing: 0.5,
-                ),
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 10, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -75,10 +60,7 @@ class CockpitHeader extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<L2LEnvironment>(
                     value: envState.environment,
@@ -102,11 +84,7 @@ class CockpitHeader extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 'PROJECT: ${envState.projectId}',
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ],
           ),

@@ -1,1 +1,1 @@
-feat(evolution): fix flutter notifier lint errors and implement project-switching safety
+feat(evolution): finalize project switching logic, versioning, and environment safety
