@@ -1,1 +1,1 @@
-feat(evolution): baseline phase 36 restoration with strict generic types and valid yaml
+fix(evolution): bypass UI stripping via type placeholders and enforce NASA v6.3 standards

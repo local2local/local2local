@@ -1,3 +1,81 @@
+L2LAAF Phase 36 Master Stabilization (v11.1)
+
+PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+
+L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
+
+fix(evolution): resolve TSC validation and relay hang via .js payload workaround
+
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(yaml:Deploy Action:.github/workflows/deploy.yml)
+
+name: L2LAAF Multi-Project Deployment
+
+on:
+  push:
+    branches: [ main, staging, develop ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+
+      - name: Build Flutter Web
+        run: flutter build web --release
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy to Target Project
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
+
 import { 
   onDocumentWritten, 
   onDocumentCreated, 
@@ -20,15 +98,15 @@ import { AgentBusClient } from "../agentBusClient";
 
 /**
  * TYPE ALIASES: Enforcing strict generic compliance for TSC validation.
- * RESTORATION: patcher.js v6.2+ restores </> internally.
+ * RESTORATION: patcher.js v6.2+ restores {{/}} internally.
  */
-type L2LChange = Change<QueryDocumentSnapshot>;
+type L2LChange = Change{{QueryDocumentSnapshot}};
 
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string> >;
+type L2LWrittenEvent = FirestoreEvent{{L2LChange | undefined, Record{{string, string}} }};
 
-type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string> >;
+type L2LCreatedEvent = FirestoreEvent{{QueryDocumentSnapshot | undefined, Record{{string, string}} }};
 
-type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string> >;
+type L2LUpdatedEvent = FirestoreEvent{{L2LChange | undefined, Record{{string, string}} }};
 
 function areResultsIdentical(a: any, b: any): boolean {
   try {
@@ -67,7 +145,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
 
     if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
       const { hbrId, agentId, proposedLogic, reason } = manifest;
-      const proposalPath = `artifacts/${appId}/public/data/logic_proposals`;
+      const proposalPath = [BACKTICK]artifacts/${appId}/public/data/logic_proposals[BACKTICK];
       const proposalRef = db.collection(proposalPath).doc();
       
       await proposalRef.set({
@@ -101,14 +179,14 @@ export const shadowComparatorWorkerV2 = onDocumentWritten({
 
   const { appId } = event.params;
   try {
-    const shadowPath = `artifacts/${appId}/public/data/shadow_bus`;
+    const shadowPath = [BACKTICK]artifacts/${appId}/public/data/shadow_bus[BACKTICK];
     const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();
     
     if (shadowSnap.empty) return;
     const shadowMsg = shadowSnap.docs[0].data();
     const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
 
-    const runPath = `artifacts/${appId}/public/data/shadow_runs`;
+    const runPath = [BACKTICK]artifacts/${appId}/public/data/shadow_runs[BACKTICK];
     await db.collection(runPath).doc(prodMsg.correlation_id).set({
       correlation_id: prodMsg.correlation_id,
       status: isMatch ? "validated" : "failed",
@@ -165,14 +243,14 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       source_proposal: proposalId
     });
 
-    const registryPath = `artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`;
+    const registryPath = [BACKTICK]artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}[BACKTICK];
     const hbrRef = dbInstance.doc(registryPath);
     batch.update(hbrRef, {
       lock_status: "IDLE",
       last_modified: FieldValue.serverTimestamp()
     });
 
-    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
+    const lockPath = [BACKTICK]artifacts/${appId}/public/data/logic_locks/${hbrId}[BACKTICK];
     const lockRef = dbInstance.doc(lockPath);
     batch.delete(lockRef);
 
@@ -202,3 +280,5 @@ export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Resp
     res.status(500).send("❌ Fail: " + e.message);
   }
 });
+
+L2LAAF_BLOCK_END
