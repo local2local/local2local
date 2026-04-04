@@ -1,1 +1,1 @@
-fix(evolution): force redeploy to resolve finalization path bug
+fix(evolution): use batch.set with merge for registry updates to prevent NOT_FOUND errors

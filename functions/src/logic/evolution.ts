@@ -8,7 +8,7 @@ import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
- * TYPE ALIASES
+ * TYPE ALIASES: Native Generic Syntax.
  */
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
@@ -203,13 +203,13 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       hbrId: hbrId
     });
 
-    // 3. UPDATE REGISTRY STATUS (PATH FIX: 6 components)
+    // 3. UPDATE REGISTRY STATUS (Safe Update using Set Merge)
     const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
     const hbrRef = dbInstance.doc(registryPath);
-    batch.update(hbrRef, {
+    batch.set(hbrRef, {
       lock_status: "IDLE",
       last_modified: FieldValue.serverTimestamp()
-    });
+    }, { merge: true });
 
     const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
     const lockRef = dbInstance.doc(lockPath);
