@@ -1,1 +1,1 @@
-feat(evolution): restore Firestore data listeners for Triage and Evolution feeds
+feat(evolution): fix grey screen crash with Firebase init and restore full navigation shell

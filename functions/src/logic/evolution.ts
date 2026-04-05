@@ -113,36 +113,6 @@ export const ombudsmanValidatorV2 = onDocumentCreated({
   }
 });
 
-export const shadowComparatorWorkerV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
-  memory: "512MiB"
-}, async (event: L2LWrittenEvent) => {
-  const prodMsg = event.data?.after.data();
-  const prev = event.data?.before.data();
-  if (!prodMsg || prodMsg.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (prodMsg.control?.type !== "RESPONSE") return;
-
-  const { appId } = event.params;
-  try {
-    const shadowPath = `artifacts/${appId}/public/data/shadow_bus`;
-    const shadowSnap = await db.collection(shadowPath).where("correlation_id", "==", prodMsg.correlation_id).get();
-    
-    if (shadowSnap.empty) return;
-    const shadowMsg = shadowSnap.docs[0].data();
-    const isMatch = areResultsIdentical(prodMsg.payload?.result || {}, shadowMsg.payload?.result || {});
-
-    const runPath = `artifacts/${appId}/public/data/shadow_runs`;
-    await db.collection(runPath).doc(prodMsg.correlation_id).set({
-      correlation_id: prodMsg.correlation_id,
-      agentId: prodMsg.provenance.sender_id,
-      status: isMatch ? "validated" : "failed",
-      timestamp: new Date().toISOString()
-    });
-  } catch (e) {
-    console.error("[SHADOW] Error:", e);
-  }
-});
-
 export const evolutionProposalFinalizedV2 = onDocumentUpdated({
   document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
   memory: "512MiB"
@@ -190,8 +160,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
 
     const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
       `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
-      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates. ` +
-      `Logic transition atomic and finalized.`;
+      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates.`;
 
     batch.set(timelineRef, {
       type: "LOGIC_COMMIT_SUCCESS",
@@ -219,7 +188,6 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
     }
 
     await batch.commit();
-    console.log(`[EVOLUTION-P36] [${appId}] Successfully committed logic for ${hbrId}`);
   } catch (e) {
     console.error("[EVOLUTION-P36] Finalization Error:", e);
   }

@@ -21,7 +21,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       backgroundColor: const Color(0xFF0F0F1E),
       body: Row(
         children: [
-          // SIDE NAVIGATION
           Container(
             width: 72,
             color: const Color(0xFF16162A),
@@ -45,14 +44,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ),
           ),
-          // MAIN CONTENT AREA
           Expanded(
             child: Column(
               children: [
                 const CockpitHeader(),
-                Expanded(
-                  child: _buildBody(),
-                ),
+                Expanded(child: _buildBody()),
               ],
             ),
           ),
@@ -107,24 +103,10 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection(coll)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 48, color: Colors.white10),
-                const SizedBox(height: 16),
-                Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-                const SizedBox(height: 8),
-                const Text('NO ACTIVE ITEMS RECORDED', style: TextStyle(color: Colors.white10, fontSize: 10)),
-              ],
-            ),
-          );
-        }
+        if (docs.isEmpty) return _buildEmptyState(title, icon);
+        
         return ListView.builder(
           padding: const EdgeInsets.all(24),
           itemCount: docs.length,
@@ -132,9 +114,10 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             final data = docs[i].data() as Map<String, dynamic>;
             return Card(
               color: const Color(0xFF1E1E2C),
+              margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Entry', style: const TextStyle(color: Colors.white)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Tracing active', style: const TextStyle(color: Colors.white54)),
               ),
             );
           },
@@ -153,12 +136,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('evolution_timeline')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
-        // Sort in memory by timestamp descending
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
         return Padding(
@@ -168,11 +148,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
@@ -218,6 +198,21 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String title, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.white10),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('NO ACTIVE ITEMS FOUND', style: TextStyle(color: Colors.white10, fontSize: 10)),
         ],
       ),
     );
