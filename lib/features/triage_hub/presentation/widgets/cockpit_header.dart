@@ -55,7 +55,6 @@ class CockpitHeader extends ConsumerWidget {
             ],
           ),
           const Spacer(),
-          // Environment Controls
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -90,16 +89,15 @@ class CockpitHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 24),
-          // Notification Bell
           const Icon(Icons.notifications_none, color: Colors.white, size: 22),
           const SizedBox(width: 12),
-          // TEST CHANGE: Yellow info icon to verify pipeline
+          // STRESS TEST: Yellow info icon to verify deployment pipeline
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 22),
             onPressed: () {
-              // Stress test: pipeline verification
+              // Pipeline verification active
             },
           ),
         ],

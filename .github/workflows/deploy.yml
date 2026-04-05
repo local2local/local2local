@@ -48,5 +48,5 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          # Explicitly deploying hosting to ensure web UI updates
+          # Scoped deploy to ensure both UI and logic are updated
           firebase deploy --only functions,hosting --project $PROJECT_ID --non-interactive --force
