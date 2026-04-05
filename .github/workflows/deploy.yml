@@ -48,5 +48,5 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          # Scoped deployment to avoid firestore.indexes.json errors
+          # Explicitly deploying hosting to ensure web UI updates
           firebase deploy --only functions,hosting --project $PROJECT_ID --non-interactive --force
