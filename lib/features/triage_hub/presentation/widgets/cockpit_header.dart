@@ -34,7 +34,7 @@ class CockpitHeader extends ConsumerWidget {
               Row(
                 children: [
                   const Text(
-                    'L2L AAF Cockpit',
+                    'L2LAAF Cockpit',
                     style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
