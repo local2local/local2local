@@ -30,8 +30,6 @@ jobs:
           flutter pub get
       - name: Build Flutter Web
         run: flutter build web --release
-      - name: Verify Build Output
-        run: ls -R build/web
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud

@@ -11,21 +11,21 @@ class CockpitHeader extends ConsumerWidget {
     final envState = ref.watch(environmentProvider);
     final isProd = envState.environment == L2LEnvironment.prod;
     
-    // NUCLEAR TEST COLOR: Impossible to miss if the pipeline works
-    const testColor = Color(0xFFE91E63); 
+    // NUCLEAR CYAN: Impossible to miss. If you see Blue, the cache is still active.
+    const nuclearCyan = Color(0xFF00E5FF); 
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: testColor, 
-        boxShadow: isProd ? [
+        color: nuclearCyan, 
+        boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 20,
-            spreadRadius: 5,
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           )
-        ] : null,
+        ],
       ),
       child: Row(
         children: [
@@ -36,22 +36,22 @@ class CockpitHeader extends ConsumerWidget {
                 children: [
                   const Text(
                     'L2LAAF Cockpit',
-                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(20)),
                     child: const Text(
-                      'PIPELINE VERIFIED',
-                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
+                      'PIPELINE LIVE',
+                      style: TextStyle(color: Colors.black87, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
                 'System Build: ${envState.version}',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 10, letterSpacing: 0.5),
+                style: TextStyle(color: Colors.black54, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -61,19 +61,22 @@ class CockpitHeader extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<L2LEnvironment>(
                     value: envState.environment,
                     dropdownColor: AdminColors.slateDarkest,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black87),
                     onChanged: (val) => ref.read(environmentProvider.notifier).setEnvironment(val!, context),
                     items: L2LEnvironment.values.map((e) => DropdownMenuItem(
                       value: e,
                       child: Text(
                         e.name.toUpperCase(),
                         style: TextStyle(
-                          color: Colors.white,
+                          color: e == L2LEnvironment.prod ? Colors.red : Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
@@ -85,15 +88,15 @@ class CockpitHeader extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 'TARGET: ${envState.projectId}',
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Colors.black45, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.notifications_none, color: Colors.white, size: 22),
+          const Icon(Icons.notifications_none, color: Colors.black87, size: 22),
           const SizedBox(width: 12),
-          // LARGE YELLOW ICON FOR STRESS TEST
-          const Icon(Icons.bolt, color: Colors.yellowAccent, size: 32),
+          // LARGE DARK BOLT FOR STRESS TEST
+          const Icon(Icons.bolt, color: Colors.black87, size: 32),
         ],
       ),
     );
