@@ -22,7 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.37.36',
+      version: 'v11.38.36',
     );
   }
 
@@ -50,7 +50,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.37.36',
+      version: 'v11.38.36',
     );
   }
 
@@ -60,7 +60,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          content: const Text('Entering LIVE production environment. Caution required.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
             ElevatedButton(

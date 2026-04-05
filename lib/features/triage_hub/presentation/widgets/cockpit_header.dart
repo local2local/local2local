@@ -10,12 +10,14 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     final isProd = envState.environment == L2LEnvironment.prod;
+    final isStressTest = envState.version == 'v11.38.36';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: envState.headerColor,
+        // PIPELINE STRESS TEST: Background turns Amber/Orange if updated
+        color: isStressTest ? Colors.amber.shade900 : envState.headerColor,
         boxShadow: isProd ? [
           BoxShadow(
             color: Colors.red.withValues(alpha: 0.5),
@@ -35,14 +37,14 @@ class CockpitHeader extends ConsumerWidget {
                     'L2LAAF Cockpit',
                     style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  if (isProd) ...[
+                  if (isStressTest) ...[
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                       child: const Text(
-                        'LIVE PRODUCTION',
-                        style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.w900),
+                        'STRESS TEST ACTIVE',
+                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -91,14 +93,12 @@ class CockpitHeader extends ConsumerWidget {
           const SizedBox(width: 24),
           const Icon(Icons.notifications_none, color: Colors.white, size: 22),
           const SizedBox(width: 12),
-          // Pipeline Verification Stress Test Icon
+          // PIPELINE STRESS TEST: Bright Yellow Info Icon
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 22),
-            onPressed: () {
-              // End-to-end pipeline verified
-            },
+            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 24),
+            onPressed: () {},
           ),
         ],
       ),
