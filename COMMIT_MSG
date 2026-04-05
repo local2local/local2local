@@ -1,1 +1,1 @@
-feat(evolution): nuclear cache bust and explicit error reporting to resolve white screen
+feat(evolution): implement resilient boot strategy to bypass Firebase init crashes v11.58

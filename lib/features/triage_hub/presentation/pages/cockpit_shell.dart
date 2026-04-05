@@ -148,11 +148,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),

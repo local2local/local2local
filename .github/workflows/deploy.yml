@@ -31,7 +31,9 @@ jobs:
       - name: Nuclear Clean
         run: flutter clean
       - name: Build Flutter Web
-        run: flutter build web --release
+        run: |
+          BUILD_DATE=$(date +'%Y-%m-%d_%H:%M')
+          flutter build web --release --dart-define=BUILD_TIME=$BUILD_DATE
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud

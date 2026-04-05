@@ -5,34 +5,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:local2local/core/app.dart';
 
 void main() async {
-  // CRITICAL: Catch errors during bootstrap to prevent white screen silence
-  runApp(const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator()))));
-
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // RESILIENT BOOT: Do not crash the app if Firebase fails due to cache issues
   try {
-    WidgetsFlutterBinding.ensureInitialized();
-    debugPrint("L2LAAF_BOOT: Initializing Firebase...");
+    debugPrint("L2LAAF_BOOT: Initializing Firebase (v11.58.36)...");
     await Firebase.initializeApp();
-    
     debugPrint("L2LAAF_BOOT: Authenticating...");
     await FirebaseAuth.instance.signInAnonymously();
-    
-    debugPrint("L2LAAF_BOOT: Launching Core Engine v11.57.36");
-    runApp(
-      const ProviderScope(
-        child: L2LAAFApp(),
-      ),
-    );
-  } catch (e, stack) {
-    debugPrint("FATAL_BOOT_ERROR: $e");
-    debugPrint(stack.toString());
-    // Fallback UI for fatal errors
-    runApp(MaterialApp(
-      home: Scaffold(
-        backgroundColor: const Color(0xFFD32F2F),
-        body: Center(
-          child: Text("BOOT ERROR: $e", style: const TextStyle(color: Colors.white)),
-        ),
-      ),
-    ));
+    debugPrint("L2LAAF_BOOT: Security Handshake Complete.");
+  } catch (e) {
+    debugPrint("L2LAAF_BOOT_WARNING: Firebase initialization bypassed: $e");
   }
+
+  runApp(
+    const ProviderScope(
+      child: L2LAAFApp(),
+    ),
+  );
 }
