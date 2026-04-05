@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/main.dart'; // Import the provider
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -81,6 +82,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildBody() {
+    final isReady = ref.watch(firebaseReadyProvider);
+    if (!isReady) {
+      return const Center(child: Text("Waiting for secure connection...", style: TextStyle(color: Colors.white24)));
+    }
+
     final env = ref.watch(environmentProvider);
     final projectId = env.projectId;
 
@@ -116,8 +122,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace active', style: const TextStyle(color: Colors.white54)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54)),
               ),
             );
           },
@@ -147,12 +153,10 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
@@ -211,8 +215,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           Icon(icon, size: 48, color: Colors.white10),
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-          const SizedBox(height: 8),
-          const Text('NO ACTIVE ITEMS FOUND', style: TextStyle(color: Colors.white10, fontSize: 10)),
         ],
       ),
     );

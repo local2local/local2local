@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.58)
-PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED_
+L2LAAF Phase 36 Master Stabilization (v11.59)
+PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_BOOT_RESILIENCE:COMMIT_MSG)
-feat(evolution): implement resilient boot strategy to bypass Firebase init crashes v11.58
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_FIREBASE_INIT:COMMIT_MSG)
+feat(evolution): fix Firebase Web initialization and implement strict boot diagnostics v11.59
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
@@ -121,9 +121,18 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <base href="/">
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
+  
+  <!-- Firebase JS SDK (Compatibility mode for standard Hosting init) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <!-- Automatically provides config if deployed to Firebase Hosting -->
+  <script src="/__/firebase/init.js"></script>
+
   <script>
     console.log("=========================================");
-    console.log("L2LAAF_HTML_ENTRY_LOADED: v11.58.36");
+    console.log("L2LAAF_HTML_ENTRY_LOADED: v11.59.36");
     console.log("Timestamp: " + new Date().toISOString());
     console.log("=========================================");
   </script>
@@ -144,44 +153,60 @@ import 'package:local2local/core/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // RESILIENT BOOT: Do not crash the app if Firebase fails due to cache issues
+  bool initialized = false;
+  String? initError;
+
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Firebase (v11.58.36)...");
+    debugPrint("L2LAAF_BOOT: Requesting Firebase init v11.59.36...");
     await Firebase.initializeApp();
-    debugPrint("L2LAAF_BOOT: Authenticating...");
+    
+    debugPrint("L2LAAF_BOOT: Handshaking with Auth...");
     await FirebaseAuth.instance.signInAnonymously();
-    debugPrint("L2LAAF_BOOT: Security Handshake Complete.");
+    
+    initialized = true;
+    debugPrint("L2LAAF_BOOT: Environment Verified.");
   } catch (e) {
-    debugPrint("L2LAAF_BOOT_WARNING: Firebase initialization bypassed: $e");
+    initError = e.toString();
+    debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
   runApp(
-    const ProviderScope(
-      child: L2LAAFApp(),
+    ProviderScope(
+      overrides: [
+        // Flag to tell the UI if Firebase is actually available
+        firebaseReadyProvider.overrideWith((ref) => initialized),
+      ],
+      child: initialized 
+        ? const L2LAAFApp() 
+        : MaterialApp(
+            home: Scaffold(
+              backgroundColor: const Color(0xFF1E1E2C),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.cloud_off, size: 64, color: Colors.redAccent),
+                      const SizedBox(height: 24),
+                      const Text("FIREBASE INITIALIZATION ERROR", 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      Text(initError ?? "Unknown Failure", 
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
     ),
   );
 }
-L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
-import 'package:flutter/material.dart';
-import 'package:local2local/features/triage_hub/presentation/pages/cockpit_shell.dart';
-
-class L2LAAFApp extends StatelessWidget {
-  const L2LAAFApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'L2LAAF Cockpit',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F1E),
-      ),
-      home: const CockpitShell(),
-    );
-  }
-}
+// Global provider to track initialization state
+final firebaseReadyProvider = Provider<bool>((ref) => false);
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:COCKPIT_SHELL:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
@@ -191,6 +216,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/main.dart'; // Import the provider
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -268,6 +294,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildBody() {
+    final isReady = ref.watch(firebaseReadyProvider);
+    if (!isReady) {
+      return const Center(child: Text("Waiting for secure connection...", style: TextStyle(color: Colors.white24)));
+    }
+
     final env = ref.watch(environmentProvider);
     final projectId = env.projectId;
 
@@ -303,8 +334,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace active', style: const TextStyle(color: Colors.white54)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54)),
               ),
             );
           },
@@ -334,12 +365,10 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
@@ -398,96 +427,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           Icon(icon, size: 48, color: Colors.white10),
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-          const SizedBox(height: 8),
-          const Text('NO ACTIVE ITEMS FOUND', style: TextStyle(color: Colors.white10, fontSize: 10)),
         ],
       ),
     );
   }
 }
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-enum L2LEnvironment { dev, staging, prod }
-
-class EnvironmentState {
-  final L2LEnvironment environment;
-  final String projectId;
-  final Color headerColor;
-  final String version;
-
-  EnvironmentState({
-    required this.environment,
-    required this.projectId,
-    required this.headerColor,
-    required this.version,
-  });
-
-  EnvironmentState copyWith({L2LEnvironment? environment}) {
-    final newEnv = environment ?? this.environment;
-    return EnvironmentState(
-      environment: newEnv,
-      projectId: _getProjectId(newEnv),
-      headerColor: _getHeaderColor(newEnv),
-      version: 'v11.58.36',
-    );
-  }
-
-  static String _getProjectId(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.staging: return 'local2local-staging';
-      case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-dev';
-    }
-  }
-
-  static Color _getHeaderColor(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.prod: return const Color(0xFFFF1744);
-      case L2LEnvironment.staging: return const Color(0xFFFF9100);
-      default: return const Color(0xFF1E1E2C);
-    }
-  }
-}
-
-class EnvironmentNotifier extends Notifier<EnvironmentState> {
-  @override
-  EnvironmentState build() {
-    return EnvironmentState(
-      environment: L2LEnvironment.dev,
-      projectId: 'local2local-dev',
-      headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.58.36',
-    );
-  }
-
-  void setEnvironment(L2LEnvironment env, BuildContext context) async {
-    if (env == L2LEnvironment.prod) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('Entering LIVE production environment. Extreme caution required.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('ENTER PROD'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-    state = state.copyWith(environment: env);
-  }
-}
-
-final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
-  return EnvironmentNotifier();
-});
 L2LAAF_BLOCK_END

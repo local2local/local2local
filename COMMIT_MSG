@@ -1,1 +1,1 @@
-feat(evolution): implement resilient boot strategy to bypass Firebase init crashes v11.58
+feat(evolution): fix Firebase Web initialization and implement strict boot diagnostics v11.59

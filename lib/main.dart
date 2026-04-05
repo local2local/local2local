@@ -7,20 +7,57 @@ import 'package:local2local/core/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // RESILIENT BOOT: Do not crash the app if Firebase fails due to cache issues
+  bool initialized = false;
+  String? initError;
+
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Firebase (v11.58.36)...");
+    debugPrint("L2LAAF_BOOT: Requesting Firebase init v11.59.36...");
     await Firebase.initializeApp();
-    debugPrint("L2LAAF_BOOT: Authenticating...");
+    
+    debugPrint("L2LAAF_BOOT: Handshaking with Auth...");
     await FirebaseAuth.instance.signInAnonymously();
-    debugPrint("L2LAAF_BOOT: Security Handshake Complete.");
+    
+    initialized = true;
+    debugPrint("L2LAAF_BOOT: Environment Verified.");
   } catch (e) {
-    debugPrint("L2LAAF_BOOT_WARNING: Firebase initialization bypassed: $e");
+    initError = e.toString();
+    debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
   runApp(
-    const ProviderScope(
-      child: L2LAAFApp(),
+    ProviderScope(
+      overrides: [
+        // Flag to tell the UI if Firebase is actually available
+        firebaseReadyProvider.overrideWith((ref) => initialized),
+      ],
+      child: initialized 
+        ? const L2LAAFApp() 
+        : MaterialApp(
+            home: Scaffold(
+              backgroundColor: const Color(0xFF1E1E2C),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.cloud_off, size: 64, color: Colors.redAccent),
+                      const SizedBox(height: 24),
+                      const Text("FIREBASE INITIALIZATION ERROR", 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      Text(initError ?? "Unknown Failure", 
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
     ),
   );
 }
+
+// Global provider to track initialization state
+final firebaseReadyProvider = Provider<bool>((ref) => false);
