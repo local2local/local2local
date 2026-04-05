@@ -1,1 +1,1 @@
-feat(evolution): resolve greenAccent lint errors and finalize navigation shell functionality
+feat(evolution): restore Firestore data listeners for Triage and Evolution feeds

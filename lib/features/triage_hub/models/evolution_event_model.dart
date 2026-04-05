@@ -35,8 +35,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
+      // UI Sync: Field 'details' contains the rule enforcement summary from backend
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
+      // UI Sync: Field 'source' contains the agent ID
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
+      // UI Sync: Field 'is_autonomous'
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -45,7 +48,6 @@ class EvolutionEventModel {
   String get timeDisplay {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
-
     if (diff.inMinutes < 1) return 'Just Now';
     if (diff.inHours < 1) return '${diff.inMinutes}m ago';
     if (diff.inDays < 1) return '${diff.inHours}h ago';
