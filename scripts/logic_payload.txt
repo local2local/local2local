@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.38)
+L2LAAF Phase 36 Master Stabilization (v11.39)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:PIPELINE_STABILIZATION:COMMIT_MSG)
-feat(evolution): finalize pipeline fix and stress test UI
+L2LAAF_BLOCK_START(text:PIPELINE_STABILIZATION_V11_39:COMMIT_MSG)
+feat(evolution): update version to v11.39 and harden deployment config
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
@@ -21,17 +21,22 @@ L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
       }
     ]
   },
-  "functions": {
-    "source": "functions",
-    "codebase": "default",
-    "ignore": [
-      "node_modules",
-      ".git",
-      "firebase-debug.log",
-      "firestore-debug.log",
-      "ui-debug.log"
-    ]
-  }
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log",
+        "ui-debug.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
 }
 L2LAAF_BLOCK_END
 
@@ -77,7 +82,7 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
-      - name: Deploy Hosting
+      - name: Deploy to Target Project
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
@@ -88,19 +93,8 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          firebase deploy --only hosting --project $PROJECT_ID --non-interactive --force
-      - name: Deploy Functions
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          firebase deploy --only functions --project $PROJECT_ID --non-interactive --force
+          # Targeted deploy for stability
+          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:FUNCTIONS_INDEX:functions/src/index.ts)
@@ -135,7 +129,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.38.36',
+      version: 'v11.39.36',
     );
   }
 
@@ -163,7 +157,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.38.36',
+      version: 'v11.39.36',
     );
   }
 
@@ -208,14 +202,13 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     final isProd = envState.environment == L2LEnvironment.prod;
-    final isStressTest = envState.version == 'v11.38.36';
+    final isStressTest = envState.version == 'v11.39.36';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        // PIPELINE STRESS TEST: Background turns Amber/Orange if updated
-        color: isStressTest ? Colors.amber.shade900 : envState.headerColor,
+        color: isStressTest ? const Color(0xFFB45309) : envState.headerColor, // Deep Amber
         boxShadow: isProd ? [
           BoxShadow(
             color: Colors.red.withValues(alpha: 0.5),
@@ -239,10 +232,10 @@ class CockpitHeader extends ConsumerWidget {
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(20)),
                       child: const Text(
                         'STRESS TEST ACTIVE',
-                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                       ),
                     ),
                   ],
@@ -291,11 +284,10 @@ class CockpitHeader extends ConsumerWidget {
           const SizedBox(width: 24),
           const Icon(Icons.notifications_none, color: Colors.white, size: 22),
           const SizedBox(width: 12),
-          // PIPELINE STRESS TEST: Bright Yellow Info Icon
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 24),
+            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 28), // Larger icon
             onPressed: () {},
           ),
         ],

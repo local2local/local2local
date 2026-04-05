@@ -10,14 +10,13 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     final isProd = envState.environment == L2LEnvironment.prod;
-    final isStressTest = envState.version == 'v11.38.36';
+    final isStressTest = envState.version == 'v11.39.36';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        // PIPELINE STRESS TEST: Background turns Amber/Orange if updated
-        color: isStressTest ? Colors.amber.shade900 : envState.headerColor,
+        color: isStressTest ? const Color(0xFFB45309) : envState.headerColor, // Deep Amber
         boxShadow: isProd ? [
           BoxShadow(
             color: Colors.red.withValues(alpha: 0.5),
@@ -41,10 +40,10 @@ class CockpitHeader extends ConsumerWidget {
                     const SizedBox(width: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(20)),
                       child: const Text(
                         'STRESS TEST ACTIVE',
-                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                       ),
                     ),
                   ],
@@ -93,11 +92,10 @@ class CockpitHeader extends ConsumerWidget {
           const SizedBox(width: 24),
           const Icon(Icons.notifications_none, color: Colors.white, size: 22),
           const SizedBox(width: 12),
-          // PIPELINE STRESS TEST: Bright Yellow Info Icon
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 24),
+            icon: const Icon(Icons.info_outline, color: Colors.yellowAccent, size: 28), // Larger icon
             onPressed: () {},
           ),
         ],
