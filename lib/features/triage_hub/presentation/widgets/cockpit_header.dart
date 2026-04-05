@@ -10,8 +10,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Vibrant Purple for v11.43
-    const nuclearColor = Color(0xFF9C27B0);
+    // NUCLEAR COLOR: Vibrant Magenta for v11.45
+    const nuclearColor = Color(0xFFFF00FF);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -19,7 +19,7 @@ class CockpitHeader extends ConsumerWidget {
       decoration: BoxDecoration(
         color: nuclearColor,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 15)
+          BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 15)
         ],
       ),
       child: Row(
@@ -38,14 +38,14 @@ class CockpitHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'STRESS TEST: v11.43',
+                      'NUCLEAR TEST: v11.45',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: ${envState.version} | Hash: ${envState.deployHash}',
+                'Build: v11.45.36 | TS: ${envState.buildTimestamp}',
                 style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
@@ -75,13 +75,13 @@ class CockpitHeader extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'TS: ${envState.buildTimestamp}',
-                style: const TextStyle(color: Colors.white60, fontSize: 9),
+                'TARGET: ${envState.projectId}',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.science, color: Colors.white, size: 28),
+          const Icon(Icons.flash_on, color: Colors.yellowAccent, size: 28),
         ],
       ),
     );

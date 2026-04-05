@@ -1,63 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.43)
+L2LAAF Phase 36 Master Stabilization (v11.45)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:PIPELINE_VERIFICATION_V11_43:COMMIT_MSG)
-feat(evolution): nuclear cache bust and browser console diagnostics v11.43
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
-{
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "source": "/index.html",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/flutter_service_worker.js",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/**",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      }
-    ]
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firestore-debug.log",
-        "ui-debug.log"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
-    }
-  ]
-}
+L2LAAF_BLOCK_START(text:PIPELINE_FIX_V11_45:COMMIT_MSG)
+feat(evolution): fix flutter lint errors and implement magenta nuclear test v11.45
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
@@ -80,7 +25,6 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: functions/package-lock.json
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -93,17 +37,14 @@ jobs:
           flutter pub get
       - name: Build Flutter Web
         run: |
-          DEPLOY_HASH=$(git rev-parse --short HEAD)
           BUILD_DATE=$(date +'%Y-%m-%d_%H:%M')
-          echo "Building version v11.43.36 (Hash: $DEPLOY_HASH, Date: $BUILD_DATE)"
           flutter clean
-          flutter build web --release \
-            --dart-define=BUILD_TIME=$BUILD_DATE \
-            --dart-define=DEPLOY_HASH=$DEPLOY_HASH
-      - name: Verify Build Artifacts
+          flutter build web --release --dart-define=BUILD_TIME=$BUILD_DATE
+      - name: Audit Build Artifacts
         run: |
-          cat build/web/version.json
-          grep -o "v11.43.36" build/web/main.dart.js || echo "Version string not found in JS!"
+          echo "Checking for Diagnostic Script in index.html..."
+          grep "L2LAAF_HTML_ENTRY_LOADED" build/web/index.html || exit 1
+          echo "Artifact Audit Passed."
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud
@@ -113,7 +54,7 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
-      - name: Deploy to Target Project
+      - name: Deploy Stack
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
@@ -125,6 +66,75 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/">
+  <meta charset="UTF-8">
+  <title>L2LAAF Cockpit</title>
+  <script>
+    console.log("=========================================");
+    console.log("L2LAAF_HTML_ENTRY_LOADED");
+    console.log("Version: v11.45.36");
+    console.log("Timestamp: " + new Date().toISOString());
+    console.log("=========================================");
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
+import 'package:flutter/material.dart';
+import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
+
+class L2LAAFApp extends StatelessWidget {
+  const L2LAAFApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'L2LAAF Cockpit',
+      theme: ThemeData.dark(),
+      home: const Scaffold(
+        body: Column(
+          children: [
+            CockpitHeader(),
+            Expanded(
+              child: Center(
+                child: Text('L2LAAF PIPELINE DIAGNOSTICS: STACK STABILIZED'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/core/app.dart';
+
+void main() {
+  // Use debugPrint to satisfy avoid_print lint
+  debugPrint("L2LAAF_DART_MAIN_START: Version v11.45.36");
+  
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    const ProviderScope(
+      child: L2LAAFApp(),
+    ),
+  );
+}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
@@ -139,7 +149,6 @@ class EnvironmentState {
   final Color headerColor;
   final String version;
   final String buildTimestamp;
-  final String deployHash;
 
   EnvironmentState({
     required this.environment,
@@ -147,7 +156,6 @@ class EnvironmentState {
     required this.headerColor,
     required this.version,
     required this.buildTimestamp,
-    required this.deployHash,
   });
 
   EnvironmentState copyWith({L2LEnvironment? environment}) {
@@ -156,9 +164,8 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.43.36',
+      version: 'v11.45.36',
       buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
-      deployHash: const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'DEBUG'),
     );
   }
 
@@ -182,24 +189,12 @@ class EnvironmentState {
 class EnvironmentNotifier extends Notifier<EnvironmentState> {
   @override
   EnvironmentState build() {
-    final hash = const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'BOOT_HASH');
-    final ts = const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_TS');
-    
-    // NUCLEAR CONSOLE LOG: Visible in browser F12 console
-    debugPrint('=========================================');
-    debugPrint('L2LAAF DEPLOYMENT LOG');
-    debugPrint('Version: v11.43.36');
-    debugPrint('Commit Hash: $hash');
-    debugPrint('Timestamp: $ts');
-    debugPrint('=========================================');
-
     return EnvironmentState(
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.43.36',
-      buildTimestamp: ts,
-      deployHash: hash,
+      version: 'v11.44.36',
+      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_INIT'),
     );
   }
 
@@ -244,8 +239,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Vibrant Purple for v11.43
-    const nuclearColor = Color(0xFF9C27B0);
+    // NUCLEAR COLOR: Vibrant Magenta for v11.45
+    const nuclearColor = Color(0xFFFF00FF);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -253,7 +248,7 @@ class CockpitHeader extends ConsumerWidget {
       decoration: BoxDecoration(
         color: nuclearColor,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 15)
+          BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 15)
         ],
       ),
       child: Row(
@@ -272,14 +267,14 @@ class CockpitHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'STRESS TEST: v11.43',
+                      'NUCLEAR TEST: v11.45',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: ${envState.version} | Hash: ${envState.deployHash}',
+                'Build: v11.45.36 | TS: ${envState.buildTimestamp}',
                 style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
@@ -309,13 +304,13 @@ class CockpitHeader extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'TS: ${envState.buildTimestamp}',
-                style: const TextStyle(color: Colors.white60, fontSize: 9),
+                'TARGET: ${envState.projectId}',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.science, color: Colors.white, size: 28),
+          const Icon(Icons.flash_on, color: Colors.yellowAccent, size: 28),
         ],
       ),
     );
