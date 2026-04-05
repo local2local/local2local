@@ -17,6 +17,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:

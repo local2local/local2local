@@ -10,8 +10,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Vibrant Magenta for v11.45
-    const nuclearColor = Color(0xFFFF00FF);
+    // NUCLEAR COLOR: Electric Blue for v11.47
+    const nuclearColor = Color(0xFF2979FF);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -38,14 +38,14 @@ class CockpitHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'NUCLEAR TEST: v11.45',
+                      'BLUE TEST: v11.47',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: v11.45.36 | TS: ${envState.buildTimestamp}',
+                'Build: ${envState.version} | TS: ${envState.buildTimestamp}',
                 style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
@@ -81,7 +81,7 @@ class CockpitHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.flash_on, color: Colors.yellowAccent, size: 28),
+          const Icon(Icons.cloud_done, color: Colors.white, size: 28),
         ],
       ),
     );

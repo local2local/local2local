@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.45)
-PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED_
+L2LAAF Phase 36 Master Stabilization (v11.47)
+PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:PIPELINE_FIX_V11_45:COMMIT_MSG)
-feat(evolution): fix flutter lint errors and implement magenta nuclear test v11.45
+L2LAAF_BLOCK_START(text:PIPELINE_FIX_V11_47:COMMIT_MSG)
+feat(evolution): fix MainAxisAlignment typo and implement blue nuclear test v11.47
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
@@ -25,6 +25,7 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -68,27 +69,6 @@ jobs:
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
-<!DOCTYPE html>
-<html>
-<head>
-  <base href="/">
-  <meta charset="UTF-8">
-  <title>L2LAAF Cockpit</title>
-  <script>
-    console.log("=========================================");
-    console.log("L2LAAF_HTML_ENTRY_LOADED");
-    console.log("Version: v11.45.36");
-    console.log("Timestamp: " + new Date().toISOString());
-    console.log("=========================================");
-  </script>
-</head>
-<body>
-  <script src="flutter_bootstrap.js" async></script>
-</body>
-</html>
-L2LAAF_BLOCK_END
-
 L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
 import 'package:flutter/material.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
@@ -102,13 +82,29 @@ class L2LAAFApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'L2LAAF Cockpit',
       theme: ThemeData.dark(),
-      home: const Scaffold(
+      home: Scaffold(
+        backgroundColor: const Color(0xFF0F0F1E),
         body: Column(
           children: [
-            CockpitHeader(),
+            const CockpitHeader(),
             Expanded(
               child: Center(
-                child: Text('L2LAAF PIPELINE DIAGNOSTICS: STACK STABILIZED'),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.verified, size: 64, color: Color(0xFF2979FF)),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'PIPELINE BRIDGE ESTABLISHED',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Stack Stabilized: Version v11.47',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -116,24 +112,6 @@ class L2LAAFApp extends StatelessWidget {
       ),
     );
   }
-}
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/core/app.dart';
-
-void main() {
-  // Use debugPrint to satisfy avoid_print lint
-  debugPrint("L2LAAF_DART_MAIN_START: Version v11.45.36");
-  
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    const ProviderScope(
-      child: L2LAAFApp(),
-    ),
-  );
 }
 L2LAAF_BLOCK_END
 
@@ -164,7 +142,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.45.36',
+      version: 'v11.47.36',
       buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
     );
   }
@@ -193,8 +171,8 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.44.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_INIT'),
+      version: 'v11.47.36',
+      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT'),
     );
   }
 
@@ -239,8 +217,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Vibrant Magenta for v11.45
-    const nuclearColor = Color(0xFFFF00FF);
+    // NUCLEAR COLOR: Electric Blue for v11.47
+    const nuclearColor = Color(0xFF2979FF);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -267,14 +245,14 @@ class CockpitHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'NUCLEAR TEST: v11.45',
+                      'BLUE TEST: v11.47',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: v11.45.36 | TS: ${envState.buildTimestamp}',
+                'Build: ${envState.version} | TS: ${envState.buildTimestamp}',
                 style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
@@ -310,7 +288,7 @@ class CockpitHeader extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.flash_on, color: Colors.yellowAccent, size: 28),
+          const Icon(Icons.cloud_done, color: Colors.white, size: 28),
         ],
       ),
     );

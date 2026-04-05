@@ -24,7 +24,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.45.36',
+      version: 'v11.47.36',
       buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
     );
   }
@@ -53,8 +53,8 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.44.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_INIT'),
+      version: 'v11.47.36',
+      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT'),
     );
   }
 
