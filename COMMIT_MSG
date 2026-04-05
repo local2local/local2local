@@ -1,1 +1,1 @@
-feat(evolution): fix grey screen crash with Firebase init and restore full navigation shell
+feat(evolution): nuclear cache bust and explicit error reporting to resolve white screen

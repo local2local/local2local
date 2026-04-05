@@ -116,8 +116,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Tracing active', style: const TextStyle(color: Colors.white54)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace active', style: const TextStyle(color: Colors.white54)),
               ),
             );
           },

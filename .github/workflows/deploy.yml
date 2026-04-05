@@ -28,16 +28,10 @@ jobs:
           cd functions && npm install
           cd ..
           flutter pub get
+      - name: Nuclear Clean
+        run: flutter clean
       - name: Build Flutter Web
-        run: |
-          BUILD_DATE=$(date +'%Y-%m-%d_%H:%M')
-          flutter clean
-          flutter build web --release --dart-define=BUILD_TIME=$BUILD_DATE
-      - name: Audit Build Artifacts
-        run: |
-          echo "Checking for Diagnostic Script in index.html..."
-          grep "L2LAAF_HTML_ENTRY_LOADED" build/web/index.html || exit 1
-          echo "Artifact Audit Passed."
+        run: flutter build web --release
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud

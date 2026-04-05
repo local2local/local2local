@@ -22,7 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.56.36',
+      version: 'v11.57.36',
     );
   }
 
@@ -50,7 +50,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.56.36',
+      version: 'v11.57.36',
     );
   }
 
