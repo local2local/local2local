@@ -1,8 +1,63 @@
-L2LAAF Phase 36 Master Stabilization (v11.42)
+L2LAAF Phase 36 Master Stabilization (v11.43)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:PIPELINE_DIAGNOSTICS_V11_42:COMMIT_MSG)
-feat(evolution): nuclear build reset and runtime diagnostics v11.42
+L2LAAF_BLOCK_START(text:PIPELINE_VERIFICATION_V11_43:COMMIT_MSG)
+feat(evolution): nuclear cache bust and browser console diagnostics v11.43
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/flutter_service_worker.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      }
+    ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log",
+        "ui-debug.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
@@ -36,16 +91,19 @@ jobs:
           cd functions && npm install
           cd ..
           flutter pub get
-      - name: Nuclear Clean
-        run: flutter clean
       - name: Build Flutter Web
-        run: flutter build web --release --dart-define=BUILD_TIME=$(date +'%Y-%m-%d_%H:%M')
+        run: |
+          DEPLOY_HASH=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +'%Y-%m-%d_%H:%M')
+          echo "Building version v11.43.36 (Hash: $DEPLOY_HASH, Date: $BUILD_DATE)"
+          flutter clean
+          flutter build web --release \
+            --dart-define=BUILD_TIME=$BUILD_DATE \
+            --dart-define=DEPLOY_HASH=$DEPLOY_HASH
       - name: Verify Build Artifacts
         run: |
-          echo "Checking build/web directory..."
-          ls -R build/web
-          echo "Manifest Version Info:"
           cat build/web/version.json
+          grep -o "v11.43.36" build/web/main.dart.js || echo "Version string not found in JS!"
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud
@@ -66,7 +124,6 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          echo "Deploying to Project: $PROJECT_ID"
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
 L2LAAF_BLOCK_END
 
@@ -82,6 +139,7 @@ class EnvironmentState {
   final Color headerColor;
   final String version;
   final String buildTimestamp;
+  final String deployHash;
 
   EnvironmentState({
     required this.environment,
@@ -89,6 +147,7 @@ class EnvironmentState {
     required this.headerColor,
     required this.version,
     required this.buildTimestamp,
+    required this.deployHash,
   });
 
   EnvironmentState copyWith({L2LEnvironment? environment}) {
@@ -97,8 +156,9 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.42.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL_BUILD'),
+      version: 'v11.43.36',
+      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
+      deployHash: const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'DEBUG'),
     );
   }
 
@@ -122,12 +182,24 @@ class EnvironmentState {
 class EnvironmentNotifier extends Notifier<EnvironmentState> {
   @override
   EnvironmentState build() {
+    final hash = const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'BOOT_HASH');
+    final ts = const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_TS');
+    
+    // NUCLEAR CONSOLE LOG: Visible in browser F12 console
+    debugPrint('=========================================');
+    debugPrint('L2LAAF DEPLOYMENT LOG');
+    debugPrint('Version: v11.43.36');
+    debugPrint('Commit Hash: $hash');
+    debugPrint('Timestamp: $ts');
+    debugPrint('=========================================');
+
     return EnvironmentState(
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.42.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_INIT'),
+      version: 'v11.43.36',
+      buildTimestamp: ts,
+      deployHash: hash,
     );
   }
 
@@ -172,8 +244,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Bright Neon Green for v11.42
-    const nuclearColor = Color(0xFF00FF00);
+    // NUCLEAR COLOR: Vibrant Purple for v11.43
+    const nuclearColor = Color(0xFF9C27B0);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -181,10 +253,7 @@ class CockpitHeader extends ConsumerWidget {
       decoration: BoxDecoration(
         color: nuclearColor,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 15,
-          )
+          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 15)
         ],
       ),
       child: Row(
@@ -196,22 +265,22 @@ class CockpitHeader extends ConsumerWidget {
                 children: [
                   const Text(
                     'L2LAAF Cockpit',
-                    style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'DIAGNOSTICS ACTIVE',
+                      'STRESS TEST: v11.43',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: ${envState.version} | TS: ${envState.buildTimestamp}',
-                style: const TextStyle(color: Colors.black54, fontSize: 10, letterSpacing: 0.5),
+                'Build: ${envState.version} | Hash: ${envState.deployHash}',
+                style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -221,15 +290,12 @@ class CockpitHeader extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<L2LEnvironment>(
                     value: envState.environment,
                     dropdownColor: AdminColors.slateDarkest,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
                     onChanged: (val) => ref.read(environmentProvider.notifier).setEnvironment(val!, context),
                     items: L2LEnvironment.values.map((e) => DropdownMenuItem(
                       value: e,
@@ -243,13 +309,13 @@ class CockpitHeader extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'TARGET: ${envState.projectId}',
-                style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                'TS: ${envState.buildTimestamp}',
+                style: const TextStyle(color: Colors.white60, fontSize: 9),
               ),
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.bug_report, color: Colors.black, size: 28),
+          const Icon(Icons.science, color: Colors.white, size: 28),
         ],
       ),
     );

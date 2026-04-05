@@ -9,6 +9,7 @@ class EnvironmentState {
   final Color headerColor;
   final String version;
   final String buildTimestamp;
+  final String deployHash;
 
   EnvironmentState({
     required this.environment,
@@ -16,6 +17,7 @@ class EnvironmentState {
     required this.headerColor,
     required this.version,
     required this.buildTimestamp,
+    required this.deployHash,
   });
 
   EnvironmentState copyWith({L2LEnvironment? environment}) {
@@ -24,8 +26,9 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.42.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL_BUILD'),
+      version: 'v11.43.36',
+      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
+      deployHash: const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'DEBUG'),
     );
   }
 
@@ -49,12 +52,24 @@ class EnvironmentState {
 class EnvironmentNotifier extends Notifier<EnvironmentState> {
   @override
   EnvironmentState build() {
+    final hash = const String.fromEnvironment('DEPLOY_HASH', defaultValue: 'BOOT_HASH');
+    final ts = const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_TS');
+    
+    // NUCLEAR CONSOLE LOG: Visible in browser F12 console
+    debugPrint('=========================================');
+    debugPrint('L2LAAF DEPLOYMENT LOG');
+    debugPrint('Version: v11.43.36');
+    debugPrint('Commit Hash: $hash');
+    debugPrint('Timestamp: $ts');
+    debugPrint('=========================================');
+
     return EnvironmentState(
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.42.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT_INIT'),
+      version: 'v11.43.36',
+      buildTimestamp: ts,
+      deployHash: hash,
     );
   }
 

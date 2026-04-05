@@ -10,8 +10,8 @@ class CockpitHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final envState = ref.watch(environmentProvider);
     
-    // NUCLEAR COLOR: Bright Neon Green for v11.42
-    const nuclearColor = Color(0xFF00FF00);
+    // NUCLEAR COLOR: Vibrant Purple for v11.43
+    const nuclearColor = Color(0xFF9C27B0);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -19,10 +19,7 @@ class CockpitHeader extends ConsumerWidget {
       decoration: BoxDecoration(
         color: nuclearColor,
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 15,
-          )
+          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 15)
         ],
       ),
       child: Row(
@@ -34,22 +31,22 @@ class CockpitHeader extends ConsumerWidget {
                 children: [
                   const Text(
                     'L2LAAF Cockpit',
-                    style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
                     child: const Text(
-                      'DIAGNOSTICS ACTIVE',
+                      'STRESS TEST: v11.43',
                       style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ],
               ),
               Text(
-                'Build: ${envState.version} | TS: ${envState.buildTimestamp}',
-                style: const TextStyle(color: Colors.black54, fontSize: 10, letterSpacing: 0.5),
+                'Build: ${envState.version} | Hash: ${envState.deployHash}',
+                style: const TextStyle(color: Colors.white70, fontSize: 10, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -59,15 +56,12 @@ class CockpitHeader extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(8)),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<L2LEnvironment>(
                     value: envState.environment,
                     dropdownColor: AdminColors.slateDarkest,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
                     onChanged: (val) => ref.read(environmentProvider.notifier).setEnvironment(val!, context),
                     items: L2LEnvironment.values.map((e) => DropdownMenuItem(
                       value: e,
@@ -81,13 +75,13 @@ class CockpitHeader extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'TARGET: ${envState.projectId}',
-                style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                'TS: ${envState.buildTimestamp}',
+                style: const TextStyle(color: Colors.white60, fontSize: 9),
               ),
             ],
           ),
           const SizedBox(width: 24),
-          const Icon(Icons.bug_report, color: Colors.black, size: 28),
+          const Icon(Icons.science, color: Colors.white, size: 28),
         ],
       ),
     );
