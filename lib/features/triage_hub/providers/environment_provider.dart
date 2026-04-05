@@ -8,14 +8,12 @@ class EnvironmentState {
   final String projectId;
   final Color headerColor;
   final String version;
-  final String buildTimestamp;
 
   EnvironmentState({
     required this.environment,
     required this.projectId,
     required this.headerColor,
     required this.version,
-    required this.buildTimestamp,
   });
 
   EnvironmentState copyWith({L2LEnvironment? environment}) {
@@ -24,8 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.47.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'LOCAL'),
+      version: 'v11.50.36',
     );
   }
 
@@ -53,8 +50,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.47.36',
-      buildTimestamp: const String.fromEnvironment('BUILD_TIME', defaultValue: 'BOOT'),
+      version: 'v11.50.36',
     );
   }
 

@@ -35,8 +35,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
+      // Business Requirement: Field 'details' contains the rule enforcement summary
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
+      // Business Requirement: Field 'source' contains the agent ID
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
+      // Business Requirement: Field 'is_autonomous' follows boolean type
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -54,18 +57,12 @@ class EvolutionEventModel {
 
   static EvolutionEventType _parseType(String? type) {
     switch (type) {
-      case 'CRITICAL_INTERVENTION_REQUIRED':
-        return EvolutionEventType.criticalIntervention;
-      case 'LOGIC_ROLLBACK':
-        return EvolutionEventType.rollback;
-      case 'HUMAN_OVERRIDE_COMMITTED':
-        return EvolutionEventType.humanOverride;
-      case 'AGENT_DEPLOYED':
-        return EvolutionEventType.agentDeployed;
-      case 'LOGIC_COMMIT_SUCCESS':
-        return EvolutionEventType.logicCommitSuccess;
-      default:
-        return EvolutionEventType.unknown;
+      case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
+      case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
+      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
+      case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
+      case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
+      default: return EvolutionEventType.unknown;
     }
   }
 

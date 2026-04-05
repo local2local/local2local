@@ -9,9 +9,10 @@ class L2LAAFApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'L2LAAF Cockpit',
-      theme: ThemeData.dark(),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0F0F1E),
+      ),
       home: Scaffold(
-        backgroundColor: const Color(0xFF0F0F1E),
         body: Column(
           children: [
             const CockpitHeader(),
@@ -20,15 +21,16 @@ class L2LAAFApp extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.verified, size: 64, color: Color(0xFF2979FF)),
+                    // FIX: 'emeraldAccent' does not exist. Using 'greenAccent'.
+                    const Icon(Icons.verified_user, size: 64, color: Colors.greenAccent),
                     const SizedBox(height: 16),
                     const Text(
-                      'PIPELINE BRIDGE ESTABLISHED',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      'L2LAAF COCKPIT: SYSTEM SECURE',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Stack Stabilized: Version v11.47',
+                    const Text(
+                      'Phase 36 Stabilization Finalized',
                       style: TextStyle(color: Colors.white70),
                     ),
                   ],
