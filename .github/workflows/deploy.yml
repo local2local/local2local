@@ -28,8 +28,16 @@ jobs:
           cd functions && npm install
           cd ..
           flutter pub get
+      - name: Nuclear Clean
+        run: flutter clean
       - name: Build Flutter Web
-        run: flutter build web --release
+        run: flutter build web --release --dart-define=BUILD_TIME=$(date +'%Y-%m-%d_%H:%M')
+      - name: Verify Build Artifacts
+        run: |
+          echo "Checking build/web directory..."
+          ls -R build/web
+          echo "Manifest Version Info:"
+          cat build/web/version.json
       - name: Build Cloud Functions
         run: cd functions && npm run build
       - name: Authenticate to Google Cloud
@@ -50,4 +58,5 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
+          echo "Deploying to Project: $PROJECT_ID"
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
