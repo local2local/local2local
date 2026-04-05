@@ -1,5 +1,5 @@
 L2LAAF Phase 36 Master Stabilization (v11.58)
-PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED_
 
 L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_BOOT_RESILIENCE:COMMIT_MSG)
 feat(evolution): implement resilient boot strategy to bypass Firebase init crashes v11.58
