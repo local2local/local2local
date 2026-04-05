@@ -188,7 +188,7 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
       .collection("evolution_timeline")
       .doc();
 
-    const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
+    const strategicSummary = `Successfully committed optimized logic for Unit ${hbrId}. ` +
       `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
       `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates. ` +
       `Logic transition atomic and finalized.`;
@@ -222,5 +222,21 @@ export const evolutionProposalFinalizedV2 = onDocumentUpdated({
     console.log(`[EVOLUTION-P36] [${appId}] Successfully committed logic for ${hbrId}`);
   } catch (e) {
     console.error("[EVOLUTION-P36] Finalization Error:", e);
+  }
+});
+
+export const evolutionForceBaselineV2 = onRequest(async (req: Request, res: Response) => {
+  const appId = (req.query.appId as string) || "local2local-kaskflow";
+  const dbInstance = admin.firestore();
+  try {
+    const pingRef = dbInstance.collection("artifacts").doc(appId).collection("public").doc("data").collection("lessons_learned").doc("baseline_ping");
+    await pingRef.set({
+      message: "Verified",
+      timestamp: FieldValue.serverTimestamp(),
+      tenant: appId
+    });
+    res.status(200).send(`✅ Success for tenant: ${appId}`);
+  } catch (e: any) {
+    res.status(500).send("❌ Fail: " + e.message);
   }
 });
