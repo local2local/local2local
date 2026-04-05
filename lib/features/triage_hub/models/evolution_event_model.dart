@@ -35,11 +35,8 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Business Requirement: Field 'details' contains the rule enforcement summary
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      // Business Requirement: Field 'source' contains the agent ID
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      // Business Requirement: Field 'is_autonomous' follows boolean type
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );

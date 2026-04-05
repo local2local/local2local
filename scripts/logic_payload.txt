@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.50)
+L2LAAF Phase 36 Master Stabilization (v11.51)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_STABILIZED:COMMIT_MSG)
-feat(evolution): resolve color constant error and finalize Phase 36 business rules
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_RESTORE_NAV:COMMIT_MSG)
+feat(evolution): restore navigation shell and finalize Phase 36 stabilization
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:EVOLUTION_LOGIC:functions/src/logic/evolution.ts)
@@ -272,11 +272,8 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // Business Requirement: Field 'details' contains the rule enforcement summary
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      // Business Requirement: Field 'source' contains the agent ID
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      // Business Requirement: Field 'is_autonomous' follows boolean type
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -311,9 +308,83 @@ class EvolutionEventModel {
 }
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
+L2LAAF_BLOCK_START(dart:COCKPIT_SHELL:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
 import 'package:flutter/material.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
+
+class CockpitShell extends StatefulWidget {
+  const CockpitShell({super.key});
+
+  @override
+  State<CockpitShell> createState() => _CockpitShellState();
+}
+
+class _CockpitShellState extends State<CockpitShell> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0F1E),
+      body: Row(
+        children: [
+          // SIDE NAVIGATION BAR
+          NavigationRail(
+            backgroundColor: const Color(0xFF16162A),
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (int index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+            labelType: NavigationRailLabelType.selected,
+            selectedIconTheme: const IconThemeData(color: Colors.blueAccent),
+            unselectedIconTheme: const IconThemeData(color: Colors.white24),
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.list_alt),
+                label: Text('Triage'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.grid_view),
+                label: Text('Health'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.directions_car),
+                label: Text('Fleet'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.psychology),
+                label: Text('Evolution'),
+              ),
+            ],
+          ),
+          // MAIN CONTENT AREA
+          Expanded(
+            child: Column(
+              children: [
+                const CockpitHeader(),
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                      'L2LAAF COCKPIT ACTIVE',
+                      style: TextStyle(color: Colors.white24, letterSpacing: 2),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
+import 'package:flutter/material.dart';
+import 'package:local2local/features/triage_hub/presentation/pages/cockpit_shell.dart';
 
 class L2LAAFApp extends StatelessWidget {
   const L2LAAFApp({super.key});
@@ -326,34 +397,7 @@ class L2LAAFApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F0F1E),
       ),
-      home: Scaffold(
-        body: Column(
-          children: [
-            const CockpitHeader(),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // FIX: 'emeraldAccent' does not exist. Using 'greenAccent'.
-                    const Icon(Icons.verified_user, size: 64, color: Colors.greenAccent),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'L2LAAF COCKPIT: SYSTEM SECURE',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Phase 36 Stabilization Finalized',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+      home: const CockpitShell(),
     );
   }
 }
@@ -384,7 +428,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.50.36',
+      version: 'v11.51.36',
     );
   }
 
@@ -412,7 +456,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.50.36',
+      version: 'v11.51.36',
     );
   }
 
