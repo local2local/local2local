@@ -69,18 +69,6 @@ class _AdminAppBarState extends ConsumerState<AdminAppBar> {
                 size: 22, color: AdminColors.textSecondary),
             onPressed: () {},
           ),
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined,
-                size: 22, color: AdminColors.textSecondary),
-            onPressed: () {},
-          ),
-          IconButton(
-            tooltip: 'Support',
-            icon: const Icon(Icons.headphones_battery_sharp,
-                size: 22, color: AdminColors.textSecondary),
-            onPressed: () {},
-          ),
         ],
       ),
     );
