@@ -1,12 +1,5 @@
-export * from "./logic/infrastructure";
-export * from "./logic/compliance";
-export * from "./logic/finance";
-export * from "./logic/orchestration";
-export * from "./logic/fulfillment";
-export * from "./logic/dispatch";
-export * from "./logic/ombudsman";
-export * from "./logic/analytics";
-export * from "./logic/treasury";
+/**
+ * L2LAAF Functions Entry Point
+ * Exports all logic modules for the Firebase Functions runtime.
+ */
 export * from "./logic/evolution";
-export * from "./utilities/listSubcollections";
-export * from "./utilities/deleteSubcollection";

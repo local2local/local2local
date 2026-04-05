@@ -23,6 +23,9 @@
         "firebase-debug.log",
         "firestore-debug.log",
         "ui-debug.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
     }
   ]

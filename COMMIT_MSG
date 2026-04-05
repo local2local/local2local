@@ -1,1 +1,1 @@
-feat(deployment): add firebase.json and stress test UI pipeline with info icon
+feat(evolution): provide functions index.ts and fix hosting deployment pipeline

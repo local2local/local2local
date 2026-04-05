@@ -30,6 +30,8 @@ jobs:
           flutter pub get
       - name: Build Flutter Web
         run: flutter build web --release
+      - name: Build Cloud Functions
+        run: cd functions && npm run build
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -48,5 +50,4 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          # Scoped deploy to ensure both UI and logic are updated
           firebase deploy --only functions,hosting --project $PROJECT_ID --non-interactive --force
