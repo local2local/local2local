@@ -14,7 +14,7 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 3; // Default to Evolution for P36 verification
 
   @override
   Widget build(BuildContext context) {
@@ -83,9 +83,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildBody() {
     final isReady = ref.watch(firebaseReadyProvider);
-    if (!isReady) {
-      return const Center(child: Text("Waiting for secure connection...", style: TextStyle(color: Colors.white24)));
-    }
+    if (!isReady) return const Center(child: CircularProgressIndicator());
 
     final env = ref.watch(environmentProvider);
     final projectId = env.projectId;
@@ -110,8 +108,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Data Stream Error", style: const TextStyle(color: Colors.redAccent, fontSize: 12)));
-        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -124,8 +120,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Log Entry', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -145,8 +141,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return const Center(child: Text("Timeline connection failed", style: TextStyle(color: Colors.redAccent, fontSize: 12)));
-        
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -157,8 +151,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 

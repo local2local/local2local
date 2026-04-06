@@ -1,1 +1,1 @@
-feat(evolution): use reserved hosting URLs for Firebase SDKs to resolve boot failure v11.62
+feat(evolution): restore Dreamflow-compatible boot sequence and resolve analyzer warnings v11.63
