@@ -1,1 +1,1 @@
-fix(evolution): finalize modular SDK migration and align dev project config v11.78
+fix(evolution): update gitignore to suppress node_modules warnings and bump version v11.82

@@ -1,20 +1,32 @@
-L2LAAF Phase 36 Master Stabilization (v11.81)
+L2LAAF Phase 36 Master Stabilization (v11.82)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): implement secure CI config injection and finalize Phase 36 v11.81
+fix(evolution): update gitignore to suppress node_modules warnings and bump version v11.82
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(text:GITIGNORE:.gitignore)
 # Firebase configuration (Managed by CLI/CI)
 lib/firebase_options.dart
 
-# Standard Flutter/Dart excludes
+# Dependencies
+node_modules/
+functions/node_modules/
+functions/lib/
 .dart_tool/
 .packages
 .pub-cache/
 .pub/
+
+# Build outputs
 build/
+*.log
+functions/npm-debug.log*
+
+# OS/IDE metadata
+.DS_Store
+.vscode/
+.idea/
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
@@ -89,7 +101,7 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.81.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.82.36...");
     
     // Auth-init via compiled options (Secure + Race-Condition Proof)
     await Firebase.initializeApp(
@@ -107,7 +119,7 @@ void main() async {
         .collection('telemetry')
         .doc('last_heartbeat')
         .set({
-          'version': 'v11.81.36',
+          'version': 'v11.82.36',
           'timestamp': FieldValue.serverTimestamp(),
           'status': 'OPERATIONAL',
           'bridge': 'MODULAR_V10'
@@ -160,7 +172,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.81.36',
+      version: 'v11.82.36',
     );
   }
 
@@ -188,7 +200,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.81.36',
+      version: 'v11.82.36',
     );
   }
 

@@ -13,17 +13,16 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Modular SDK v11.78.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.82.36...");
     
-    // Auth-init via compiled options (removes browser JS race condition)
+    // Auth-init via compiled options (Secure + Race-Condition Proof)
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    // Services are safe to call immediately after the await above
     await FirebaseAuth.instance.signInAnonymously();
     
-    // HEARTBEAT: Global tracking independent of tenant project ID
+    // HEARTBEAT: Telemetry verify
     await FirebaseFirestore.instance
         .collection('artifacts')
         .doc('system_status')
@@ -32,13 +31,14 @@ void main() async {
         .collection('telemetry')
         .doc('last_heartbeat')
         .set({
-          'version': 'v11.78.36',
+          'version': 'v11.82.36',
           'timestamp': FieldValue.serverTimestamp(),
-          'status': 'OPERATIONAL'
+          'status': 'OPERATIONAL',
+          'bridge': 'MODULAR_V10'
         }, SetOptions(merge: true));
 
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    debugPrint("L2LAAF_BOOT: System Ready.");
   } catch (e) {
     errorMsg = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");
