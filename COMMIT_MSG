@@ -1,1 +1,1 @@
-feat(evolution): fix Firebase Web initialization and implement strict boot diagnostics v11.59
+feat(evolution): resolve Firebase init null-check error and harden web bootstrap v11.61
