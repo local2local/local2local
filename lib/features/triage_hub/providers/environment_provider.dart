@@ -22,7 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.74.36',
+      version: 'v11.75.36',
     );
   }
 
@@ -30,7 +30,7 @@ class EnvironmentState {
     switch (env) {
       case L2LEnvironment.staging: return 'local2local-staging';
       case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-kaskflow'; // Defaulting to kaskflow per user valid subcollections
+      default: return 'local2local-kaskflow'; // Defaulted to kaskflow per user subcollections
     }
   }
 
@@ -48,9 +48,9 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
   EnvironmentState build() {
     return EnvironmentState(
       environment: L2LEnvironment.dev,
-      projectId: 'local2local-kaskflow', // Default per valid subcollections
+      projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.74.36',
+      version: 'v11.75.36',
     );
   }
 

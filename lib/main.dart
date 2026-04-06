@@ -12,15 +12,19 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing core v11.74.36...");
-    await Firebase.initializeApp();
+    debugPrint("L2LAAF_BOOT: Starting core v11.75.36...");
     
-    // MICROTASK DELAY: Prevent Null check crash on immediate service access
-    Future.delayed(Duration.zero, () async {
+    // DREAMFLOW COMPLIANCE: Check if already initialized by JS before calling Plugin
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+    
+    // MICROTASK ESCAPE: Run service access in next tick to clear null checks
+    Future.delayed(const Duration(milliseconds: 50), () async {
       try {
         await FirebaseAuth.instance.signInAnonymously();
         
-        // HEARTBEAT: Using system-level independent subcollection
+        // SYSTEM HEARTBEAT: Global tracking independent of project ID
         await FirebaseFirestore.instance
             .collection('artifacts')
             .doc('system_status')
@@ -29,22 +33,22 @@ void main() async {
             .collection('telemetry')
             .doc('last_heartbeat')
             .set({
-              'active_version': 'v11.74.36',
+              'active_version': 'v11.75.36',
               'timestamp': FieldValue.serverTimestamp(),
-              'status': 'OPERATIONAL'
+              'status': 'HEALTHY'
             }, SetOptions(merge: true));
             
-        debugPrint("L2LAAF_BOOT: Background Handshake Success.");
+        debugPrint("L2LAAF_BOOT: Heartbeat established.");
       } catch (e) {
-        debugPrint("L2LAAF_BOOT_WARNING: Service Handshake Delayed: $e");
+        debugPrint("L2LAAF_BOOT_WARNING: Service sync delayed: $e");
       }
     });
 
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Initialization Triggered.");
+    debugPrint("L2LAAF_BOOT: Plugin Handshake complete.");
   } catch (e) {
     errorMsg = e.toString();
-    debugPrint("L2LAAF_BOOT_ERROR: $e");
+    debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
   runApp(
