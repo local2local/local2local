@@ -35,10 +35,10 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
-      // SYNC: Map backend 'details' to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization cycle committed.',
-      // SYNC: Map backend 'source' to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      // SYNC: Map backend 'details' field to UI 'description'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Trace finalized.',
+      // SYNC: Map backend 'source' field to UI 'agentName'
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );

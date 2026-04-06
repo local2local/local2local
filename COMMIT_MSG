@@ -1,1 +1,1 @@
-feat(evolution): resolve boot null-check and force service worker update v11.71
+feat(evolution): resolve bootErrorProvider identifier error and stabilize shell v11.73
