@@ -1,64 +1,63 @@
-L2LAAF Phase 36 Master Stabilization (v11.66)
+L2LAAF Phase 36 Master Stabilization (v11.67)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_DREAMFLOW_RESTORE:COMMIT_MSG)
-feat(evolution): restore Dreamflow-compliant boot sequence and fix data field mapping v11.66
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_STABILIZE_FINAL:COMMIT_MSG)
+feat(evolution): nuclear cache-bust and Dreamflow-aligned data sync v11.67
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, staging, develop ]
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: functions/package-lock.json
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-      - name: Build Flutter Web
-        run: flutter build web --release
-      - name: Build Cloud Functions
-        run: cd functions && npm run build
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-      - name: Deploy Stack
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/flutter_service_worker.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/version.json",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      }
+    ]
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log",
+        "ui-debug.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -69,20 +68,21 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Firebase SDKs: Dreamflow Standard Compat (v10.7.1) -->
+  <!-- Firebase SDK Compat Loaders (v10.7.1) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   
-  <!-- Automatic Config provided by Firebase Hosting reserved URL -->
+  <!-- Reserved Hosting URL for Automatic Config -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    console.log("L2LAAF_BOOT: v11.66.36");
+    console.log("L2LAAF_CACHE_BUST: v11.67.36");
+    console.log("Handshake: " + (typeof firebase !== 'undefined' ? "Ready" : "Pending"));
   </script>
 </head>
 <body>
-  <!-- Synchronous load to ensure Firebase is ready before main.dart execution -->
+  <!-- Non-async script ensures Firebase is ready before Flutter engine kicks in -->
   <script src="flutter_bootstrap.js"></script>
 </body>
 </html>
@@ -98,22 +98,30 @@ import 'package:local2local/core/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  bool firebaseReady = false;
+
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking with Engine v11.66.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.67.36...");
     await Firebase.initializeApp();
     await FirebaseAuth.instance.signInAnonymously();
-    debugPrint("L2LAAF_BOOT: Stack Verified.");
+    firebaseReady = true;
+    debugPrint("L2LAAF_BOOT: Engine Synchronized.");
   } catch (e) {
-    debugPrint("L2LAAF_BOOT_WARNING: $e");
-    // Standard Dreamflow resilience: Continue and let the UI handle empty states
+    debugPrint("L2LAAF_BOOT_ERROR: $e");
+    // Resume boot even on error; the UI will handle the lack of data gracefully
   }
 
   runApp(
-    const ProviderScope(
-      child: L2LAAFApp(),
+    ProviderScope(
+      overrides: [
+        firebaseStatusProvider.overrideWith((ref) => firebaseReady),
+      ],
+      child: const L2LAAFApp(),
     ),
   );
 }
+
+final firebaseStatusProvider = Provider<bool>((ref) => false);
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
@@ -153,12 +161,13 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Mapping 'details' (written by backend) to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Logic commit finalized.',
-      // SYNC: Mapping 'source' (written by backend) to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      title: data['title'] as String? ?? 'System Event',
+      // SYNC: Support both 'details' (v2 backend) and 'description' (legacy/v1)
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Trace recorded.',
+      // SYNC: Support both 'source' (v2 backend) and 'agent_name' (legacy)
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      // SYNC: Support both snake_case and camelCase for boolean
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }
@@ -176,7 +185,7 @@ class EvolutionEventModel {
     switch (type) {
       case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
       case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
-      case 'HUMAN_OVER_RIDE': return EvolutionEventType.humanOverride;
+      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
       case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
       case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
       default: return EvolutionEventType.unknown;
@@ -198,6 +207,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -207,15 +217,17 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for P36 verification
+  int _selectedIndex = 3; // Default to Evolution for verification
 
   @override
   Widget build(BuildContext context) {
+    final isReady = ref.watch(firebaseStatusProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
       body: Row(
         children: [
-          // SIDE NAVIGATION
+          // SIDE NAVIGATION BAR
           Container(
             width: 72,
             color: const Color(0xFF16162A),
@@ -244,7 +256,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             child: Column(
               children: [
                 const CockpitHeader(),
-                Expanded(child: _buildBody()),
+                Expanded(
+                  child: !isReady 
+                    ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+                    : _buildBody(),
+                ),
               ],
             ),
           ),
@@ -299,7 +315,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection(coll)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -332,7 +348,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('evolution_timeline')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -344,11 +360,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),

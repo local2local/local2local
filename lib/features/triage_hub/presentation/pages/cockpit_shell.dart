@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -13,15 +14,17 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for P36 verification
+  int _selectedIndex = 3; // Default to Evolution for verification
 
   @override
   Widget build(BuildContext context) {
+    final isReady = ref.watch(firebaseStatusProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
       body: Row(
         children: [
-          // SIDE NAVIGATION
+          // SIDE NAVIGATION BAR
           Container(
             width: 72,
             color: const Color(0xFF16162A),
@@ -50,7 +53,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             child: Column(
               children: [
                 const CockpitHeader(),
-                Expanded(child: _buildBody()),
+                Expanded(
+                  child: !isReady 
+                    ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+                    : _buildBody(),
+                ),
               ],
             ),
           ),
@@ -105,7 +112,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection(coll)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -138,7 +145,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('evolution_timeline')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -150,11 +157,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),

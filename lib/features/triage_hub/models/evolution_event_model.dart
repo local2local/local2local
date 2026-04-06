@@ -34,12 +34,13 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Mapping 'details' (written by backend) to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Logic commit finalized.',
-      // SYNC: Mapping 'source' (written by backend) to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      title: data['title'] as String? ?? 'System Event',
+      // SYNC: Support both 'details' (v2 backend) and 'description' (legacy/v1)
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Trace recorded.',
+      // SYNC: Support both 'source' (v2 backend) and 'agent_name' (legacy)
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      // SYNC: Support both snake_case and camelCase for boolean
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }
@@ -57,7 +58,7 @@ class EvolutionEventModel {
     switch (type) {
       case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
       case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
-      case 'HUMAN_OVER_RIDE': return EvolutionEventType.humanOverride;
+      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
       case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
       case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
       default: return EvolutionEventType.unknown;
