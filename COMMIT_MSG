@@ -1,1 +1,1 @@
-feat(evolution): resolve infinite loader and stabilize Dreamflow boot sequence v11.68
+feat(evolution): implement Dreamflow-safe bootstrap and explicit Firebase config v11.69

@@ -14,12 +14,12 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for P36 verification
+  int _selectedIndex = 3; // Default to Evolution to verify P36
 
   @override
   Widget build(BuildContext context) {
-    final isReady = ref.watch(firebaseStatusProvider);
-    final bootMsg = ref.watch(bootMessageProvider);
+    final isReady = ref.watch(firebaseReadyProvider);
+    final error = ref.watch(initErrorProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
@@ -49,22 +49,17 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ),
           ),
-          // MAIN CONTENT
+          // MAIN CONTENT AREA
           Expanded(
             child: Column(
               children: [
                 const CockpitHeader(),
-                if (bootMsg != null)
-                  Container(
-                    width: double.infinity,
-                    color: Colors.orangeAccent.withValues(alpha: 0.1),
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                    child: Text(bootMsg, style: const TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
                 Expanded(
-                  child: !isReady 
-                    ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-                    : _buildBody(),
+                  child: error != null 
+                    ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
+                    : !isReady 
+                        ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+                        : _buildBody(),
                 ),
               ],
             ),
@@ -133,8 +128,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Log Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Tracing active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -164,8 +159,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 

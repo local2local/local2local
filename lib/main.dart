@@ -7,39 +7,41 @@ import 'package:local2local/core/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  bool firebaseReady = false;
-  String? initMessage;
+  bool initialized = false;
+  String? errorMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing v11.68.36...");
-    await Firebase.initializeApp();
+    debugPrint("L2LAAF_BOOT: Initializing v11.69.36...");
     
-    // Auth Handshake
-    try {
-      await FirebaseAuth.instance.signInAnonymously();
-      firebaseReady = true;
-      debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
-    } catch (authError) {
-      initMessage = "AUTH_DEGRADED: Using restricted guest access.";
-      debugPrint("L2LAAF_BOOT_WARNING: $authError");
-      firebaseReady = true; // Proceed with limited access
-    }
+    // Explicit check to avoid Null check operator crash on web
+    await Firebase.initializeApp(
+      // Optional: If init.js fails, these are the dev project fallbacks
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyB...", // Placeholder - hosting usually handles this
+        appId: "1:24933902371:web:...", 
+        messagingSenderId: "24933902371",
+        projectId: "local2local-dev",
+      ),
+    );
+    
+    await FirebaseAuth.instance.signInAnonymously();
+    initialized = true;
+    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
   } catch (e) {
-    initMessage = "INIT_ERROR: Firestore connectivity limited.";
+    errorMessage = e.toString();
     debugPrint("L2LAAF_BOOT_ERROR: $e");
-    firebaseReady = true; // Fallback: Allow UI to load even if Firebase is delayed
   }
 
   runApp(
     ProviderScope(
       overrides: [
-        firebaseStatusProvider.overrideWith((ref) => firebaseReady),
-        bootMessageProvider.overrideWith((ref) => initMessage),
+        firebaseReadyProvider.overrideWith((ref) => initialized),
+        initErrorProvider.overrideWith((ref) => errorMessage),
       ],
       child: const L2LAAFApp(),
     ),
   );
 }
 
-final firebaseStatusProvider = Provider<bool>((ref) => false);
-final bootMessageProvider = Provider<String?>((ref) => null);
+final firebaseReadyProvider = Provider<bool>((ref) => false);
+final initErrorProvider = Provider<String?>((ref) => null);
