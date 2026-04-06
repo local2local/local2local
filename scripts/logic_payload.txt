@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.75)
+L2LAAF Phase 36 Master Stabilization (v11.76)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_DREAMFLOW_FIX:COMMIT_MSG)
-fix(evolution): resolve boot null-check and synchronize Dreamflow data mappings v11.75
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FINAL_STABILIZE:COMMIT_MSG)
+fix(evolution): resolve boot null-check and synchronize backend-to-ui data mapping v11.76
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -13,33 +13,21 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Firebase SDKs: Modular v10 Alignment (Dreamflow Pattern) -->
+  <!-- Standard Firebase SDKs for Dreamflow Compliance -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   
-  <!-- Config injection -->
+  <!-- Automatic Environment Configuration -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.75.36";
-    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
-    
-    function startApp() {
-      // Barrier: Wait for init.js to finish calling firebase.initializeApp()
-      if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-        console.log("L2LAAF_BOOT: Handshake Verified. Initializing Engine...");
-        const script = document.createElement('script');
-        script.src = "flutter_bootstrap.js";
-        document.body.appendChild(script);
-      } else {
-        console.warn("L2LAAF_BOOT: Handshake Pending...");
-        setTimeout(startApp, 100);
-      }
-    }
+    window.L2LAAF_BUILD = "v11.76.36";
+    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_BUILD);
   </script>
 </head>
-<body onload="startApp()">
+<body>
+  <script src="flutter_bootstrap.js"></script>
 </body>
 </html>
 L2LAAF_BLOCK_END
@@ -59,40 +47,40 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Starting core v11.75.36...");
+    debugPrint("L2LAAF_BOOT: Starting Handshake v11.76.36...");
     
-    // DREAMFLOW COMPLIANCE: Check if already initialized by JS before calling Plugin
+    // DREAMFLOW HARDENING: Ensure we don't call init if JS side already did
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp();
     }
     
-    // MICROTASK ESCAPE: Run service access in next tick to clear null checks
-    Future.delayed(const Duration(milliseconds: 50), () async {
-      try {
-        await FirebaseAuth.instance.signInAnonymously();
-        
-        // SYSTEM HEARTBEAT: Global tracking independent of project ID
-        await FirebaseFirestore.instance
-            .collection('artifacts')
-            .doc('system_status')
-            .collection('public')
-            .doc('data')
-            .collection('telemetry')
-            .doc('last_heartbeat')
-            .set({
-              'active_version': 'v11.75.36',
-              'timestamp': FieldValue.serverTimestamp(),
-              'status': 'HEALTHY'
-            }, SetOptions(merge: true));
-            
-        debugPrint("L2LAAF_BOOT: Heartbeat established.");
-      } catch (e) {
-        debugPrint("L2LAAF_BOOT_WARNING: Service sync delayed: $e");
-      }
-    });
+    // MICROTASK DELAY: Finalizing Bridge Attachment
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      
+      // SYSTEM HEARTBEAT: Write to independent system subcollection
+      await FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc('system_status')
+          .collection('public')
+          .doc('data')
+          .collection('telemetry')
+          .doc('last_heartbeat')
+          .set({
+            'version': 'v11.76.36',
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': 'OPERATIONAL',
+            'tenant_default': 'local2local-kaskflow'
+          }, SetOptions(merge: true));
+          
+      debugPrint("L2LAAF_BOOT: Heartbeat established.");
+    } catch (serviceError) {
+      debugPrint("L2LAAF_BOOT_WARNING: Post-init sync delayed: $serviceError");
+    }
 
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Plugin Handshake complete.");
   } catch (e) {
     errorMsg = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");
@@ -111,91 +99,6 @@ void main() async {
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
 final initErrorProvider = Provider<String?>((ref) => null);
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-enum L2LEnvironment { dev, staging, prod }
-
-class EnvironmentState {
-  final L2LEnvironment environment;
-  final String projectId;
-  final Color headerColor;
-  final String version;
-
-  EnvironmentState({
-    required this.environment,
-    required this.projectId,
-    required this.headerColor,
-    required this.version,
-  });
-
-  EnvironmentState copyWith({L2LEnvironment? environment}) {
-    final newEnv = environment ?? this.environment;
-    return EnvironmentState(
-      environment: newEnv,
-      projectId: _getProjectId(newEnv),
-      headerColor: _getHeaderColor(newEnv),
-      version: 'v11.75.36',
-    );
-  }
-
-  static String _getProjectId(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.staging: return 'local2local-staging';
-      case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-kaskflow'; // Defaulted to kaskflow per user subcollections
-    }
-  }
-
-  static Color _getHeaderColor(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.prod: return const Color(0xFFFF1744);
-      case L2LEnvironment.staging: return const Color(0xFFFF9100);
-      default: return const Color(0xFF1E1E2C);
-    }
-  }
-}
-
-class EnvironmentNotifier extends Notifier<EnvironmentState> {
-  @override
-  EnvironmentState build() {
-    return EnvironmentState(
-      environment: L2LEnvironment.dev,
-      projectId: 'local2local-kaskflow',
-      headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.75.36',
-    );
-  }
-
-  void setEnvironment(L2LEnvironment env, BuildContext context) async {
-    if (env == L2LEnvironment.prod) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('Entering LIVE production environment. Extreme caution required.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('ENTER PROD'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-    state = state.copyWith(environment: env);
-  }
-}
-
-final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
-  return EnvironmentNotifier();
-});
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
@@ -235,12 +138,12 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Map backend 'details' field to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization cycle logged.',
-      // SYNC: Map backend 'source' field to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      title: data['title'] as String? ?? 'System Event',
+      // SYNC: Backend writes 'details'. Legacy writes 'description'.
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
+      // SYNC: Backend writes 'source'. Legacy writes 'agent_name'.
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }
@@ -271,4 +174,89 @@ class EvolutionEventModel {
     return DateTime.now();
   }
 }
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum L2LEnvironment { dev, staging, prod }
+
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
+  final String version;
+
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+    required this.version,
+  });
+
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+      version: 'v11.76.36',
+    );
+  }
+
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.staging: return 'local2local-staging';
+      case L2LEnvironment.prod: return 'local2local-prod';
+      default: return 'local2local-kaskflow'; // User-verified default tenant
+    }
+  }
+
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return const Color(0xFFFF1744);
+      case L2LEnvironment.staging: return const Color(0xFFFF9100);
+      default: return const Color(0xFF1E1E2C);
+    }
+  }
+}
+
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-kaskflow',
+      headerColor: const Color(0xFF1E1E2C),
+      version: 'v11.76.36',
+    );
+  }
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
+          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
+  return EnvironmentNotifier();
+});
 L2LAAF_BLOCK_END

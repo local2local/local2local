@@ -34,12 +34,12 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Map backend 'details' field to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization cycle logged.',
-      // SYNC: Map backend 'source' field to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      title: data['title'] as String? ?? 'System Event',
+      // SYNC: Backend writes 'details'. Legacy writes 'description'.
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
+      // SYNC: Backend writes 'source'. Legacy writes 'agent_name'.
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }

@@ -12,40 +12,40 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Starting core v11.75.36...");
+    debugPrint("L2LAAF_BOOT: Starting Handshake v11.76.36...");
     
-    // DREAMFLOW COMPLIANCE: Check if already initialized by JS before calling Plugin
+    // DREAMFLOW HARDENING: Ensure we don't call init if JS side already did
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp();
     }
     
-    // MICROTASK ESCAPE: Run service access in next tick to clear null checks
-    Future.delayed(const Duration(milliseconds: 50), () async {
-      try {
-        await FirebaseAuth.instance.signInAnonymously();
-        
-        // SYSTEM HEARTBEAT: Global tracking independent of project ID
-        await FirebaseFirestore.instance
-            .collection('artifacts')
-            .doc('system_status')
-            .collection('public')
-            .doc('data')
-            .collection('telemetry')
-            .doc('last_heartbeat')
-            .set({
-              'active_version': 'v11.75.36',
-              'timestamp': FieldValue.serverTimestamp(),
-              'status': 'HEALTHY'
-            }, SetOptions(merge: true));
-            
-        debugPrint("L2LAAF_BOOT: Heartbeat established.");
-      } catch (e) {
-        debugPrint("L2LAAF_BOOT_WARNING: Service sync delayed: $e");
-      }
-    });
+    // MICROTASK DELAY: Finalizing Bridge Attachment
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      
+      // SYSTEM HEARTBEAT: Write to independent system subcollection
+      await FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc('system_status')
+          .collection('public')
+          .doc('data')
+          .collection('telemetry')
+          .doc('last_heartbeat')
+          .set({
+            'version': 'v11.76.36',
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': 'OPERATIONAL',
+            'tenant_default': 'local2local-kaskflow'
+          }, SetOptions(merge: true));
+          
+      debugPrint("L2LAAF_BOOT: Heartbeat established.");
+    } catch (serviceError) {
+      debugPrint("L2LAAF_BOOT_WARNING: Post-init sync delayed: $serviceError");
+    }
 
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Plugin Handshake complete.");
   } catch (e) {
     errorMsg = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");
