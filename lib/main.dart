@@ -8,22 +8,33 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   bool firebaseReady = false;
+  String? initMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.67.36...");
+    debugPrint("L2LAAF_BOOT: Initializing v11.68.36...");
     await Firebase.initializeApp();
-    await FirebaseAuth.instance.signInAnonymously();
-    firebaseReady = true;
-    debugPrint("L2LAAF_BOOT: Engine Synchronized.");
+    
+    // Auth Handshake
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      firebaseReady = true;
+      debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    } catch (authError) {
+      initMessage = "AUTH_DEGRADED: Using restricted guest access.";
+      debugPrint("L2LAAF_BOOT_WARNING: $authError");
+      firebaseReady = true; // Proceed with limited access
+    }
   } catch (e) {
+    initMessage = "INIT_ERROR: Firestore connectivity limited.";
     debugPrint("L2LAAF_BOOT_ERROR: $e");
-    // Resume boot even on error; the UI will handle the lack of data gracefully
+    firebaseReady = true; // Fallback: Allow UI to load even if Firebase is delayed
   }
 
   runApp(
     ProviderScope(
       overrides: [
         firebaseStatusProvider.overrideWith((ref) => firebaseReady),
+        bootMessageProvider.overrideWith((ref) => initMessage),
       ],
       child: const L2LAAFApp(),
     ),
@@ -31,3 +42,4 @@ void main() async {
 }
 
 final firebaseStatusProvider = Provider<bool>((ref) => false);
+final bootMessageProvider = Provider<String?>((ref) => null);

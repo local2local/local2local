@@ -1,63 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.67)
+L2LAAF Phase 36 Master Stabilization (v11.68)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_STABILIZE_FINAL:COMMIT_MSG)
-feat(evolution): nuclear cache-bust and Dreamflow-aligned data sync v11.67
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
-{
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "source": "/index.html",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/flutter_service_worker.js",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      },
-      {
-        "source": "/version.json",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-        ]
-      }
-    ]
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firestore-debug.log",
-        "ui-debug.log"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
-    }
-  ]
-}
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_LOADER_FIX:COMMIT_MSG)
+feat(evolution): resolve infinite loader and stabilize Dreamflow boot sequence v11.68
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -68,21 +13,21 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Firebase SDK Compat Loaders (v10.7.1) -->
+  <!-- Firebase SDKs: Dreamflow Standard (v10.7.1) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   
-  <!-- Reserved Hosting URL for Automatic Config -->
+  <!-- Automatically provided by Firebase Hosting reserved URLs -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    console.log("L2LAAF_CACHE_BUST: v11.67.36");
-    console.log("Handshake: " + (typeof firebase !== 'undefined' ? "Ready" : "Pending"));
+    window.L2LAAF_VERSION = "v11.68.36";
+    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
   </script>
 </head>
 <body>
-  <!-- Non-async script ensures Firebase is ready before Flutter engine kicks in -->
+  <!-- Synchronous bootstrap ensures Firebase is initialized before main.dart -->
   <script src="flutter_bootstrap.js"></script>
 </body>
 </html>
@@ -99,22 +44,33 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   bool firebaseReady = false;
+  String? initMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.67.36...");
+    debugPrint("L2LAAF_BOOT: Initializing v11.68.36...");
     await Firebase.initializeApp();
-    await FirebaseAuth.instance.signInAnonymously();
-    firebaseReady = true;
-    debugPrint("L2LAAF_BOOT: Engine Synchronized.");
+    
+    // Auth Handshake
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+      firebaseReady = true;
+      debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    } catch (authError) {
+      initMessage = "AUTH_DEGRADED: Using restricted guest access.";
+      debugPrint("L2LAAF_BOOT_WARNING: $authError");
+      firebaseReady = true; // Proceed with limited access
+    }
   } catch (e) {
+    initMessage = "INIT_ERROR: Firestore connectivity limited.";
     debugPrint("L2LAAF_BOOT_ERROR: $e");
-    // Resume boot even on error; the UI will handle the lack of data gracefully
+    firebaseReady = true; // Fallback: Allow UI to load even if Firebase is delayed
   }
 
   runApp(
     ProviderScope(
       overrides: [
         firebaseStatusProvider.overrideWith((ref) => firebaseReady),
+        bootMessageProvider.overrideWith((ref) => initMessage),
       ],
       child: const L2LAAFApp(),
     ),
@@ -122,6 +78,7 @@ void main() async {
 }
 
 final firebaseStatusProvider = Provider<bool>((ref) => false);
+final bootMessageProvider = Provider<String?>((ref) => null);
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
@@ -161,12 +118,11 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Event',
-      // SYNC: Support both 'details' (v2 backend) and 'description' (legacy/v1)
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Trace recorded.',
-      // SYNC: Support both 'source' (v2 backend) and 'agent_name' (legacy)
+      title: data['title'] as String? ?? 'Evolution Event',
+      // Business Requirement: backend writes to 'details'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
+      // Business Requirement: backend writes to 'source'
       agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      // SYNC: Support both snake_case and camelCase for boolean
       isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -217,17 +173,18 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for verification
+  int _selectedIndex = 3; // Default to Evolution for P36 verification
 
   @override
   Widget build(BuildContext context) {
     final isReady = ref.watch(firebaseStatusProvider);
+    final bootMsg = ref.watch(bootMessageProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
       body: Row(
         children: [
-          // SIDE NAVIGATION BAR
+          // SIDE NAVIGATION
           Container(
             width: 72,
             color: const Color(0xFF16162A),
@@ -256,6 +213,13 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             child: Column(
               children: [
                 const CockpitHeader(),
+                if (bootMsg != null)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.orangeAccent.withValues(alpha: 0.1),
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                    child: Text(bootMsg, style: const TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
                 Expanded(
                   child: !isReady 
                     ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
@@ -328,8 +292,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Log Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Tracing active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -360,11 +324,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Autonomous logic logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
