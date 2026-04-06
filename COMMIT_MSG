@@ -1,1 +1,1 @@
-fix(evolution): simplify config workflow by re-integrating firebase_options v11.84
+fix(evolution): integrate verified firebase_options and finalize Phase 36 v11.86

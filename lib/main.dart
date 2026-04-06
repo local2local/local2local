@@ -13,16 +13,16 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.84.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.86.36...");
     
-    // Auth-init via compiled options (Modular Bridge)
+    // Auth-init via authoritative compiled options
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
     await FirebaseAuth.instance.signInAnonymously();
     
-    // HEARTBEAT: Telemetry verify system-level subcollection
+    // HEARTBEAT: Telemetry verification via system-level anchor
     await FirebaseFirestore.instance
         .collection('artifacts')
         .doc('system_status')
@@ -31,10 +31,10 @@ void main() async {
         .collection('telemetry')
         .doc('last_heartbeat')
         .set({
-          'version': 'v11.84.36',
+          'version': 'v11.86.36',
           'timestamp': FieldValue.serverTimestamp(),
           'status': 'OPERATIONAL',
-          'bridge': 'MODULAR_V10'
+          'bridge': 'MODULAR_V10_STABLE'
         }, SetOptions(merge: true));
 
     initialized = true;

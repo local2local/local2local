@@ -9,12 +9,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA88...', // PASTE YOUR VALID API KEY HERE
-    authDomain: 'local2local-dev.firebaseapp.com',
+    apiKey: 'AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8',
+    appId: '1:849010982119:web:f5af08a3214393b0943642',
+    messagingSenderId: '849010982119',
     projectId: 'local2local-dev',
-    storageBucket: 'local2local-dev.appspot.com',
-    messagingSenderId: '24933902371',
-    appId: '1:24933902371:web:5d2a71f084be7b7f1604a3',
-    measurementId: 'G-74X1J2J8N7',
+    authDomain: 'local2local-dev.firebaseapp.com',
+    storageBucket: 'local2local-dev.firebasestorage.app',
+    measurementId: 'G-7KYLQM8T4C',
   );
 }
