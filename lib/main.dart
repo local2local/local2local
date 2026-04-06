@@ -11,18 +11,10 @@ void main() async {
   String? errorMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing v11.69.36...");
+    debugPrint("L2LAAF_BOOT: Initializing v11.70.36 via automatic config...");
     
-    // Explicit check to avoid Null check operator crash on web
-    await Firebase.initializeApp(
-      // Optional: If init.js fails, these are the dev project fallbacks
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyB...", // Placeholder - hosting usually handles this
-        appId: "1:24933902371:web:...", 
-        messagingSenderId: "24933902371",
-        projectId: "local2local-dev",
-      ),
-    );
+    // Dreamflow Pattern: No options passed on web to use Hosting auto-init
+    await Firebase.initializeApp();
     
     await FirebaseAuth.instance.signInAnonymously();
     initialized = true;

@@ -1,1 +1,1 @@
-feat(evolution): implement Dreamflow-safe bootstrap and explicit Firebase config v11.69
+feat(evolution): restore automatic Firebase config and fix API key validation v11.70

@@ -35,11 +35,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details' field
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization committed.',
-      // SYNC: Backend writes agent ID to 'source' field
-      agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      // SYNC: Backend writes rule summaries to 'details'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
+      // SYNC: Backend writes agent ID to 'source'
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }

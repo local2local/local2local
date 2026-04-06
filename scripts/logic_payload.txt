@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.69)
+L2LAAF Phase 36 Master Stabilization (v11.70)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_SYNC_BOOT:COMMIT_MSG)
-feat(evolution): implement Dreamflow-safe bootstrap and explicit Firebase config v11.69
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_API_KEY:COMMIT_MSG)
+feat(evolution): restore automatic Firebase config and fix API key validation v11.70
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -13,14 +13,16 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
+  <!-- Firebase SDKs: Standard Dreamflow Compat (v10.7.1) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   
+  <!-- Automatic Config Injection provided by Firebase Hosting -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.69.36";
+    window.L2LAAF_VERSION = "v11.70.36";
     console.log("L2LAAF_BOOT_START: " + window.L2LAAF_VERSION);
     
     // Safety Guard: Wait for Firebase JS to be ready before starting Flutter
@@ -38,7 +40,8 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   </script>
 </head>
 <body onload="startApp()">
-  </body>
+  <!-- App will be injected here by startApp() -->
+</body>
 </html>
 L2LAAF_BLOCK_END
 
@@ -56,18 +59,10 @@ void main() async {
   String? errorMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing v11.69.36...");
+    debugPrint("L2LAAF_BOOT: Initializing v11.70.36 via automatic config...");
     
-    // Explicit check to avoid Null check operator crash on web
-    await Firebase.initializeApp(
-      // Optional: If init.js fails, these are the dev project fallbacks
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyB...", // Placeholder - hosting usually handles this
-        appId: "1:24933902371:web:...", 
-        messagingSenderId: "24933902371",
-        projectId: "local2local-dev",
-      ),
-    );
+    // Dreamflow Pattern: No options passed on web to use Hosting auto-init
+    await Firebase.initializeApp();
     
     await FirebaseAuth.instance.signInAnonymously();
     initialized = true;
@@ -90,40 +85,6 @@ void main() async {
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
 final initErrorProvider = Provider<String?>((ref) => null);
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:CORE_APP:lib/core/app.dart)
-import 'package:flutter/material.dart';
-import 'package:local2local/features/triage_hub/presentation/pages/cockpit_shell.dart';
-
-class L2LAAFApp extends StatelessWidget {
-  const L2LAAFApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'L2LAAF Cockpit',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F1E),
-      ),
-      // Dreamflow Pattern: Standard error boundary
-      builder: (context, child) {
-        ErrorWidget.builder = (details) => Container(
-          alignment: Alignment.center,
-          color: const Color(0xFF0F0F1E),
-          child: Text(
-            'L2LAAF RUNTIME ERROR: ${details.exception}',
-            style: const TextStyle(color: Colors.redAccent, fontSize: 10),
-            textAlign: TextAlign.center,
-          ),
-        );
-        return child!;
-      },
-      home: const CockpitShell(),
-    );
-  }
-}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
@@ -164,11 +125,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details' field
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization committed.',
-      // SYNC: Backend writes agent ID to 'source' field
-      agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
+      // SYNC: Backend writes rule summaries to 'details'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
+      // SYNC: Backend writes agent ID to 'source'
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
+      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }
@@ -260,7 +221,15 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 const CockpitHeader(),
                 Expanded(
                   child: error != null 
-                    ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text('BOOT ERROR: $error', 
+                            style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      )
                     : !isReady 
                         ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
                         : _buildBody(),
@@ -319,7 +288,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection(coll)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -352,7 +323,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('evolution_timeline')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Timeline Connection failed", style: const TextStyle(color: Colors.redAccent, fontSize: 10)));
+
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -363,10 +336,12 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
