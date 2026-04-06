@@ -49,6 +49,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                       padding: const EdgeInsets.only(bottom: 24),
                       child: IconButton(
                         icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                        tooltip: 'Sign Out',
                         onPressed: () => FirebaseAuth.instance.signOut(),
                       ),
                     ),
@@ -81,25 +82,42 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildLoginGate() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.lock_outline, color: Colors.white24, size: 64),
-          const SizedBox(height: 24),
-          const Text('L2LAAF COCKPIT ACCESS RESTRICTED', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Please sign in via the Identity Provider to continue.', style: TextStyle(color: Colors.white38, fontSize: 12)),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () {
-              // Trigger login flow or display message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Redirecting to Identity Provider...'))
-              );
-            },
-            child: const Text('SIGN IN'),
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shield_outlined, color: Colors.blueAccent, size: 64),
+            const SizedBox(height: 24),
+            const Text('L2LAAF COCKPIT', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+            const SizedBox(height: 12),
+            const Text('ACCESS CONTROLLED ENVIRONMENT', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 48),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  try {
+                    final provider = GoogleAuthProvider();
+                    await FirebaseAuth.instance.signInWithPopup(provider);
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Sign-in failed: $e'), backgroundColor: Colors.redAccent)
+                    );
+                  }
+                },
+                child: const Text('SIGN IN WITH IDENTITY PROVIDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -148,10 +166,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('public')
           .doc('data')
           .collection(coll)
+          .limit(50)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+        if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
         
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
@@ -162,15 +181,18 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           itemBuilder: (ctx, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             
-            // Flexible Mapping for different telemetry modules
-            final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['correlation_id'] ?? 'Record';
-            final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? 'Trace Active';
+            // DYNAMIC MAPPING: capturing fields common to Health, Fleet, and Triage
+            final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
+            final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
+            final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
 
             return Card(
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: ListTile(
-                title: Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                leading: Icon(Icons.circle, color: statusColor, size: 10),
+                title: Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                 subtitle: Text(displaySub, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: data['timestamp'] != null ? Text(_formatTs(data['timestamp']), style: const TextStyle(color: Colors.white10, fontSize: 10)) : null,
               ),
@@ -179,6 +201,14 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
         );
       },
     );
+  }
+
+  Color _getColorForStatus(dynamic status) {
+    final s = status.toString().toLowerCase();
+    if (s.contains('error') || s.contains('failed') || s.contains('critical')) return Colors.redAccent;
+    if (s.contains('warn')) return Colors.orangeAccent;
+    if (s.contains('healthy') || s.contains('ok') || s.contains('success')) return Colors.greenAccent;
+    return Colors.blueAccent;
   }
 
   String _formatTs(dynamic ts) {
@@ -206,7 +236,13 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  _buildAdminBadge(),
+                ],
+              ),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
@@ -221,6 +257,18 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
         );
       },
     );
+  }
+
+  Widget _buildAdminBadge() {
+    return Consumer(builder: (context, ref, child) {
+      final isAdmin = ref.watch(isAdminProvider).value ?? false;
+      if (!isAdmin) return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))),
+        child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+      );
+    });
   }
 
   Widget _buildTimelineCard(EvolutionEventModel event) {
@@ -269,6 +317,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           Icon(icon, size: 48, color: Colors.white10),
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('Waiting for data feed...', style: TextStyle(color: Colors.white10, fontSize: 10)),
         ],
       ),
     );

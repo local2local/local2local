@@ -1,1 +1,1 @@
-feat(cockpit): implement identity-based auth, custom claims, and data-link restoration v11.88
+feat(cockpit): active Identity Provider login, claim enforcement, and telemetry data-link v11.89

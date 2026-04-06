@@ -34,10 +34,10 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Event',
-      // SYNC: Backend writes 'details'. Legacy writes 'description'.
+      title: data['title'] as String? ?? 'System Evolution Event',
+      // SYNC: Backend writes rule summaries to 'details' (HBR_EVO style)
       description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
-      // SYNC: Backend writes 'source'. Legacy writes 'agent_name'.
+      // SYNC: Backend writes agent ID to 'source' (EVOLUTION_WORKER style)
       agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
       isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
@@ -47,6 +47,7 @@ class EvolutionEventModel {
   String get timeDisplay {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
+
     if (diff.inMinutes < 1) return 'Just Now';
     if (diff.inHours < 1) return '${diff.inMinutes}m ago';
     if (diff.inDays < 1) return '${diff.inHours}h ago';
