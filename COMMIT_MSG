@@ -1,1 +1,1 @@
-fix(evolution): resolve split deployment and handle admin-restricted-auth error v11.87
+feat(cockpit): implement identity-based auth, custom claims, and data-link restoration v11.88

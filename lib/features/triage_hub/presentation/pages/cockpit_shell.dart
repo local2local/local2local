@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
@@ -14,62 +15,89 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for P36 verification
+  int _selectedIndex = 3;
 
   @override
   Widget build(BuildContext context) {
     final isReady = ref.watch(firebaseReadyProvider);
     final error = ref.watch(initErrorProvider);
+    final authState = ref.watch(authStateProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
-      body: Row(
+      body: authState.when(
+        data: (user) {
+          if (user == null) return _buildLoginGate();
+          
+          return Row(
+            children: [
+              // SIDE NAVIGATION
+              Container(
+                width: 72,
+                color: const Color(0xFF16162A),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    const Icon(Icons.blur_on, color: Colors.greenAccent, size: 32),
+                    const SizedBox(height: 48),
+                    _buildNavItem(0, Icons.list_alt, 'Triage'),
+                    _buildNavItem(1, Icons.grid_view, 'Health'),
+                    _buildNavItem(2, Icons.directions_car, 'Fleet'),
+                    _buildNavItem(3, Icons.psychology, 'Evolution'),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: IconButton(
+                        icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                        onPressed: () => FirebaseAuth.instance.signOut(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // MAIN CONTENT
+              Expanded(
+                child: Column(
+                  children: [
+                    const CockpitHeader(),
+                    Expanded(
+                      child: error != null 
+                        ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
+                        : !isReady 
+                            ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+                            : _buildBody(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('AUTH ERROR: $err', style: const TextStyle(color: Colors.redAccent))),
+      ),
+    );
+  }
+
+  Widget _buildLoginGate() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // SIDE NAVIGATION
-          Container(
-            width: 72,
-            color: const Color(0xFF16162A),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                const Icon(Icons.blur_on, color: Colors.greenAccent, size: 32),
-                const SizedBox(height: 48),
-                _buildNavItem(0, Icons.list_alt, 'Triage'),
-                _buildNavItem(1, Icons.grid_view, 'Health'),
-                _buildNavItem(2, Icons.directions_car, 'Fleet'),
-                _buildNavItem(3, Icons.psychology, 'Evolution'),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
-                  onPressed: () {},
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-          // MAIN CONTENT AREA
-          Expanded(
-            child: Column(
-              children: [
-                const CockpitHeader(),
-                Expanded(
-                  child: error != null 
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text(
-                            'BOOT ERROR: $error',
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                    : !isReady 
-                        ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-                        : _buildBody(),
-                ),
-              ],
-            ),
+          const Icon(Icons.lock_outline, color: Colors.white24, size: 64),
+          const SizedBox(height: 24),
+          const Text('L2LAAF COCKPIT ACCESS RESTRICTED', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('Please sign in via the Identity Provider to continue.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () {
+              // Trigger login flow or display message
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Redirecting to Identity Provider...'))
+              );
+            },
+            child: const Text('SIGN IN'),
           ),
         ],
       ),
@@ -123,6 +151,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -131,18 +161,29 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           itemCount: docs.length,
           itemBuilder: (ctx, i) {
             final data = docs[i].data() as Map<String, dynamic>;
+            
+            // Flexible Mapping for different telemetry modules
+            final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['correlation_id'] ?? 'Record';
+            final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? 'Trace Active';
+
             return Card(
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                title: Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(displaySub, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: data['timestamp'] != null ? Text(_formatTs(data['timestamp']), style: const TextStyle(color: Colors.white10, fontSize: 10)) : null,
               ),
             );
           },
         );
       },
     );
+  }
+
+  String _formatTs(dynamic ts) {
+    if (ts is Timestamp) return "${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}";
+    return "";
   }
 
   Widget _buildEvolutionTimeline(String appId) {

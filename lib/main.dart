@@ -9,59 +9,28 @@ import 'package:local2local/firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  bool initialized = false;
-  String? errorMsg;
+  bool coreReady = false;
+  String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.87.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Identity Engine v11.88.36...");
     
-    // Auth-init via authoritative compiled options
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    try {
-      debugPrint("L2LAAF_BOOT: Signing in anonymously...");
-      await FirebaseAuth.instance.signInAnonymously();
-      
-      // HEARTBEAT: Only written if Auth succeeds
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('system_status')
-          .collection('public')
-          .doc('data')
-          .collection('telemetry')
-          .doc('last_heartbeat')
-          .set({
-            'version': 'v11.87.36',
-            'timestamp': FieldValue.serverTimestamp(),
-            'status': 'OPERATIONAL',
-            'bridge': 'MODULAR_V10_STABLE'
-          }, SetOptions(merge: true));
-      
-      debugPrint("L2LAAF_BOOT: System Ready.");
-      initialized = true;
-    } on FirebaseAuthException catch (authE) {
-      // Handle 'admin-restricted-operation' gracefully
-      if (authE.code == 'admin-restricted-operation') {
-        errorMsg = "AUTH ERROR: Anonymous Sign-in is disabled in Firebase Console.";
-      } else {
-        errorMsg = "AUTH ERROR: ${authE.message}";
-      }
-      debugPrint("L2LAAF_BOOT_AUTH_FAIL: ${authE.code} - ${authE.message}");
-      // We set initialized to true anyway so the UI loads in 'degraded' mode
-      initialized = true; 
-    }
+    coreReady = true;
+    debugPrint("L2LAAF_BOOT: Firebase Core Ready.");
   } catch (e) {
-    errorMsg = "BOOT FATAL: $e";
+    bootError = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
   runApp(
     ProviderScope(
       overrides: [
-        firebaseReadyProvider.overrideWith((ref) => initialized),
-        initErrorProvider.overrideWith((ref) => errorMsg),
+        firebaseReadyProvider.overrideWith((ref) => coreReady),
+        initErrorProvider.overrideWith((ref) => bootError),
       ],
       child: const L2LAAFApp(),
     ),
@@ -70,3 +39,15 @@ void main() async {
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
 final initErrorProvider = Provider<String?>((ref) => null);
+
+// Provider to track the current user and their claims
+final authStateProvider = StreamProvider<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
+
+final isAdminProvider = FutureProvider<bool>((ref) async {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return false;
+  final idToken = await user.getIdTokenResult();
+  return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
+});
