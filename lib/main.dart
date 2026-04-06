@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/core/app.dart';
 import 'package:local2local/firebase_options.dart';
 
@@ -13,7 +12,7 @@ void main() async {
   String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.90.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.91.36...");
     
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

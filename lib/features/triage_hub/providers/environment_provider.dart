@@ -22,7 +22,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.90.36',
+      version: 'v11.91.36',
     );
   }
 
@@ -50,7 +50,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.90.36',
+      version: 'v11.91.36',
     );
   }
 

@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.90)
+L2LAAF Phase 36 Master Stabilization (v11.91)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(cockpit): implement Email/Password authentication and credential-gate v11.90
+fix(evolution): resolve lint warnings for unused imports and members v11.91
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/core/app.dart';
 import 'package:local2local/firebase_options.dart';
 
@@ -21,7 +20,7 @@ void main() async {
   String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.90.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.91.36...");
     
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -60,6 +59,29 @@ final isAdminProvider = FutureProvider<bool>((ref) async {
   final idToken = await user.getIdTokenResult(true); 
   return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
 });
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(dart:FIREBASE_OPTIONS:lib/firebase_options.dart)
+// File managed by L2LAAF Assistant.
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+class DefaultFirebaseOptions {
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) return web;
+    throw UnsupportedError('DefaultFirebaseOptions are not supported for this platform.');
+  }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8',
+    appId: '1:849010982119:web:f5af08a3214393b0943642',
+    messagingSenderId: '849010982119',
+    projectId: 'local2local-dev',
+    authDomain: 'local2local-dev.firebaseapp.com',
+    storageBucket: 'local2local-dev.firebasestorage.app',
+    measurementId: 'G-7KYLQM8T4C',
+  );
+}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:COCKPIT_SHELL:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
@@ -472,7 +494,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.90.36',
+      version: 'v11.91.36',
     );
   }
 
@@ -500,7 +522,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.90.36',
+      version: 'v11.91.36',
     );
   }
 
