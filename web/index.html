@@ -5,20 +5,16 @@
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Standard Firebase SDKs for Dreamflow Compliance -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  
-  <!-- Automatic Environment Configuration -->
-  <script src="/__/firebase/init.js"></script>
+  <!-- ✅ MODULAR SDK MIGRATION -->
+  <!-- External script tags for Firebase are removed to prevent namespace collisions. -->
+  <!-- FlutterFire 3.x+ manages JS loading internally. -->
 
   <script>
-    window.L2LAAF_BUILD = "v11.76.36";
-    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_BUILD);
+    window.L2LAAF_BUILD = "v11.78.36";
+    console.log("L2LAAF_BOOT: Modular Engine " + window.L2LAAF_BUILD);
   </script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

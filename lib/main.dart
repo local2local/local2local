@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/core/app.dart';
+import 'package:local2local/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,40 +13,32 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Starting Handshake v11.76.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Modular SDK v11.78.36...");
     
-    // DREAMFLOW HARDENING: Ensure we don't call init if JS side already did
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp();
-    }
+    // Auth-init via compiled options (removes browser JS race condition)
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     
-    // MICROTASK DELAY: Finalizing Bridge Attachment
-    await Future.delayed(const Duration(milliseconds: 100));
+    // Services are safe to call immediately after the await above
+    await FirebaseAuth.instance.signInAnonymously();
     
-    try {
-      await FirebaseAuth.instance.signInAnonymously();
-      
-      // SYSTEM HEARTBEAT: Write to independent system subcollection
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('system_status')
-          .collection('public')
-          .doc('data')
-          .collection('telemetry')
-          .doc('last_heartbeat')
-          .set({
-            'version': 'v11.76.36',
-            'timestamp': FieldValue.serverTimestamp(),
-            'status': 'OPERATIONAL',
-            'tenant_default': 'local2local-kaskflow'
-          }, SetOptions(merge: true));
-          
-      debugPrint("L2LAAF_BOOT: Heartbeat established.");
-    } catch (serviceError) {
-      debugPrint("L2LAAF_BOOT_WARNING: Post-init sync delayed: $serviceError");
-    }
+    // HEARTBEAT: Global tracking independent of tenant project ID
+    await FirebaseFirestore.instance
+        .collection('artifacts')
+        .doc('system_status')
+        .collection('public')
+        .doc('data')
+        .collection('telemetry')
+        .doc('last_heartbeat')
+        .set({
+          'version': 'v11.78.36',
+          'timestamp': FieldValue.serverTimestamp(),
+          'status': 'OPERATIONAL'
+        }, SetOptions(merge: true));
 
     initialized = true;
+    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
   } catch (e) {
     errorMsg = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");

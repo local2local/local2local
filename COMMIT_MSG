@@ -1,1 +1,1 @@
-fix(evolution): resolve boot null-check and synchronize backend-to-ui data mapping v11.76
+fix(evolution): finalize modular SDK migration and align dev project config v11.78
