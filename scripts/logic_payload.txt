@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.61)
+L2LAAF Phase 36 Master Stabilization (v11.62)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_NULL_CHECK:COMMIT_MSG)
-feat(evolution): resolve Firebase init null-check error and harden web bootstrap v11.61
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_SDK_LINK:COMMIT_MSG)
+feat(evolution): use reserved hosting URLs for Firebase SDKs to resolve boot failure v11.62
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
@@ -122,18 +122,19 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Standard Firebase SDKs for Flutter Web initialization -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- Firebase SDKs using Reserved Hosting URLs (v10.7.1) -->
+  <script src="/__/firebase/10.7.1/firebase-app-compat.js"></script>
+  <script src="/__/firebase/10.7.1/firebase-auth-compat.js"></script>
+  <script src="/__/firebase/10.7.1/firebase-firestore-compat.js"></script>
   
-  <!-- Automatically provides config if deployed to Firebase Hosting -->
+  <!-- Automatic Config Injection -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
+    window.L2LAAF_VERSION = "v11.62.36";
     console.log("=========================================");
-    console.log("L2LAAF_HTML_ENTRY_LOADED: v11.61.36");
-    console.log("Environment: Bootstrap Verification");
+    console.log("L2LAAF_HTML_ENTRY_LOADED: " + window.L2LAAF_VERSION);
+    console.log("Firebase Status: " + (typeof firebase !== 'undefined' ? "SDK Detected" : "SDK MISSING"));
     console.log("=========================================");
   </script>
 </head>
@@ -148,6 +149,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:js' as js;
 import 'package:local2local/core/app.dart';
 
 void main() async {
@@ -157,21 +159,27 @@ void main() async {
   String? initError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Starting Firebase Handshake v11.61.36...");
+    debugPrint("L2LAAF_BOOT: Checking JS Environment v11.62.36...");
     
-    // Attempting standard initialization. 
-    // If this fails with Null check, it means the window.firebase object is missing.
+    // Explicitly check for the 'firebase' object in the JS context
+    final hasFirebase = js.context.hasProperty('firebase');
+    
+    if (!hasFirebase) {
+      throw "FIREBASE_JS_NOT_FOUND: The global 'firebase' object is missing. The index.html scripts failed to execute.";
+    }
+
+    debugPrint("L2LAAF_BOOT: Initializing FlutterFire Core...");
     await Firebase.initializeApp();
     
-    debugPrint("L2LAAF_BOOT: Handshaking with Auth Service...");
+    debugPrint("L2LAAF_BOOT: Authenticating Anonymously...");
     await FirebaseAuth.instance.signInAnonymously();
     
     initialized = true;
-    debugPrint("L2LAAF_BOOT: System Ready.");
+    debugPrint("L2LAAF_BOOT: Handshake Success.");
   } catch (e) {
     initError = e.toString();
     if (initError.contains("Null check operator")) {
-      initError = "FIREBASE_JS_SDK_MISSING: The browser failed to load the required Firebase scripts. Please check your network or refresh the page.";
+      initError = "FIREBASE_DART_BRIDGE_FAILURE: The Dart plugin failed to find the initialized JS app. This is likely a caching conflict.";
     }
     debugPrint("L2LAAF_BOOT_FATAL: $initError");
   }
@@ -186,43 +194,45 @@ void main() async {
         : MaterialApp(
             debugShowCheckedModeBanner: false,
             home: Scaffold(
-              backgroundColor: const Color(0xFF1E1E2C),
+              backgroundColor: const Color(0xFF0F0F1E),
               body: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(48),
+                  padding: const EdgeInsets.all(40),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, size: 80, color: Color(0xFFFF5252)),
+                      const Icon(Icons.webhook, size: 80, color: Colors.blueAccent),
                       const SizedBox(height: 32),
                       const Text(
-                        "SYSTEM BOOT FAILURE", 
+                        "L2LAAF BOOT ERROR", 
                         style: TextStyle(
                           color: Colors.white, 
-                          fontSize: 18, 
+                          fontSize: 16, 
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 2
+                          letterSpacing: 3
                         )
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.black26,
-                          borderRadius: BorderRadius.circular(8)
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10)
                         ),
                         child: Text(
-                          initError ?? "Initialization Timeout", 
+                          initError ?? "Connection Refused", 
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5)
+                          style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.6, fontFamily: 'monospace')
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text("RETRY CONNECTION"),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      const SizedBox(height: 40),
+                      TextButton.icon(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text("RETRY ENGINE START"),
                         onPressed: () => main(),
+                        style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
                       ),
                     ],
                   ),
@@ -350,7 +360,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Error loading $title", style: const TextStyle(color: Colors.redAccent)));
+        if (snapshot.hasError) return Center(child: Text("Data Stream Error", style: const TextStyle(color: Colors.redAccent, fontSize: 12)));
         
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
@@ -364,8 +374,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace active', style: const TextStyle(color: Colors.white54)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -385,7 +395,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return const Center(child: Text("Timeline connection error", style: TextStyle(color: Colors.redAccent)));
+        if (snapshot.hasError) return const Center(child: Text("Timeline connection failed", style: TextStyle(color: Colors.redAccent, fontSize: 12)));
         
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
@@ -397,10 +407,12 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),

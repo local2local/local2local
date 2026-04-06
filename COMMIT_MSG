@@ -1,1 +1,1 @@
-feat(evolution): resolve Firebase init null-check error and harden web bootstrap v11.61
+feat(evolution): use reserved hosting URLs for Firebase SDKs to resolve boot failure v11.62

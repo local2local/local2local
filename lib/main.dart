@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:js' as js;
 import 'package:local2local/core/app.dart';
 
 void main() async {
@@ -11,21 +12,27 @@ void main() async {
   String? initError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Starting Firebase Handshake v11.61.36...");
+    debugPrint("L2LAAF_BOOT: Checking JS Environment v11.62.36...");
     
-    // Attempting standard initialization. 
-    // If this fails with Null check, it means the window.firebase object is missing.
+    // Explicitly check for the 'firebase' object in the JS context
+    final hasFirebase = js.context.hasProperty('firebase');
+    
+    if (!hasFirebase) {
+      throw "FIREBASE_JS_NOT_FOUND: The global 'firebase' object is missing. The index.html scripts failed to execute.";
+    }
+
+    debugPrint("L2LAAF_BOOT: Initializing FlutterFire Core...");
     await Firebase.initializeApp();
     
-    debugPrint("L2LAAF_BOOT: Handshaking with Auth Service...");
+    debugPrint("L2LAAF_BOOT: Authenticating Anonymously...");
     await FirebaseAuth.instance.signInAnonymously();
     
     initialized = true;
-    debugPrint("L2LAAF_BOOT: System Ready.");
+    debugPrint("L2LAAF_BOOT: Handshake Success.");
   } catch (e) {
     initError = e.toString();
     if (initError.contains("Null check operator")) {
-      initError = "FIREBASE_JS_SDK_MISSING: The browser failed to load the required Firebase scripts. Please check your network or refresh the page.";
+      initError = "FIREBASE_DART_BRIDGE_FAILURE: The Dart plugin failed to find the initialized JS app. This is likely a caching conflict.";
     }
     debugPrint("L2LAAF_BOOT_FATAL: $initError");
   }
@@ -40,43 +47,45 @@ void main() async {
         : MaterialApp(
             debugShowCheckedModeBanner: false,
             home: Scaffold(
-              backgroundColor: const Color(0xFF1E1E2C),
+              backgroundColor: const Color(0xFF0F0F1E),
               body: Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(48),
+                  padding: const EdgeInsets.all(40),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, size: 80, color: Color(0xFFFF5252)),
+                      const Icon(Icons.webhook, size: 80, color: Colors.blueAccent),
                       const SizedBox(height: 32),
                       const Text(
-                        "SYSTEM BOOT FAILURE", 
+                        "L2LAAF BOOT ERROR", 
                         style: TextStyle(
                           color: Colors.white, 
-                          fontSize: 18, 
+                          fontSize: 16, 
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 2
+                          letterSpacing: 3
                         )
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.black26,
-                          borderRadius: BorderRadius.circular(8)
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10)
                         ),
                         child: Text(
-                          initError ?? "Initialization Timeout", 
+                          initError ?? "Connection Refused", 
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5)
+                          style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.6, fontFamily: 'monospace')
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.refresh),
-                        label: const Text("RETRY CONNECTION"),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      const SizedBox(height: 40),
+                      TextButton.icon(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text("RETRY ENGINE START"),
                         onPressed: () => main(),
+                        style: TextButton.styleFrom(foregroundColor: Colors.blueAccent),
                       ),
                     ],
                   ),
