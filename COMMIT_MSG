@@ -1,1 +1,1 @@
-feat(cockpit): active Identity Provider login, claim enforcement, and telemetry data-link v11.89
+feat(cockpit): implement Email/Password authentication and credential-gate v11.90

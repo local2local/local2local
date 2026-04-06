@@ -13,7 +13,7 @@ void main() async {
   String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Identity Engine v11.89.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.90.36...");
     
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -45,10 +45,10 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
 });
 
-// Admin/Operator claim check
+// Admin/Operator claim check - stays valid for email users
 final isAdminProvider = FutureProvider<bool>((ref) async {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return false;
-  final idToken = await user.getIdTokenResult(true); // Force refresh to catch claim updates
+  final idToken = await user.getIdTokenResult(true); 
   return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
 });

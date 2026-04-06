@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.89)
+L2LAAF Phase 36 Master Stabilization (v11.90)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(cockpit): active Identity Provider login, claim enforcement, and telemetry data-link v11.89
+feat(cockpit): implement Email/Password authentication and credential-gate v11.90
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
@@ -21,7 +21,7 @@ void main() async {
   String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Identity Engine v11.89.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.90.36...");
     
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -53,11 +53,11 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
 });
 
-// Admin/Operator claim check
+// Admin/Operator claim check - stays valid for email users
 final isAdminProvider = FutureProvider<bool>((ref) async {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return false;
-  final idToken = await user.getIdTokenResult(true); // Force refresh to catch claim updates
+  final idToken = await user.getIdTokenResult(true); 
   return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
 });
 L2LAAF_BLOCK_END
@@ -81,6 +81,16 @@ class CockpitShell extends ConsumerStatefulWidget {
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
   int _selectedIndex = 3;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoggingIn = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,33 +167,79 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             const SizedBox(height: 24),
             const Text('L2LAAF COCKPIT', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
             const SizedBox(height: 12),
-            const Text('ACCESS CONTROLLED ENVIRONMENT', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            const Text('CREDENTIAL ACCESS REQUIRED', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
             const SizedBox(height: 48),
+            
+            TextField(
+              controller: _emailController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Email address',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Password',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
+              ),
+            ),
+            const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () async {
-                  try {
-                    final provider = GoogleAuthProvider();
-                    await FirebaseAuth.instance.signInWithPopup(provider);
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Sign-in failed: $e'), backgroundColor: Colors.redAccent)
-                    );
-                  }
-                },
-                child: const Text('SIGN IN WITH IDENTITY PROVIDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                onPressed: _isLoggingIn ? null : _handleLogin,
+                child: _isLoggingIn 
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('AUTHORIZE ACCESS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _handleLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showError('Email and Password are required.');
+      return;
+    }
+
+    setState(() => _isLoggingIn = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (e) {
+      _showError(e.message ?? 'Authentication failed.');
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent)
     );
   }
 
@@ -391,78 +447,87 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 }
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
+L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum EvolutionEventType {
-  criticalIntervention,
-  rollback,
-  humanOverride,
-  agentDeployed,
-  logicCommitSuccess,
-  unknown
-}
+enum L2LEnvironment { dev, staging, prod }
 
-class EvolutionEventModel {
-  final String id;
-  final EvolutionEventType type;
-  final String title;
-  final String description;
-  final String agentName;
-  final bool isAutonomous;
-  final DateTime timestamp;
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
+  final String version;
 
-  EvolutionEventModel({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.description,
-    required this.agentName,
-    required this.isAutonomous,
-    required this.timestamp,
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+    required this.version,
   });
 
-  factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    return EvolutionEventModel(
-      id: doc.id,
-      type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details' (HBR_EVO style)
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
-      // SYNC: Backend writes agent ID to 'source' (EVOLUTION_WORKER style)
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
-      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
-      timestamp: _parseTimestamp(data['timestamp']),
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+      version: 'v11.90.36',
     );
   }
 
-  String get timeDisplay {
-    final now = DateTime.now();
-    final diff = now.difference(timestamp);
-
-    if (diff.inMinutes < 1) return 'Just Now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    return '${timestamp.month}/${timestamp.day}';
-  }
-
-  static EvolutionEventType _parseType(String? type) {
-    switch (type) {
-      case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
-      case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
-      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
-      case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
-      case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
-      default: return EvolutionEventType.unknown;
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.staging: return 'local2local-staging';
+      case L2LEnvironment.prod: return 'local2local-prod';
+      default: return 'local2local-kaskflow'; 
     }
   }
 
-  static DateTime _parseTimestamp(dynamic ts) {
-    if (ts is Timestamp) return ts.toDate();
-    if (ts is String) return DateTime.tryParse(ts) ?? DateTime.now();
-    return DateTime.now();
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return const Color(0xFFFF1744);
+      case L2LEnvironment.staging: return const Color(0xFFFF9100);
+      default: return const Color(0xFF1E1E2C);
+    }
   }
 }
+
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-kaskflow',
+      headerColor: const Color(0xFF1E1E2C),
+      version: 'v11.90.36',
+    );
+  }
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
+          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
+  return EnvironmentNotifier();
+});
 L2LAAF_BLOCK_END
