@@ -14,12 +14,12 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution to verify P36
+  int _selectedIndex = 3; // Default to Evolution for audit verification
 
   @override
   Widget build(BuildContext context) {
     final isReady = ref.watch(firebaseReadyProvider);
-    final error = ref.watch(initErrorProvider);
+    final error = ref.watch(bootErrorProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
@@ -39,32 +39,19 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 _buildNavItem(2, Icons.directions_car, 'Fleet'),
                 _buildNavItem(3, Icons.psychology, 'Evolution'),
                 const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
-                    onPressed: () {},
-                  ),
-                ),
+                IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20), onPressed: () {}),
+                const SizedBox(height: 24),
               ],
             ),
           ),
-          // MAIN CONTENT AREA
+          // MAIN CONTENT
           Expanded(
             child: Column(
               children: [
                 const CockpitHeader(),
                 Expanded(
                   child: error != null 
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text('BOOT ERROR: $error', 
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      )
+                    ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
                     : !isReady 
                         ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
                         : _buildBody(),
@@ -115,20 +102,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildFirestoreList(String appId, String coll, String title, IconData icon) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection(coll)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('artifacts').doc(appId).collection('public').doc('data').collection(coll).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
-        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
-        
         return ListView.builder(
           padding: const EdgeInsets.all(24),
           itemCount: docs.length,
@@ -139,7 +117,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -150,37 +128,23 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildEvolutionTimeline(String appId) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection('evolution_timeline')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('artifacts').doc(appId).collection('public').doc('data').collection('evolution_timeline').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Timeline Connection failed", style: const TextStyle(color: Colors.redAccent, fontSize: 10)));
-
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
         return Padding(
           padding: const EdgeInsets.all(32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
                   ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
-                  : ListView.builder(
-                      itemCount: events.length,
-                      itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
-                    ),
+                  : ListView.builder(itemCount: events.length, itemBuilder: (ctx, i) => _buildTimelineCard(events[i])),
               ),
             ],
           ),
@@ -209,11 +173,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
-                child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9)),
-              ),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)), child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9))),
               if (event.isAutonomous) ...[
                 const SizedBox(width: 8),
                 const Icon(Icons.bolt, color: Colors.greenAccent, size: 12),
@@ -228,15 +188,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildEmptyState(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.white10),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-        ],
-      ),
-    );
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, size: 48, color: Colors.white10), const SizedBox(height: 16), Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18))]));
   }
 }

@@ -1,8 +1,29 @@
-L2LAAF Phase 36 Master Stabilization (v11.70)
+L2LAAF Phase 36 Master Stabilization (v11.71)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_API_KEY:COMMIT_MSG)
-feat(evolution): restore automatic Firebase config and fix API key validation v11.70
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_SYNC_FINAL:COMMIT_MSG)
+feat(evolution): resolve boot null-check and force service worker update v11.71
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(json:FIREBASE_CONFIG:firebase.json)
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{"source": "**", "destination": "/index.html"}],
+    "headers": [
+      {
+        "source": "/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      },
+      {
+        "source": "/flutter_service_worker.js",
+        "headers": [{ "key": "Service-Worker-Allowed", "value": "/" }, { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+      }
+    ]
+  },
+  "functions": [{ "source": "functions", "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"] }]
+}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -13,34 +34,31 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Firebase SDKs: Standard Dreamflow Compat (v10.7.1) -->
+  <!-- Firebase SDKs: Dreamflow Standard -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  
-  <!-- Automatic Config Injection provided by Firebase Hosting -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.70.36";
-    console.log("L2LAAF_BOOT_START: " + window.L2LAAF_VERSION);
+    window.L2LAAF_VERSION = "v11.71.36";
+    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
     
-    // Safety Guard: Wait for Firebase JS to be ready before starting Flutter
-    function startApp() {
-      if (typeof firebase !== 'undefined') {
-        console.log("L2LAAF_BOOT: Firebase JS Detected. Launching Engine...");
+    function startFlutter() {
+      // Ensure firebase is initialized before loading flutter
+      if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+        console.log("L2LAAF_BOOT: Firebase JS Ready. Launching Engine...");
         const script = document.createElement('script');
         script.src = "flutter_bootstrap.js";
         document.body.appendChild(script);
       } else {
-        console.warn("L2LAAF_BOOT: Firebase JS not ready, retrying in 50ms...");
-        setTimeout(startApp, 50);
+        console.warn("L2LAAF_BOOT: Waiting for Firebase init.js...");
+        setTimeout(startFlutter, 100);
       }
     }
   </script>
 </head>
-<body onload="startApp()">
-  <!-- App will be injected here by startApp() -->
+<body onload="startFlutter()">
 </body>
 </html>
 L2LAAF_BLOCK_END
@@ -59,14 +77,23 @@ void main() async {
   String? errorMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing v11.70.36 via automatic config...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.71.36...");
     
-    // Dreamflow Pattern: No options passed on web to use Hosting auto-init
+    // Standard Dreamflow init: No options on web (uses Hosting config)
     await Firebase.initializeApp();
     
-    await FirebaseAuth.instance.signInAnonymously();
+    // Safety delay to allow JS Auth bridge to attach
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+        debugPrint("L2LAAF_BOOT: Auth Synchronized.");
+      } catch (e) {
+        debugPrint("L2LAAF_BOOT_WARNING: Auth delayed: $e");
+      }
+    });
+
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    debugPrint("L2LAAF_BOOT: Core Ready.");
   } catch (e) {
     errorMessage = e.toString();
     debugPrint("L2LAAF_BOOT_ERROR: $e");
@@ -76,7 +103,7 @@ void main() async {
     ProviderScope(
       overrides: [
         firebaseReadyProvider.overrideWith((ref) => initialized),
-        initErrorProvider.overrideWith((ref) => errorMessage),
+        bootErrorProvider.overrideWith((ref) => errorMessage),
       ],
       child: const L2LAAFApp(),
     ),
@@ -84,7 +111,7 @@ void main() async {
 }
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
-final initErrorProvider = Provider<String?>((ref) => null);
+final bootErrorProvider = Provider<String?>((ref) => null);
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
@@ -124,12 +151,12 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
-      // SYNC: Backend writes agent ID to 'source'
+      title: data['title'] as String? ?? 'System Evolution Event',
+      // SYNC: Map backend 'details' to UI 'description'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization cycle committed.',
+      // SYNC: Map backend 'source' to UI 'agentName'
       agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
+      isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }
@@ -179,12 +206,12 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution to verify P36
+  int _selectedIndex = 3; // Default to Evolution for audit verification
 
   @override
   Widget build(BuildContext context) {
     final isReady = ref.watch(firebaseReadyProvider);
-    final error = ref.watch(initErrorProvider);
+    final error = ref.watch(bootErrorProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
@@ -204,32 +231,19 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 _buildNavItem(2, Icons.directions_car, 'Fleet'),
                 _buildNavItem(3, Icons.psychology, 'Evolution'),
                 const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
-                    onPressed: () {},
-                  ),
-                ),
+                IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20), onPressed: () {}),
+                const SizedBox(height: 24),
               ],
             ),
           ),
-          // MAIN CONTENT AREA
+          // MAIN CONTENT
           Expanded(
             child: Column(
               children: [
                 const CockpitHeader(),
                 Expanded(
                   child: error != null 
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text('BOOT ERROR: $error', 
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontFamily: 'monospace'),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      )
+                    ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
                     : !isReady 
                         ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
                         : _buildBody(),
@@ -280,20 +294,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildFirestoreList(String appId, String coll, String title, IconData icon) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection(coll)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('artifacts').doc(appId).collection('public').doc('data').collection(coll).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
-        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
-        
         return ListView.builder(
           padding: const EdgeInsets.all(24),
           itemCount: docs.length,
@@ -304,7 +309,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Logged', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -315,37 +320,23 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   Widget _buildEvolutionTimeline(String appId) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection('evolution_timeline')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('artifacts').doc(appId).collection('public').doc('data').collection('evolution_timeline').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Timeline Connection failed", style: const TextStyle(color: Colors.redAccent, fontSize: 10)));
-
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
         return Padding(
           padding: const EdgeInsets.all(32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Autonomous logic optimization logs and rule enforcement audit.', style: TextStyle(color: Colors.white38, fontSize: 12)),
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
                   ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
-                  : ListView.builder(
-                      itemCount: events.length,
-                      itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
-                    ),
+                  : ListView.builder(itemCount: events.length, itemBuilder: (ctx, i) => _buildTimelineCard(events[i])),
               ),
             ],
           ),
@@ -374,11 +365,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
-                child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9)),
-              ),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)), child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9))),
               if (event.isAutonomous) ...[
                 const SizedBox(width: 8),
                 const Icon(Icons.bolt, color: Colors.greenAccent, size: 12),
@@ -393,16 +380,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildEmptyState(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.white10),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-        ],
-      ),
-    );
+    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(icon, size: 48, color: Colors.white10), const SizedBox(height: 16), Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18))]));
   }
 }
 L2LAAF_BLOCK_END

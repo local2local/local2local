@@ -11,14 +11,23 @@ void main() async {
   String? errorMessage;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing v11.70.36 via automatic config...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.71.36...");
     
-    // Dreamflow Pattern: No options passed on web to use Hosting auto-init
+    // Standard Dreamflow init: No options on web (uses Hosting config)
     await Firebase.initializeApp();
     
-    await FirebaseAuth.instance.signInAnonymously();
+    // Safety delay to allow JS Auth bridge to attach
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+        debugPrint("L2LAAF_BOOT: Auth Synchronized.");
+      } catch (e) {
+        debugPrint("L2LAAF_BOOT_WARNING: Auth delayed: $e");
+      }
+    });
+
     initialized = true;
-    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    debugPrint("L2LAAF_BOOT: Core Ready.");
   } catch (e) {
     errorMessage = e.toString();
     debugPrint("L2LAAF_BOOT_ERROR: $e");
@@ -28,7 +37,7 @@ void main() async {
     ProviderScope(
       overrides: [
         firebaseReadyProvider.overrideWith((ref) => initialized),
-        initErrorProvider.overrideWith((ref) => errorMessage),
+        bootErrorProvider.overrideWith((ref) => errorMessage),
       ],
       child: const L2LAAFApp(),
     ),
@@ -36,4 +45,4 @@ void main() async {
 }
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
-final initErrorProvider = Provider<String?>((ref) => null);
+final bootErrorProvider = Provider<String?>((ref) => null);

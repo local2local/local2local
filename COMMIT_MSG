@@ -1,1 +1,1 @@
-feat(evolution): restore automatic Firebase config and fix API key validation v11.70
+feat(evolution): resolve boot null-check and force service worker update v11.71

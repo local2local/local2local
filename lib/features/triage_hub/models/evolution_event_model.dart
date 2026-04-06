@@ -34,12 +34,12 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization finalized.',
-      // SYNC: Backend writes agent ID to 'source'
+      title: data['title'] as String? ?? 'System Evolution Event',
+      // SYNC: Map backend 'details' to UI 'description'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Optimization cycle committed.',
+      // SYNC: Map backend 'source' to UI 'agentName'
       agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'EVOLUTION_WORKER',
-      isAutonomous: data['is_autonomous'] as bool? ?? data['isAutonomous'] as bool? ?? true,
+      isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
   }

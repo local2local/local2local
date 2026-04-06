@@ -5,33 +5,30 @@
   <meta charset="UTF-8">
   <title>L2LAAF Cockpit</title>
   
-  <!-- Firebase SDKs: Standard Dreamflow Compat (v10.7.1) -->
+  <!-- Firebase SDKs: Dreamflow Standard -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  
-  <!-- Automatic Config Injection provided by Firebase Hosting -->
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.70.36";
-    console.log("L2LAAF_BOOT_START: " + window.L2LAAF_VERSION);
+    window.L2LAAF_VERSION = "v11.71.36";
+    console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
     
-    // Safety Guard: Wait for Firebase JS to be ready before starting Flutter
-    function startApp() {
-      if (typeof firebase !== 'undefined') {
-        console.log("L2LAAF_BOOT: Firebase JS Detected. Launching Engine...");
+    function startFlutter() {
+      // Ensure firebase is initialized before loading flutter
+      if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+        console.log("L2LAAF_BOOT: Firebase JS Ready. Launching Engine...");
         const script = document.createElement('script');
         script.src = "flutter_bootstrap.js";
         document.body.appendChild(script);
       } else {
-        console.warn("L2LAAF_BOOT: Firebase JS not ready, retrying in 50ms...");
-        setTimeout(startApp, 50);
+        console.warn("L2LAAF_BOOT: Waiting for Firebase init.js...");
+        setTimeout(startFlutter, 100);
       }
     }
   </script>
 </head>
-<body onload="startApp()">
-  <!-- App will be injected here by startApp() -->
+<body onload="startFlutter()">
 </body>
 </html>
