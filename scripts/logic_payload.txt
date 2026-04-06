@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.73)
+L2LAAF Phase 36 Master Stabilization (v11.74)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
-L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_FIX_LINT:COMMIT_MSG)
-feat(evolution): resolve bootErrorProvider identifier error and stabilize shell v11.73
+L2LAAF_BLOCK_START(text:FEAT_EVOLUTION_BOOT_REPAIR:COMMIT_MSG)
+fix(evolution): resolve boot null-check and implement system-level heartbeat v11.74
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
@@ -20,18 +20,18 @@ L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.73.36";
+    window.L2LAAF_VERSION = "v11.74.36";
     console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
     
     function startApp() {
-      // Wait for Firebase JS to be initialized by init.js before starting Flutter
+      // Safety Barrier: Only launch Flutter if Firebase JS Core is 100% ready
       if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-        console.log("L2LAAF_BOOT: Firebase Config found. Injecting Bootstrap...");
+        console.log("L2LAAF_BOOT: Firebase Handshake Verified. Injecting Bootstrap...");
         const script = document.createElement('script');
         script.src = "flutter_bootstrap.js";
         document.body.appendChild(script);
       } else {
-        console.warn("L2LAAF_BOOT: Waiting for Firebase JS Handshake...");
+        console.warn("L2LAAF_BOOT: Firebase JS Pending...");
         setTimeout(startApp, 100);
       }
     }
@@ -56,36 +56,40 @@ void main() async {
   bool initialized = false;
   String? errorMsg;
 
-  // DREAMFLOW STABILIZER: Async Retry Loop for JS SDK binding
-  int attempts = 0;
-  while (attempts < 5 && !initialized) {
-    try {
-      debugPrint("L2LAAF_BOOT: Handshake Attempt ${attempts + 1} (v11.73.36)...");
-      await Firebase.initializeApp();
-      await FirebaseAuth.instance.signInAnonymously();
-      
-      // Heartbeat: Write current version to Firestore for tracking
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('local2local-dev')
-          .collection('public')
-          .doc('data')
-          .collection('system_status')
-          .doc('heartbeat')
-          .set({
-            'active_version': 'v11.73.36',
-            'last_boot': FieldValue.serverTimestamp(),
-            'status': 'HEALTHY'
-          }, SetOptions(merge: true));
+  try {
+    debugPrint("L2LAAF_BOOT: Initializing core v11.74.36...");
+    await Firebase.initializeApp();
+    
+    // MICROTASK DELAY: Prevent Null check crash on immediate service access
+    Future.delayed(Duration.zero, () async {
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+        
+        // HEARTBEAT: Using system-level independent subcollection
+        await FirebaseFirestore.instance
+            .collection('artifacts')
+            .doc('system_status')
+            .collection('public')
+            .doc('data')
+            .collection('telemetry')
+            .doc('last_heartbeat')
+            .set({
+              'active_version': 'v11.74.36',
+              'timestamp': FieldValue.serverTimestamp(),
+              'status': 'OPERATIONAL'
+            }, SetOptions(merge: true));
+            
+        debugPrint("L2LAAF_BOOT: Background Handshake Success.");
+      } catch (e) {
+        debugPrint("L2LAAF_BOOT_WARNING: Service Handshake Delayed: $e");
+      }
+    });
 
-      initialized = true;
-      debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
-    } catch (e) {
-      attempts++;
-      errorMsg = e.toString();
-      debugPrint("L2LAAF_BOOT_RETRY: $e");
-      if (attempts < 5) await Future.delayed(const Duration(milliseconds: 500));
-    }
+    initialized = true;
+    debugPrint("L2LAAF_BOOT: Initialization Triggered.");
+  } catch (e) {
+    errorMsg = e.toString();
+    debugPrint("L2LAAF_BOOT_ERROR: $e");
   }
 
   runApp(
@@ -153,7 +157,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ),
           ),
-          // MAIN CONTENT
+          // MAIN CONTENT AREA
           Expanded(
             child: Column(
               children: [
@@ -242,7 +246,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -341,81 +345,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 }
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:EVOLUTION_MODEL:lib/features/triage_hub/models/evolution_event_model.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-enum EvolutionEventType {
-  criticalIntervention,
-  rollback,
-  humanOverride,
-  agentDeployed,
-  logicCommitSuccess,
-  unknown
-}
-
-class EvolutionEventModel {
-  final String id;
-  final EvolutionEventType type;
-  final String title;
-  final String description;
-  final String agentName;
-  final bool isAutonomous;
-  final DateTime timestamp;
-
-  EvolutionEventModel({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.description,
-    required this.agentName,
-    required this.isAutonomous,
-    required this.timestamp,
-  });
-
-  factory EvolutionEventModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    return EvolutionEventModel(
-      id: doc.id,
-      type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Evolution Event',
-      // SYNC: Map backend 'details' field to UI 'description'
-      description: data['details'] as String? ?? data['description'] as String? ?? 'Trace finalized.',
-      // SYNC: Map backend 'source' field to UI 'agentName'
-      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
-      isAutonomous: data['is_autonomous'] as bool? ?? true,
-      timestamp: _parseTimestamp(data['timestamp']),
-    );
-  }
-
-  String get timeDisplay {
-    final now = DateTime.now();
-    final diff = now.difference(timestamp);
-    if (diff.inMinutes < 1) return 'Just Now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    return '${timestamp.month}/${timestamp.day}';
-  }
-
-  static EvolutionEventType _parseType(String? type) {
-    switch (type) {
-      case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
-      case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
-      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
-      case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
-      case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
-      default: return EvolutionEventType.unknown;
-    }
-  }
-
-  static DateTime _parseTimestamp(dynamic ts) {
-    if (ts is Timestamp) return ts.toDate();
-    if (ts is String) return DateTime.tryParse(ts) ?? DateTime.now();
-    return DateTime.now();
-  }
-}
-L2LAAF_BLOCK_END
-
 L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -441,7 +370,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.73.36',
+      version: 'v11.74.36',
     );
   }
 
@@ -449,7 +378,7 @@ class EnvironmentState {
     switch (env) {
       case L2LEnvironment.staging: return 'local2local-staging';
       case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-dev';
+      default: return 'local2local-kaskflow'; // Defaulting to kaskflow per user valid subcollections
     }
   }
 
@@ -467,9 +396,9 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
   EnvironmentState build() {
     return EnvironmentState(
       environment: L2LEnvironment.dev,
-      projectId: 'local2local-dev',
+      projectId: 'local2local-kaskflow', // Default per valid subcollections
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.73.36',
+      version: 'v11.74.36',
     );
   }
 

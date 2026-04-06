@@ -12,18 +12,18 @@
   <script src="/__/firebase/init.js"></script>
 
   <script>
-    window.L2LAAF_VERSION = "v11.73.36";
+    window.L2LAAF_VERSION = "v11.74.36";
     console.log("L2LAAF_BOOT_INFO: " + window.L2LAAF_VERSION);
     
     function startApp() {
-      // Wait for Firebase JS to be initialized by init.js before starting Flutter
+      // Safety Barrier: Only launch Flutter if Firebase JS Core is 100% ready
       if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-        console.log("L2LAAF_BOOT: Firebase Config found. Injecting Bootstrap...");
+        console.log("L2LAAF_BOOT: Firebase Handshake Verified. Injecting Bootstrap...");
         const script = document.createElement('script');
         script.src = "flutter_bootstrap.js";
         document.body.appendChild(script);
       } else {
-        console.warn("L2LAAF_BOOT: Waiting for Firebase JS Handshake...");
+        console.warn("L2LAAF_BOOT: Firebase JS Pending...");
         setTimeout(startApp, 100);
       }
     }

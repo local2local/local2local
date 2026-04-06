@@ -47,7 +47,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ),
           ),
-          // MAIN CONTENT
+          // MAIN CONTENT AREA
           Expanded(
             child: Column(
               children: [
@@ -136,7 +136,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
                 title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },

@@ -1,1 +1,1 @@
-feat(evolution): resolve bootErrorProvider identifier error and stabilize shell v11.73
+fix(evolution): resolve boot null-check and implement system-level heartbeat v11.74

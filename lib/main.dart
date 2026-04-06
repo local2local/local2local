@@ -11,36 +11,40 @@ void main() async {
   bool initialized = false;
   String? errorMsg;
 
-  // DREAMFLOW STABILIZER: Async Retry Loop for JS SDK binding
-  int attempts = 0;
-  while (attempts < 5 && !initialized) {
-    try {
-      debugPrint("L2LAAF_BOOT: Handshake Attempt ${attempts + 1} (v11.73.36)...");
-      await Firebase.initializeApp();
-      await FirebaseAuth.instance.signInAnonymously();
-      
-      // Heartbeat: Write current version to Firestore for tracking
-      await FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc('local2local-dev')
-          .collection('public')
-          .doc('data')
-          .collection('system_status')
-          .doc('heartbeat')
-          .set({
-            'active_version': 'v11.73.36',
-            'last_boot': FieldValue.serverTimestamp(),
-            'status': 'HEALTHY'
-          }, SetOptions(merge: true));
+  try {
+    debugPrint("L2LAAF_BOOT: Initializing core v11.74.36...");
+    await Firebase.initializeApp();
+    
+    // MICROTASK DELAY: Prevent Null check crash on immediate service access
+    Future.delayed(Duration.zero, () async {
+      try {
+        await FirebaseAuth.instance.signInAnonymously();
+        
+        // HEARTBEAT: Using system-level independent subcollection
+        await FirebaseFirestore.instance
+            .collection('artifacts')
+            .doc('system_status')
+            .collection('public')
+            .doc('data')
+            .collection('telemetry')
+            .doc('last_heartbeat')
+            .set({
+              'active_version': 'v11.74.36',
+              'timestamp': FieldValue.serverTimestamp(),
+              'status': 'OPERATIONAL'
+            }, SetOptions(merge: true));
+            
+        debugPrint("L2LAAF_BOOT: Background Handshake Success.");
+      } catch (e) {
+        debugPrint("L2LAAF_BOOT_WARNING: Service Handshake Delayed: $e");
+      }
+    });
 
-      initialized = true;
-      debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
-    } catch (e) {
-      attempts++;
-      errorMsg = e.toString();
-      debugPrint("L2LAAF_BOOT_RETRY: $e");
-      if (attempts < 5) await Future.delayed(const Duration(milliseconds: 500));
-    }
+    initialized = true;
+    debugPrint("L2LAAF_BOOT: Initialization Triggered.");
+  } catch (e) {
+    errorMsg = e.toString();
+    debugPrint("L2LAAF_BOOT_ERROR: $e");
   }
 
   runApp(
