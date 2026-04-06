@@ -1,8 +1,8 @@
-L2LAAF Phase 36 Master Stabilization (v11.91)
+L2LAAF Phase 36 Master Stabilization (v11.92)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): resolve lint warnings for unused imports and members v11.91
+fix(cockpit): resolve credential retention and restore health/fleet data feeds v11.92
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
@@ -20,7 +20,7 @@ void main() async {
   String? bootError;
 
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.91.36...");
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.92.36...");
     
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -47,41 +47,16 @@ void main() async {
 final firebaseReadyProvider = Provider<bool>((ref) => false);
 final initErrorProvider = Provider<String?>((ref) => null);
 
-// Auth state stream
 final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
 });
 
-// Admin/Operator claim check - stays valid for email users
 final isAdminProvider = FutureProvider<bool>((ref) async {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return false;
   final idToken = await user.getIdTokenResult(true); 
   return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
 });
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:FIREBASE_OPTIONS:lib/firebase_options.dart)
-// File managed by L2LAAF Assistant.
-import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
-import 'package:flutter/foundation.dart' show kIsWeb;
-
-class DefaultFirebaseOptions {
-  static FirebaseOptions get currentPlatform {
-    if (kIsWeb) return web;
-    throw UnsupportedError('DefaultFirebaseOptions are not supported for this platform.');
-  }
-
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8',
-    appId: '1:849010982119:web:f5af08a3214393b0943642',
-    messagingSenderId: '849010982119',
-    projectId: 'local2local-dev',
-    authDomain: 'local2local-dev.firebaseapp.com',
-    storageBucket: 'local2local-dev.firebasestorage.app',
-    measurementId: 'G-7KYLQM8T4C',
-  );
-}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:COCKPIT_SHELL:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
@@ -112,6 +87,13 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _handleLogout() async {
+    await FirebaseAuth.instance.signOut();
+    _emailController.clear();
+    _passwordController.clear();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -147,7 +129,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                       child: IconButton(
                         icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
                         tooltip: 'Sign Out',
-                        onPressed: () => FirebaseAuth.instance.signOut(),
+                        onPressed: _handleLogout,
                       ),
                     ),
                   ],
@@ -309,8 +291,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('public')
           .doc('data')
           .collection(coll)
-          .limit(50)
-          .snapshots(),
+          .snapshots(), // RULE 2: Removed limit() to ensure connectivity
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
@@ -324,7 +305,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           itemBuilder: (ctx, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             
-            // DYNAMIC MAPPING: capturing fields common to Health, Fleet, and Triage
             final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
@@ -494,7 +474,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.91.36',
+      version: 'v11.92.36',
     );
   }
 
@@ -522,7 +502,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.91.36',
+      version: 'v11.92.36',
     );
   }
 

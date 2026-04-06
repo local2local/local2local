@@ -27,6 +27,13 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
     super.dispose();
   }
 
+  void _handleLogout() async {
+    await FirebaseAuth.instance.signOut();
+    _emailController.clear();
+    _passwordController.clear();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final isReady = ref.watch(firebaseReadyProvider);
@@ -60,7 +67,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                       child: IconButton(
                         icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
                         tooltip: 'Sign Out',
-                        onPressed: () => FirebaseAuth.instance.signOut(),
+                        onPressed: _handleLogout,
                       ),
                     ),
                   ],
@@ -222,8 +229,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('public')
           .doc('data')
           .collection(coll)
-          .limit(50)
-          .snapshots(),
+          .snapshots(), // RULE 2: Removed limit() to ensure connectivity
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
@@ -237,7 +243,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           itemBuilder: (ctx, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             
-            // DYNAMIC MAPPING: capturing fields common to Health, Fleet, and Triage
             final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
