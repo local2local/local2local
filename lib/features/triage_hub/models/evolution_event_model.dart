@@ -34,12 +34,11 @@ class EvolutionEventModel {
     return EvolutionEventModel(
       id: doc.id,
       type: _parseType(data['type'] as String?),
-      title: data['title'] as String? ?? 'System Evolution Event',
-      // SYNC: Backend writes rule summaries to 'details'
-      description: data['details'] as String? ?? 'Autonomous logic update committed.',
-      // SYNC: Backend writes agent ID to 'source'
-      agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
-      // SYNC: Boolean check
+      title: data['title'] as String? ?? 'Evolution Event',
+      // SYNC: Mapping 'details' (written by backend) to UI 'description'
+      description: data['details'] as String? ?? data['description'] as String? ?? 'Logic commit finalized.',
+      // SYNC: Mapping 'source' (written by backend) to UI 'agentName'
+      agentName: data['source'] as String? ?? data['agent_name'] as String? ?? 'SYSTEM',
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );
@@ -58,7 +57,7 @@ class EvolutionEventModel {
     switch (type) {
       case 'CRITICAL_INTERVENTION_REQUIRED': return EvolutionEventType.criticalIntervention;
       case 'LOGIC_ROLLBACK': return EvolutionEventType.rollback;
-      case 'HUMAN_OVERRIDE_COMMITTED': return EvolutionEventType.humanOverride;
+      case 'HUMAN_OVER_RIDE': return EvolutionEventType.humanOverride;
       case 'AGENT_DEPLOYED': return EvolutionEventType.agentDeployed;
       case 'LOGIC_COMMIT_SUCCESS': return EvolutionEventType.logicCommitSuccess;
       default: return EvolutionEventType.unknown;

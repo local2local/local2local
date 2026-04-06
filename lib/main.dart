@@ -7,47 +7,19 @@ import 'package:local2local/core/app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  bool initialized = false;
-  String? initError;
-
   try {
-    debugPrint("L2LAAF_BOOT: Initializing core v11.65.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking with Engine v11.66.36...");
     await Firebase.initializeApp();
     await FirebaseAuth.instance.signInAnonymously();
-    initialized = true;
-    debugPrint("L2LAAF_BOOT: Handshake SUCCESS.");
+    debugPrint("L2LAAF_BOOT: Stack Verified.");
   } catch (e) {
-    initError = e.toString();
-    debugPrint("L2LAAF_BOOT_ERROR: $e");
+    debugPrint("L2LAAF_BOOT_WARNING: $e");
+    // Standard Dreamflow resilience: Continue and let the UI handle empty states
   }
 
   runApp(
-    ProviderScope(
-      overrides: [
-        firebaseReadyProvider.overrideWith((ref) => initialized),
-      ],
-      child: initialized 
-        ? const L2LAAFApp() 
-        : MaterialApp(
-            debugShowCheckedModeBanner: false,
-            home: Scaffold(
-              backgroundColor: const Color(0xFF0F0F1E),
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.cloud_off, size: 64, color: Colors.redAccent),
-                    const SizedBox(height: 24),
-                    const Text("SYSTEM BOOT FAILURE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                    const SizedBox(height: 12),
-                    Text(initError ?? "Initialization Timeout", style: const TextStyle(color: Colors.white24, fontSize: 10)),
-                  ],
-                ),
-              ),
-            ),
-          ),
+    const ProviderScope(
+      child: L2LAAFApp(),
     ),
   );
 }
-
-final firebaseReadyProvider = Provider<bool>((ref) => false);

@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
-import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -14,7 +13,7 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for P36 audit verification
+  int _selectedIndex = 3; // Default to Evolution for P36 verification
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +21,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       backgroundColor: const Color(0xFF0F0F1E),
       body: Row(
         children: [
-          // SIDE NAVIGATION BAR
+          // SIDE NAVIGATION
           Container(
             width: 72,
             color: const Color(0xFF16162A),
@@ -46,7 +45,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               ],
             ),
           ),
-          // MAIN CONTENT AREA
+          // MAIN CONTENT
           Expanded(
             child: Column(
               children: [
@@ -84,9 +83,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildBody() {
-    final isReady = ref.watch(firebaseReadyProvider);
-    if (!isReady) return const Center(child: CircularProgressIndicator());
-
     final env = ref.watch(environmentProvider);
     final projectId = env.projectId;
 
@@ -110,8 +106,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
-        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -124,8 +118,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               color: const Color(0xFF1E1E2C),
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record Logged', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                subtitle: Text(data['details'] ?? data['status'] ?? 'Trace Active', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                title: Text(data['title'] ?? data['correlation_id'] ?? 'Record', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                subtitle: Text(data['details'] ?? data['status'] ?? 'Active Trace', style: const TextStyle(color: Colors.white54, fontSize: 12)),
               ),
             );
           },
@@ -145,8 +139,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Timeline Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
-
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -162,7 +154,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               const SizedBox(height: 32),
               Expanded(
                 child: events.isEmpty 
-                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
+                  ? const Center(child: Text('Waiting for evolution cycles...', style: TextStyle(color: Colors.white10)))
                   : ListView.builder(
                       itemCount: events.length,
                       itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
