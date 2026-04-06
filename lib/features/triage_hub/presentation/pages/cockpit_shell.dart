@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
   const CockpitShell({super.key});
@@ -13,7 +14,7 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3; // Default to Evolution for verification
+  int _selectedIndex = 3; // Default to Evolution for P36 audit verification
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +84,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
   }
 
   Widget _buildBody() {
+    final isReady = ref.watch(firebaseReadyProvider);
+    if (!isReady) return const Center(child: CircularProgressIndicator());
+
     final env = ref.watch(environmentProvider);
     final projectId = env.projectId;
 
@@ -106,6 +110,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Data Sync Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+        
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
         
@@ -139,6 +145,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("Timeline Error", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+
         final docs = snapshot.data?.docs ?? [];
         final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
         events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
