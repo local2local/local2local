@@ -1,78 +1,33 @@
-L2LAAF Phase 36 Master Stabilization (v11.86)
+L2LAAF Phase 36 Master Stabilization (v11.87)
 PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): integrate verified firebase_options and finalize Phase 36 v11.86
+fix(evolution): resolve split deployment and handle admin-restricted-auth error v11.87
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(text:GITIGNORE:.gitignore)
-# Dependencies
-node_modules/
-functions/node_modules/
-functions/lib/
-.dart_tool/
-.packages
-.pub-cache/
-.pub/
+L2LAAF_BLOCK_START(html:WEB_INDEX:web/index.html)
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="/">
+  <meta charset="UTF-8">
+  <title>L2LAAF Cockpit</title>
+  
+  <!-- Cache-Busting Meta Tags -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
 
-# Build outputs
-build/
-*.log
-functions/npm-debug.log*
-
-# OS/IDE metadata
-.DS_Store
-.vscode/
-.idea/
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(yaml:DEPLOY_ACTION:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, staging, develop ]
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-
-      - name: Build Flutter Web
-        run: flutter build web --release
-
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Deploy Stack
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+  <script>
+    // Version v11.87.36
+    window.L2LAAF_BUILD = "v11.87.36";
+    console.log("L2LAAF_BOOT: Modular Engine " + window.L2LAAF_BUILD);
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
@@ -91,34 +46,47 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.86.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.87.36...");
     
     // Auth-init via authoritative compiled options
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    await FirebaseAuth.instance.signInAnonymously();
-    
-    // HEARTBEAT: Telemetry verification via system-level anchor
-    await FirebaseFirestore.instance
-        .collection('artifacts')
-        .doc('system_status')
-        .collection('public')
-        .doc('data')
-        .collection('telemetry')
-        .doc('last_heartbeat')
-        .set({
-          'version': 'v11.86.36',
-          'timestamp': FieldValue.serverTimestamp(),
-          'status': 'OPERATIONAL',
-          'bridge': 'MODULAR_V10_STABLE'
-        }, SetOptions(merge: true));
-
-    initialized = true;
-    debugPrint("L2LAAF_BOOT: System Ready.");
+    try {
+      debugPrint("L2LAAF_BOOT: Signing in anonymously...");
+      await FirebaseAuth.instance.signInAnonymously();
+      
+      // HEARTBEAT: Only written if Auth succeeds
+      await FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc('system_status')
+          .collection('public')
+          .doc('data')
+          .collection('telemetry')
+          .doc('last_heartbeat')
+          .set({
+            'version': 'v11.87.36',
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': 'OPERATIONAL',
+            'bridge': 'MODULAR_V10_STABLE'
+          }, SetOptions(merge: true));
+      
+      debugPrint("L2LAAF_BOOT: System Ready.");
+      initialized = true;
+    } on FirebaseAuthException catch (authE) {
+      // Handle 'admin-restricted-operation' gracefully
+      if (authE.code == 'admin-restricted-operation') {
+        errorMsg = "AUTH ERROR: Anonymous Sign-in is disabled in Firebase Console.";
+      } else {
+        errorMsg = "AUTH ERROR: ${authE.message}";
+      }
+      debugPrint("L2LAAF_BOOT_AUTH_FAIL: ${authE.code} - ${authE.message}");
+      // We set initialized to true anyway so the UI loads in 'degraded' mode
+      initialized = true; 
+    }
   } catch (e) {
-    errorMsg = e.toString();
+    errorMsg = "BOOT FATAL: $e";
     debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
@@ -135,29 +103,6 @@ void main() async {
 
 final firebaseReadyProvider = Provider<bool>((ref) => false);
 final initErrorProvider = Provider<String?>((ref) => null);
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:FIREBASE_OPTIONS:lib/firebase_options.dart)
-// File managed by L2LAAF Assistant.
-import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
-
-class DefaultFirebaseOptions {
-  static FirebaseOptions get currentPlatform {
-    if (kIsWeb) return web;
-    throw UnsupportedError('DefaultFirebaseOptions are not supported for this platform.');
-  }
-
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAy0umnBYiKPxxAIUT9WLYKG0Fs_zKtMQ8',
-    appId: '1:849010982119:web:f5af08a3214393b0943642',
-    messagingSenderId: '849010982119',
-    projectId: 'local2local-dev',
-    authDomain: 'local2local-dev.firebaseapp.com',
-    storageBucket: 'local2local-dev.firebasestorage.app',
-    measurementId: 'G-7KYLQM8T4C',
-  );
-}
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
@@ -185,7 +130,7 @@ class EnvironmentState {
       environment: newEnv,
       projectId: _getProjectId(newEnv),
       headerColor: _getHeaderColor(newEnv),
-      version: 'v11.86.36',
+      version: 'v11.87.36',
     );
   }
 
@@ -213,7 +158,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
       environment: L2LEnvironment.dev,
       projectId: 'local2local-kaskflow',
       headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.86.36',
+      version: 'v11.87.36',
     );
   }
 

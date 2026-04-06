@@ -13,34 +13,47 @@ void main() async {
   String? errorMsg;
 
   try {
-    debugPrint("L2LAAF_BOOT: Handshaking v11.86.36...");
+    debugPrint("L2LAAF_BOOT: Handshaking v11.87.36...");
     
     // Auth-init via authoritative compiled options
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
-    await FirebaseAuth.instance.signInAnonymously();
-    
-    // HEARTBEAT: Telemetry verification via system-level anchor
-    await FirebaseFirestore.instance
-        .collection('artifacts')
-        .doc('system_status')
-        .collection('public')
-        .doc('data')
-        .collection('telemetry')
-        .doc('last_heartbeat')
-        .set({
-          'version': 'v11.86.36',
-          'timestamp': FieldValue.serverTimestamp(),
-          'status': 'OPERATIONAL',
-          'bridge': 'MODULAR_V10_STABLE'
-        }, SetOptions(merge: true));
-
-    initialized = true;
-    debugPrint("L2LAAF_BOOT: System Ready.");
+    try {
+      debugPrint("L2LAAF_BOOT: Signing in anonymously...");
+      await FirebaseAuth.instance.signInAnonymously();
+      
+      // HEARTBEAT: Only written if Auth succeeds
+      await FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc('system_status')
+          .collection('public')
+          .doc('data')
+          .collection('telemetry')
+          .doc('last_heartbeat')
+          .set({
+            'version': 'v11.87.36',
+            'timestamp': FieldValue.serverTimestamp(),
+            'status': 'OPERATIONAL',
+            'bridge': 'MODULAR_V10_STABLE'
+          }, SetOptions(merge: true));
+      
+      debugPrint("L2LAAF_BOOT: System Ready.");
+      initialized = true;
+    } on FirebaseAuthException catch (authE) {
+      // Handle 'admin-restricted-operation' gracefully
+      if (authE.code == 'admin-restricted-operation') {
+        errorMsg = "AUTH ERROR: Anonymous Sign-in is disabled in Firebase Console.";
+      } else {
+        errorMsg = "AUTH ERROR: ${authE.message}";
+      }
+      debugPrint("L2LAAF_BOOT_AUTH_FAIL: ${authE.code} - ${authE.message}");
+      // We set initialized to true anyway so the UI loads in 'degraded' mode
+      initialized = true; 
+    }
   } catch (e) {
-    errorMsg = e.toString();
+    errorMsg = "BOOT FATAL: $e";
     debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
