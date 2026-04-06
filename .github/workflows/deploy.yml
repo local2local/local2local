@@ -19,13 +19,6 @@ jobs:
           channel: 'stable'
           flutter-version: '3.38.5'
 
-      - name: Restore Firebase Configuration
-        run: |
-          cat <<EOF > lib/firebase_options.dart
-          ${{ secrets.FIREBASE_OPTIONS_DART }}
-          EOF
-        # This secret must contain the full content of your working firebase_options.dart
-
       - name: Install Dependencies
         run: |
           cd functions && npm install

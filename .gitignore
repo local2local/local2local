@@ -1,6 +1,3 @@
-# Firebase configuration (Managed by CLI/CI)
-lib/firebase_options.dart
-
 # Dependencies
 node_modules/
 functions/node_modules/

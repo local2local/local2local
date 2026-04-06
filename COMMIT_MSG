@@ -1,1 +1,1 @@
-fix(evolution): update gitignore to suppress node_modules warnings and bump version v11.82
+fix(evolution): simplify config workflow by re-integrating firebase_options v11.84
