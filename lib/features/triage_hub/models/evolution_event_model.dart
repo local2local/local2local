@@ -35,8 +35,11 @@ class EvolutionEventModel {
       id: doc.id,
       type: _parseType(data['type'] as String?),
       title: data['title'] as String? ?? 'System Evolution Event',
+      // SYNC: Backend writes rule summaries to 'details'
       description: data['details'] as String? ?? 'Autonomous logic update committed.',
+      // SYNC: Backend writes agent ID to 'source'
       agentName: data['source'] as String? ?? 'EVOLUTION_WORKER',
+      // SYNC: Boolean check
       isAutonomous: data['is_autonomous'] as bool? ?? true,
       timestamp: _parseTimestamp(data['timestamp']),
     );

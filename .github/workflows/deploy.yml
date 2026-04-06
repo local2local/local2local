@@ -28,6 +28,8 @@ jobs:
           cd functions && npm install
           cd ..
           flutter pub get
+      - name: Nuclear Clean
+        run: flutter clean
       - name: Build Flutter Web
         run: flutter build web --release
       - name: Build Cloud Functions
