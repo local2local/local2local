@@ -2,6 +2,11 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
+/**
+ * APPLICATION LOGIC:
+ * Note that we no longer call initializeApp() here. 
+ * We assume the System Entry Point (index.ts) has handled it.
+ */
 const db = admin.firestore();
 
 type L2LChange = Change<QueryDocumentSnapshot>;
