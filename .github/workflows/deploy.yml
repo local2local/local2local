@@ -2,8 +2,10 @@ name: L2LAAF Multi-Project Deployment
 on:
   push:
     branches: [ main, staging, develop ]
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -44,3 +46,23 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+
+      - name: Notify Orchestrator (Telemetry Link)
+        if: success()
+        run: |
+          # 1. Extract the current phase from logic_payload if possible, or fallback
+          PHASE="36.6" 
+          
+          # 2. Get the latest commit message for the summary
+          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
+          
+          # 3. POST to n8n Webhook
+          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"incoming_phase\": \"$PHASE\",
+            \"build_id\": \"${{ github.run_id }}\",
+            \"summary\": \"$SUMMARY\",
+            \"event\": \"DEPLOYMENT_COMPLETE\",
+            \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"
+          }"
