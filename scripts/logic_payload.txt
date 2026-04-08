@@ -6,6 +6,7 @@
  * 2. Implemented atomic transaction-based Mutex locking in evolutionOrchestratorV3.
  * 3. Added HbrLockIndicator widget for visual status in the Cockpit.
  * 4. Updated CockpitShell to render real-time lock status on HBR records.
+ * 5. FIXED: Resolved 'withOpacity' deprecation warnings by using .withValues(alpha: ...).
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
@@ -107,9 +108,9 @@ class HbrLockIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.1),
+        color: Colors.amber.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -255,7 +256,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Email address',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: Colors.white.withValues(alpha: 0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
               ),
@@ -269,7 +270,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Password',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: Colors.white.withValues(alpha: 0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
               ),
@@ -330,7 +331,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
         height: 64,
         decoration: BoxDecoration(
           border: isSelected ? const Border(left: BorderSide(color: Colors.blueAccent, width: 4)) : null,
-          color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
+          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -471,7 +472,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       if (!isAdmin) return const SizedBox.shrink();
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withOpacity(0.3))),
+        decoration: BoxDecoration(
+          color: Colors.blueAccent.withValues(alpha: 0.1), 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))
+        ),
         child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
       );
     });
