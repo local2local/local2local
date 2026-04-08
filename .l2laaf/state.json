@@ -3,17 +3,18 @@
   "current_phase": "36.5",
   "active_environment": "develop",
   "deployment_telemetry": {
-  "last_success_commit": null,
-  "current_build_id": null,
-  "verification_status": "IDLE"
+    "last_success_commit": null,
+    "current_build_id": null,
+    "verification_status": "VERIFIED_STABLE"
   },
   "approval_gate": {
-  "pending": false,
-  "timeout_at": null,
-  "gate_type": "HITL_REQUIRED"
+    "pending": false,
+    "timeout_at": null,
+    "gate_type": "HITL_REQUIRED",
+    "status": "PROMOTED"
   },
   "reconciliation": {
-  "last_sync_timestamp": null,
-  "conflict_detected": false
+    "last_sync_timestamp": null,
+    "conflict_detected": false
   }
-  }
+}
