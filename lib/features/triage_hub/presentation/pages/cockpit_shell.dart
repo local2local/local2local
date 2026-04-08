@@ -120,7 +120,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Email address',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
               ),
@@ -134,7 +134,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Password',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
               ),
@@ -195,7 +195,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
         height: 64,
         decoration: BoxDecoration(
           border: isSelected ? const Border(left: BorderSide(color: Colors.blueAccent, width: 4)) : null,
-          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -248,7 +248,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
             
-            // Mutex Visualization Logic
+            // MUTEX VISUALIZATION
             final isLocked = data['lock_status'] == 'LOCKED';
 
             return Card(
@@ -336,7 +336,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       if (!isAdmin) return const SizedBox.shrink();
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withOpacity(0.3))),
         child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
       );
     });

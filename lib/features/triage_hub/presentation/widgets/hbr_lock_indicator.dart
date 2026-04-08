@@ -17,9 +17,9 @@ class HbrLockIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.1),
+        color: Colors.amber.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.amber.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -28,7 +28,12 @@ class HbrLockIndicator extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'LOCKED: ${lockedBy ?? "EVOLUTION"}',
-            style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.amber, 
+              fontSize: 9, 
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5
+            ),
           ),
         ],
       ),

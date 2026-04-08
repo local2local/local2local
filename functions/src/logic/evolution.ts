@@ -2,16 +2,15 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
-/**
- * APPLICATION LOGIC:
- * Note that we no longer call initializeApp() here. 
- * We assume the System Entry Point (index.ts) has handled it.
- */
 const db = admin.firestore();
 
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
+/**
+ * Evolution Orchestrator V3
+ * Handles logic proposals with atomic Mutex enforcement.
+ */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -21,6 +20,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 
   const { appId } = event.params;
   const manifest = data.payload?.manifest;
+  
+  // Intercept Logic Proposals
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
 
@@ -28,16 +29,21 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
     
     await db.runTransaction(async (transaction) => {
       const lockSnap = await transaction.get(lockRef);
+      
+      // COLLISION DETECTION
       if (lockSnap.exists) {
-        throw new Error(`COLLISION: HBR ${hbrId} is currently locked by ${lockSnap.data()?.agentId}`);
+        const lockData = lockSnap.data();
+        throw new Error(`COLLISION: HBR ${hbrId} is currently locked by ${lockData?.agentId}`);
       }
 
+      // SET MUTEX LOCK
       transaction.set(lockRef, {
         agentId,
         lockedAt: admin.firestore.FieldValue.serverTimestamp(),
-        correlation_id: data.correlation_id
+        correlation_id: data.correlation_id || "unknown"
       });
 
+      // UPDATE REGISTRY VISUAL STATUS
       const registryRef = db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`);
       transaction.set(registryRef, {
         lock_status: 'LOCKED',
@@ -45,5 +51,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         last_modified: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     });
+    
+    console.log(`✅ MUTEX_ACQUIRED: HBR ${hbrId} locked for Agent ${agentId}`);
   }
 });

@@ -1,11 +1,15 @@
 /**
  * L2LAAF Phase 36.6 Mutex Integrity (v11.36.6)
- * REFACTORED: Moved Firebase System Initialization to Entry Point (index.ts)
- * FULL IMPLEMENTATION: No abbreviated blocks.
+ * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+ * * CHANGES:
+ * 1. Refactored Firebase initialization to entry point (index.ts).
+ * 2. Implemented atomic transaction-based Mutex locking in evolutionOrchestratorV3.
+ * 3. Added HbrLockIndicator widget for visual status in the Cockpit.
+ * 4. Updated CockpitShell to render real-time lock status on HBR records.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): refactor system initialization to entry point and implement mutex v11.36.6
+feat(evolution): implement visual Mutex locks and refactor system entry point v11.36.6
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
@@ -13,13 +17,13 @@ import * as admin from "firebase-admin";
 
 /** * SYSTEM INITIALIZATION: 
  * This is the 'systems' file for the backend. 
- * We initialize once here, at the entry point of the Cloud Functions process.
+ * We initialize once here at the process entry point.
  */
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-// Export all application-focused functions
+// Export all application-focused logic modules
 export * from "./logic/evolution";
 L2LAAF_BLOCK_END */
 
@@ -28,16 +32,15 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
-/**
- * APPLICATION LOGIC:
- * Note that we no longer call initializeApp() here. 
- * We assume the System Entry Point (index.ts) has handled it.
- */
 const db = admin.firestore();
 
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
+/**
+ * Evolution Orchestrator V3
+ * Handles logic proposals with atomic Mutex enforcement.
+ */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -47,6 +50,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 
   const { appId } = event.params;
   const manifest = data.payload?.manifest;
+  
+  // Intercept Logic Proposals
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
 
@@ -54,16 +59,21 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
     
     await db.runTransaction(async (transaction) => {
       const lockSnap = await transaction.get(lockRef);
+      
+      // COLLISION DETECTION
       if (lockSnap.exists) {
-        throw new Error(`COLLISION: HBR ${hbrId} is currently locked by ${lockSnap.data()?.agentId}`);
+        const lockData = lockSnap.data();
+        throw new Error(`COLLISION: HBR ${hbrId} is currently locked by ${lockData?.agentId}`);
       }
 
+      // SET MUTEX LOCK
       transaction.set(lockRef, {
         agentId,
         lockedAt: admin.firestore.FieldValue.serverTimestamp(),
-        correlation_id: data.correlation_id
+        correlation_id: data.correlation_id || "unknown"
       });
 
+      // UPDATE REGISTRY VISUAL STATUS
       const registryRef = db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`);
       transaction.set(registryRef, {
         lock_status: 'LOCKED',
@@ -71,6 +81,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         last_modified: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
     });
+    
+    console.log(`✅ MUTEX_ACQUIRED: HBR ${hbrId} locked for Agent ${agentId}`);
   }
 });
 L2LAAF_BLOCK_END */
@@ -95,9 +107,9 @@ class HbrLockIndicator extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.1),
+        color: Colors.amber.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.amber.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -106,7 +118,12 @@ class HbrLockIndicator extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             'LOCKED: ${lockedBy ?? "EVOLUTION"}',
-            style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.amber, 
+              fontSize: 9, 
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5
+            ),
           ),
         ],
       ),
@@ -238,7 +255,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Email address',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
               ),
@@ -252,7 +269,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                 hintText: 'Password',
                 hintStyle: const TextStyle(color: Colors.white24),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                 prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
               ),
@@ -313,7 +330,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
         height: 64,
         decoration: BoxDecoration(
           border: isSelected ? const Border(left: BorderSide(color: Colors.blueAccent, width: 4)) : null,
-          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -366,7 +383,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
             
-            // Mutex Visualization Logic
+            // MUTEX VISUALIZATION
             final isLocked = data['lock_status'] == 'LOCKED';
 
             return Card(
@@ -454,7 +471,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       if (!isAdmin) return const SizedBox.shrink();
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withOpacity(0.3))),
         child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
       );
     });
