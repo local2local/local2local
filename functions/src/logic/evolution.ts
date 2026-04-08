@@ -1,194 +1,44 @@
-import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onRequest } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
-import type { Request, Response } from "firebase-functions/v1";
 import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../config";
-import { AgentBusClient } from "../agentBusClient";
+
+const db = admin.firestore();
 
 type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
-type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
-type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
-function areResultsIdentical(a: any, b: any): boolean {
-  try {
-    const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());
-    const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());
-    return s1 === s2;
-  } catch (e) {
-    return false;
-  }
-}
-
-export const evolutionOrchestratorV2 = onDocumentWritten({
+export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
-  const prev = event.data?.before.data();
-  if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;
+  if (!data || data.status !== "dispatched") return;
 
   const { appId } = event.params;
-  const client = new AgentBusClient({
-    agentId: "EVOLUTION_WORKER",
-    capabilities: ["logic_optimization", "memory_commit"],
-    jurisdictions: ["AB"],
-    substances: ["DAUA"],
-    role: "ORCHESTRATOR",
-    domain: "SECURITY"
-  }, appId);
+  const manifest = data.payload?.manifest;
+  if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
+    const { hbrId, agentId } = manifest;
 
-  await client.register();
-
-  try {
-    const manifest = data.payload?.manifest;
-    if (!manifest) return;
-
-    if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
-      const { hbrId, agentId, proposedLogic, reason } = manifest;
-
-      const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
-      const lockSnap = await lockRef.get();
+    const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
+    
+    await db.runTransaction(async (transaction) => {
+      const lockSnap = await transaction.get(lockRef);
       if (lockSnap.exists) {
-        console.warn(`[ORCHESTRATOR] Collision: HBR ${hbrId} is currently locked.`);
-        return;
+        throw new Error(`COLLISION: HBR ${hbrId} is currently locked by ${lockSnap.data()?.agentId}`);
       }
 
-      const proposalPath = `artifacts/${appId}/public/data/logic_proposals`;
-      const proposalRef = db.collection(proposalPath).doc();
-      
-      await proposalRef.set({
-        hbrId,
-        proposingAgentId: agentId,
-        proposedLogic,
-        reason,
-        status: "PENDING",
-        correlation_id: data.correlation_id,
-        commit_pending: false,
-        createdAt: new Date().toISOString()
+      transaction.set(lockRef, {
+        agentId,
+        lockedAt: admin.firestore.FieldValue.serverTimestamp(),
+        correlation_id: data.correlation_id
       });
 
-      return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
-        status: "REGISTERED",
-        proposalId: proposalRef.id
-      });
-    }
-  } catch (err) {
-    console.error("[ORCHESTRATOR] Error:", err);
-  }
-});
-
-export const ombudsmanValidatorV2 = onDocumentCreated({
-  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
-  memory: "512MiB"
-}, async (event: L2LCreatedEvent) => {
-  const data = event.data?.data();
-  if (!data || data.status !== "validated") return;
-
-  const { appId } = event.params;
-  const correlationId = data.correlation_id;
-
-  try {
-    const proposalsPath = `artifacts/${appId}/public/data/logic_proposals`;
-    const proposalSnap = await db.collection(proposalsPath)
-      .where("correlation_id", "==", correlationId)
-      .get();
-
-    if (proposalSnap.empty) return;
-
-    const proposalRef = proposalSnap.docs[0].ref;
-    await proposalRef.update({
-      status: "APPROVED",
-      commit_pending: true,
-      validated_at: new Date().toISOString(),
-      validation_source: "OMBUDSMAN_AUTO_RUN"
+      const registryRef = db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`);
+      transaction.set(registryRef, {
+        lock_status: 'LOCKED',
+        locked_by: agentId,
+        last_modified: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
     });
-
-    console.log(`[OMBUDSMAN] Auto-approved proposal for correlation: ${correlationId}`);
-  } catch (err) {
-    console.error("[OMBUDSMAN] Error:", err);
-  }
-});
-
-export const evolutionProposalFinalizedV2 = onDocumentUpdated({
-  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
-  memory: "512MiB"
-}, async (event: L2LUpdatedEvent) => {
-  const newData = event.data?.after.data();
-  const oldData = event.data?.before.data();
-  const { appId, proposalId } = event.params;
-
-  if (!newData || !oldData) return;
-
-  const isApproved = newData.status === "APPROVED";
-  const isCommitReady = newData.commit_pending === true;
-  const wasAlreadyProcessed = oldData.status === "APPROVED" && oldData.commit_pending === true;
-
-  if (!isApproved || !isCommitReady || wasAlreadyProcessed) return;
-
-  const dbInstance = admin.firestore();
-  const hbrId = newData.hbrId || "UNKNOWN";
-
-  try {
-    const batch = dbInstance.batch();
-
-    const lessonRef = dbInstance.collection("artifacts")
-      .doc(appId)
-      .collection("public")
-      .doc("data")
-      .collection("lessons_learned")
-      .doc();
-
-    batch.set(lessonRef, {
-      reasoning_vault: newData.reasoning_vault || {},
-      applied_logic: newData.proposedLogic || "N/A",
-      hbr_target: hbrId,
-      agent_id: newData.proposingAgentId || "SYSTEM",
-      finalized_at: FieldValue.serverTimestamp(),
-      source_proposal: proposalId
-    });
-
-    const timelineRef = dbInstance.collection("artifacts")
-      .doc(appId)
-      .collection("public")
-      .doc("data")
-      .collection("evolution_timeline")
-      .doc();
-
-    const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
-      `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
-      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates.`;
-
-    batch.set(timelineRef, {
-      type: "LOGIC_COMMIT_SUCCESS",
-      title: "LOGIC COMMIT SUCCESS",
-      details: strategicSummary,
-      is_autonomous: true,
-      source: "EVOLUTION_WORKER",
-      timestamp: new Date().toISOString(),
-      hbr_id: hbrId
-    });
-
-    const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
-    const hbrRef = dbInstance.doc(registryPath);
-    batch.set(hbrRef, {
-      lock_status: "IDLE",
-      last_modified: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
-    const lockRef = dbInstance.doc(lockPath);
-    batch.delete(lockRef);
-
-    if (event.data?.after.ref) {
-      batch.delete(event.data.after.ref);
-    }
-
-    await batch.commit();
-  } catch (e) {
-    console.error("[EVOLUTION-P36] Finalization Error:", e);
   }
 });

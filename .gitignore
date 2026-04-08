@@ -16,3 +16,11 @@ functions/npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+
+# L2LAAF Security: Ignore GCP Service Account Keys
+*.json
+!state.json
+!.l2laaf/state.json
+
+# Ignore dedicated keys folder
+keys/

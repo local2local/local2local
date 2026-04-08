@@ -3,9 +3,9 @@
 ## 1. GCP Service Account (Least Privilege)
 Create a Service Account named `n8n-orchestrator` in the Google Cloud Console and assign these roles:
 - `roles/cloudfunctions.developer`: To monitor and trigger functions.
-- `roles/datastore.user`: To query/write Firestore test data.
-- `roles/logging.viewer`: To tail deployment logs.
-- `roles/firebase.admin`: To verify Hosting status.
+- `roles/datastore.user`: To query/write Firestore test data. (Cloud Datastore User)
+- `roles/logging.viewer`: To tail deployment logs. (Logs Viewer)
+- `roles/firebase.admin`: To verify Hosting status. 
 
 ## 2. GitHub PAT (Fine-Grained)
 Create a token in GitHub Settings (Developer Settings) with access to your repository and the following scopes:
