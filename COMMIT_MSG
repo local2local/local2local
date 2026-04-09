@@ -1,1 +1,1 @@
-fix(evolution): harden secret injection and add GHA debug step v11.37.7.0
+fix(evolution): reset handshake to v11.37.7.1 and verify secret injection
