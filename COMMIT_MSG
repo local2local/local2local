@@ -1,1 +1,1 @@
-fix(evolution): reset handshake to v11.37.7.1 and verify secret injection
+fix(evolution): link job to environments to enable secret access v11.37.7.2

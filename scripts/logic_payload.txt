@@ -1,20 +1,21 @@
 /**
- * L2LAAF Phase 37.7.1: Secret Connectivity Verification
+ * L2LAAF Phase 37.7.2: Environment Secret Access Restoration
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.7.1 to reset the orchestrator handshake.
- * 2. SYNC: Ensuring standard YAML syntax without 'environment' gates to maximize secret visibility.
- * 3. DEBUG: Maintained 'Check Secret Presence' to confirm injection in the next run.
+ * 1. FIX: Restored 'environment' block to deploy.yml to enable access to Environment Secrets.
+ * 2. SYNC: Mapping branches (main/staging/develop) to Environments (Production/Staging/Development).
+ * 3. BUMP: Phase 37.7.2 (Orchestration Gate).
+ * 4. DEBUG: Maintained 'Check Secret Presence' to verify injection.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): reset handshake to v11.37.7.1 and verify secret injection
+fix(evolution): link job to environments to enable secret access v11.37.7.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.7.1",
+  "current_phase": "37.7.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -47,6 +48,9 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # REQUIRED: This links the job to the Environment Secrets seen in your screenshots
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -95,7 +99,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.1" 
+          PHASE="37.7.2" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -123,7 +127,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.7.1",
+      incoming_phase: "37.7.2",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -148,7 +152,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   const manifest = data.payload?.manifest;
   const correlationId = data.correlation_id || messageId;
 
-  if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
+  if (manifest?.intent === "PROPOSE_LOG_CHANGE") {
     const { hbrId, agentId } = manifest;
     const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
 
