@@ -11,7 +11,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # REQUIRED: This links the job to the Environment Secrets seen in your screenshots
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
     steps:
@@ -62,7 +61,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.2" 
+          PHASE="37.7.3" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \

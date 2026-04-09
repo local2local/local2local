@@ -12,7 +12,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.7.2",
+      incoming_phase: "37.7.3",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -37,7 +37,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   const manifest = data.payload?.manifest;
   const correlationId = data.correlation_id || messageId;
 
-  if (manifest?.intent === "PROPOSE_LOG_CHANGE") {
+  if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
     const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
 
