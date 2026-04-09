@@ -5,8 +5,9 @@ import axios from "axios";
 
 const db = admin.firestore();
 
+// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
 type L2LChange = Change<DocumentSnapshot>;
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
+type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
 
 /**
  * SIGNAL ORCHESTRATOR
@@ -16,7 +17,7 @@ async function signalOrchestrator(payload: any) {
     const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
     try {
         await axios.post(N8N_WEBHOOK_URL, {
-            incoming_phase: "37.4",
+            incoming_phase: "37.4.2",
             build_id: payload.correlation_id || `EVO-${Date.now()}`,
             summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
             event: "DEPLOYMENT_COMPLETE",
@@ -32,6 +33,7 @@ async function signalOrchestrator(payload: any) {
 
 /**
  * [1] EVOLUTION ORCHESTRATOR
+ * Now handles both Mutex locks AND n8n signaling.
  */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -46,6 +48,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
+    
     const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
     
     try {
@@ -57,6 +60,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
                 throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
             }
         }
+
         transaction.set(lockRef, {
           agentId,
           lockedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -64,6 +68,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         });
       });
 
+      // TRIGGER THE AUTONOMOUS WRITER
       await signalOrchestrator(data);
 
     } catch (e) {
