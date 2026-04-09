@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 37.7.3: Payload-Aware Orchestration
+ * L2LAAF Phase 37.7.4: Absolute Routing & Handshake Stabilization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.7.3 (Global).
- * 2. SYNC: Updated deploy.yml notification phase to 37.7.3.
- * 3. FIX: Hardened evolution.ts signaling to ensure correlation_id consistency.
+ * 1. BUMP: Phase 37.7.4 (Global).
+ * 2. SYNC: deploy.yml updated to phase 37.7.4 to match orchestrator.
+ * 3. FIX: Absolute Node Referencing implemented in n8n to resolve 'endsWith' undefined error.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement payload-aware routing and bump to v11.37.7.3
+fix(orchestration): resolve undefined file path error and bump to v11.37.7.4
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.7.3",
+  "current_phase": "37.7.4",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -97,7 +97,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.3" 
+          PHASE="37.7.4" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -125,7 +125,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.7.3",
+      incoming_phase: "37.7.4",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
