@@ -8,15 +8,11 @@ const db = admin.firestore();
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
 
-/**
- * SIGNAL ORCHESTRATOR
- * Transmits the agent's proposed logic to n8n for GitHub writing.
- */
 async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.5.3",
+      incoming_phase: "37.5.4",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -30,9 +26,6 @@ async function signalOrchestrator(payload: any) {
   }
 }
 
-/**
- * [1] EVOLUTION ORCHESTRATOR
- */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"

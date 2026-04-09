@@ -1,1 +1,1 @@
-fix(evolution): correct path resolution for deploy.yml and bump to v11.37.5.3
+fix(evolution): restore GitHub secret syntax and bump to v11.37.5.4
