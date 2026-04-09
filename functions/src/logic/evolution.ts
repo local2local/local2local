@@ -8,8 +8,8 @@ type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 /**
- * TELEMETRY HELPER
- * Updates the Mission Monitor UI in real-time.
+ * PHASE 37.1: TELEMETRY HELPER
+ * Updates the real-time status for the Browser Mission Monitor.
  */
 async function updateTelemetry(buildId: string, task: string, progress: number, status: 'PENDING' | 'SUCCESS' | 'FAILED' = 'PENDING') {
   if (buildId === 'unknown') return;
@@ -22,10 +22,6 @@ async function updateTelemetry(buildId: string, task: string, progress: number, 
   }, { merge: true });
 }
 
-/**
- * [1] EVOLUTION ORCHESTRATOR
- * Handles Mutex locks and UI telemetry.
- */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -74,8 +70,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 });
 
 /**
- * [2] AUTONOMOUS FIXER
- * Listens for FAILED_AUDIT and initiates self-healing protocols.
+ * PHASE 37.1: THE AUTONOMOUS FIXER
+ * Listens for FAILED_AUDIT status in state.json and attempts self-healing.
  */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
@@ -85,30 +81,13 @@ export const autonomousFixerV1 = onDocumentWritten({
   if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
 
   const { appId } = event.params;
-  console.log(`🛠️ FIXER: Audit failure detected in ${appId}. Initializing Recovery Agent...`);
+  console.log(`🛠️ FIXER: Audit failure detected in ${appId}. Analyzing logs...`);
 
+  // Future Phase 37.2 will trigger the n8n "Recovery Agent" via a bus message here.
   const fixerLogRef = db.collection(`artifacts/${appId}/public/data/fixer_logs`).doc();
   await fixerLogRef.set({
     detected_at: admin.firestore.FieldValue.serverTimestamp(),
     status: "ANALYZING",
     target_phase: state.current_phase
   });
-});
-
-/**
- * [3] OMBUDSMAN VALIDATOR (Legacy Maintenance)
- */
-export const ombudsmanValidatorV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
-}, async (event) => {
-  // Legacy logic remains stable. Visibility is managed via index.ts
-});
-
-/**
- * [4] PROPOSAL FINALIZER (Legacy Maintenance)
- */
-export const evolutionProposalFinalizerV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
-}, async (event) => {
-  // Legacy logic remains stable. Visibility is managed via index.ts
 });

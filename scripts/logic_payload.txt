@@ -1,69 +1,17 @@
 /**
- * L2LAAF Phase 37.1: Global Logic Synchronization (v11.37.1)
+ * L2LAAF Phase 37.1: The Autonomous Fixer (v11.37.1)
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * * FIX: Restored missing getAppId and getProjectId exports in config.ts.
- * * ACTIONS:
- * 1. Synchronize System Entry Point (index.ts) to export ALL logic modules.
- * 2. Patch config.ts with helper functions required by agentBusClient and others.
- * 3. Maintain Mutex and Telemetry hooks in evolution.ts.
+ * * GOALS:
+ * 1. Implement Telemetry Hook for the Mission Monitor UI.
+ * 2. Deploy the 'Autonomous Fixer' shell to Cloud Functions.
+ * 3. Enhance Mutex logging for n8n consumption.
  */
 
-L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(orchestration): restore config helpers and synchronize global logic v11.37.1
-L2LAAF_BLOCK_END
+/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
+feat(fixer): implement autonomous fixer shell and live telemetry hooks v11.37.1
+L2LAAF_BLOCK_END */
 
-L2LAAF_BLOCK_START(typescript:System Config:functions/src/config.ts)
-import * as admin from "firebase-admin";
-
-/**
- * SHARED SYSTEM CONFIG
- * This file is imported by many logic modules. We must guard initialization here.
- */
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
-export const db = admin.firestore();
-export const auth = admin.auth();
-
-/**
- * Returns the current GCP Project ID.
- */
-export const getProjectId = () => process.env.GCLOUD_PROJECT || "local2local-dev";
-
-/**
- * Returns the App ID used in Firestore pathing.
- * In L2LAAF, the App ID typically matches the Project ID.
- */
-export const getAppId = () => getProjectId();
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
-import * as admin from "firebase-admin";
-
-/** * SYSTEM INITIALIZATION
- * Guarded initialization at the primary entry point.
- */
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
-/** * GLOBAL LOGIC EXPORTS
- * Restoring visibility to all business pillars.
- */
-export * from "./logic/analytics";
-export * from "./logic/compliance";
-export * from "./logic/dispatch";
-export * from "./logic/evolution";
-export * from "./logic/finance";
-export * from "./logic/fulfillment";
-export * from "./logic/infrastructure";
-export * from "./logic/ombudsman";
-export * from "./logic/orchestration";
-export * from "./logic/treasury";
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
+/* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -74,8 +22,8 @@ type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 /**
- * TELEMETRY HELPER
- * Updates the Mission Monitor UI in real-time.
+ * PHASE 37.1: TELEMETRY HELPER
+ * Updates the real-time status for the Browser Mission Monitor.
  */
 async function updateTelemetry(buildId: string, task: string, progress: number, status: 'PENDING' | 'SUCCESS' | 'FAILED' = 'PENDING') {
   if (buildId === 'unknown') return;
@@ -88,10 +36,6 @@ async function updateTelemetry(buildId: string, task: string, progress: number, 
   }, { merge: true });
 }
 
-/**
- * [1] EVOLUTION ORCHESTRATOR
- * Handles Mutex locks and UI telemetry.
- */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -140,8 +84,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 });
 
 /**
- * [2] AUTONOMOUS FIXER
- * Listens for FAILED_AUDIT and initiates self-healing protocols.
+ * PHASE 37.1: THE AUTONOMOUS FIXER
+ * Listens for FAILED_AUDIT status in state.json and attempts self-healing.
  */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
@@ -151,31 +95,14 @@ export const autonomousFixerV1 = onDocumentWritten({
   if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
 
   const { appId } = event.params;
-  console.log(`🛠️ FIXER: Audit failure detected in ${appId}. Initializing Recovery Agent...`);
+  console.log(`🛠️ FIXER: Audit failure detected in ${appId}. Analyzing logs...`);
 
+  // Future Phase 37.2 will trigger the n8n "Recovery Agent" via a bus message here.
   const fixerLogRef = db.collection(`artifacts/${appId}/public/data/fixer_logs`).doc();
   await fixerLogRef.set({
     detected_at: admin.firestore.FieldValue.serverTimestamp(),
     status: "ANALYZING",
     target_phase: state.current_phase
   });
-});
-
-/**
- * [3] OMBUDSMAN VALIDATOR (Legacy Maintenance)
- */
-export const ombudsmanValidatorV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
-}, async (event) => {
-  // Legacy logic remains stable. Visibility is managed via index.ts
-});
-
-/**
- * [4] PROPOSAL FINALIZER (Legacy Maintenance)
- */
-export const evolutionProposalFinalizerV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
-}, async (event) => {
-  // Legacy logic remains stable. Visibility is managed via index.ts
 });
 L2LAAF_BLOCK_END
