@@ -1,21 +1,20 @@
 /**
- * L2LAAF Phase 37.5.0: Autonomous Bridge Stabilization
+ * L2LAAF Phase 37.5.1: Autonomous Signal Finalization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.5.0 (Final Handshake).
- * 2. FIX: Hardened TypeScript types for Firebase Functions v2.
- * 3. SYNC: Full dependency alignment (axios, stripe, uuid).
- * 4. SIGNAL: Automated signaling to n8n active.
+ * 1. BUMP: Phase 37.5.1 to force fresh orchestration loop.
+ * 2. SYNC: Ensuring all backend type-guards for Cloud Functions v2 remain strict.
+ * 3. VERIFY: Final handshake for the n8n persistence model.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): stabilize autonomous signaling and harden types v11.37.5.0
+feat(evolution): finalize autonomous signaling bridge v11.37.5.1
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.5.0",
+  "current_phase": "37.5.1",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -79,7 +78,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.5.0",
+      incoming_phase: "37.5.1",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
