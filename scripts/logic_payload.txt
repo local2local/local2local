@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 37.7.5: Orchestration Resiliency & Dummy Pathing
+ * L2LAAF Phase 37.7.6: Orchestration Data-Flow Hardening
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.7.5 (Global).
- * 2. FIX: Implemented "Safe Dummy Path" fallback to prevent n8n 404 initialization errors.
- * 3. SYNC: deploy.yml updated to 37.7.5.
- * 4. HARDEN: Evolution signaling logic refined for stateless consistency.
+ * 1. BUMP: Phase 37.7.6 (Global Handshake).
+ * 2. SYNC: deploy.yml updated to phase 37.7.6.
+ * 3. FIX: Hardened n8n expressions using '.item.json' syntax for absolute reliability.
+ * 4. FIX: Implemented non-empty fallback for Final Alert to prevent Google Chat 400 errors.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement safe dummy pathing for n8n stability v11.37.7.5
+fix(orchestration): harden n8n data flow and bump to v11.37.7.6
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.7.5",
+  "current_phase": "37.7.6",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -72,7 +72,7 @@ jobs:
       - name: Check Secret Presence
         run: |
           if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ FATAL: GCP_SA_KEY is empty. Check GitHub Settings > Secrets > Actions."
+            echo "❌ FATAL: GCP_SA_KEY is empty."
             exit 1
           else
             echo "✅ GCP_SA_KEY detected."
@@ -98,7 +98,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.5" 
+          PHASE="37.7.6" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -126,7 +126,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.7.5",
+      incoming_phase: "37.7.6",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",

@@ -35,7 +35,7 @@ jobs:
       - name: Check Secret Presence
         run: |
           if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ FATAL: GCP_SA_KEY is empty. Check GitHub Settings > Secrets > Actions."
+            echo "❌ FATAL: GCP_SA_KEY is empty."
             exit 1
           else
             echo "✅ GCP_SA_KEY detected."
@@ -61,7 +61,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.5" 
+          PHASE="37.7.6" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \

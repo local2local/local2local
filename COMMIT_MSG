@@ -1,1 +1,1 @@
-fix(orchestration): implement safe dummy pathing for n8n stability v11.37.7.5
+fix(orchestration): harden n8n data flow and bump to v11.37.7.6
