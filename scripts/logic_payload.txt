@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 37.5.5: YAML Integrity & Secret Injection fix
+ * L2LAAF Phase 37.6.0: Secret Access Restoration
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Verified standard GitHub Action secret syntax for google-github-actions/auth.
- * 2. BUMP: Phase 37.5.5 (Orchestration Sync).
- * 3. SYNC: Maintaining hardened types for Firebase Functions v2 and orchestrator bridge.
+ * 1. FIX: Removed 'environment' block from deploy.yml to restore access to Repo secrets.
+ * 2. BUMP: Phase 37.6.0 (Handshake Reset).
+ * 3. SYNC: Maintaining hardened types and orchestrator bridge.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): repair GitHub Action secret injection and bump to v11.37.5.5
+fix(evolution): restore secret access by removing environment gate v11.37.6.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.5.5",
+  "current_phase": "37.6.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.5.5" 
+          PHASE="37.6.0" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
@@ -111,15 +111,11 @@ const db = admin.firestore();
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
 
-/**
- * SIGNAL ORCHESTRATOR
- * Transmits the agent's proposed logic to n8n for GitHub writing.
- */
 async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.5.5",
+      incoming_phase: "37.6.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -133,9 +129,6 @@ async function signalOrchestrator(payload: any) {
   }
 }
 
-/**
- * [1] EVOLUTION ORCHESTRATOR
- */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"

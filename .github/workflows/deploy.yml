@@ -50,7 +50,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.5.5" 
+          PHASE="37.6.0" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \

@@ -1,1 +1,1 @@
-fix(evolution): repair GitHub Action secret injection and bump to v11.37.5.5
+fix(evolution): restore secret access by removing environment gate v11.37.6.0
