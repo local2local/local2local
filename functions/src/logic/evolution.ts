@@ -5,7 +5,6 @@ import axios from "axios";
 
 const db = admin.firestore();
 
-// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
 
@@ -14,21 +13,21 @@ type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; me
  * Transmits the agent's proposed logic to n8n for GitHub writing.
  */
 async function signalOrchestrator(payload: any) {
-    const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
-    try {
-        await axios.post(N8N_WEBHOOK_URL, {
-            incoming_phase: "37.4.2",
-            build_id: payload.correlation_id || `EVO-${Date.now()}`,
-            summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
-            event: "DEPLOYMENT_COMPLETE",
-            filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
-            fileContent: payload.manifest.proposedLogic,
-            branch: "develop"
-        });
-        console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
-    } catch (error) {
-        console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
-    }
+  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
+  try {
+    await axios.post(N8N_WEBHOOK_URL, {
+      incoming_phase: "37.5.0",
+      build_id: payload.correlation_id || `EVO-${Date.now()}`,
+      summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
+      event: "DEPLOYMENT_COMPLETE",
+      filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest.proposedLogic,
+      branch: "develop"
+    });
+    console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
+  } catch (error) {
+    console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
+  }
 }
 
 /**
@@ -42,25 +41,23 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   const data = event.data?.after.data();
   if (!data || data.status !== "dispatched") return;
 
-  const { appId } = event.params;
+  const { appId, messageId } = event.params;
   const manifest = data.payload?.manifest;
-  const correlationId = data.correlation_id || "unknown";
+  const correlationId = data.correlation_id || messageId;
 
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
-    
     const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
-    
+
     try {
       await db.runTransaction(async (transaction) => {
         const lockSnap = await transaction.get(lockRef);
         if (lockSnap.exists) {
-            const existingLock = lockSnap.data();
-            if (existingLock?.correlation_id !== correlationId) {
-                throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
-            }
+          const existingLock = lockSnap.data();
+          if (existingLock?.correlation_id !== correlationId) {
+            throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
+          }
         }
-
         transaction.set(lockRef, {
           agentId,
           lockedAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -1,1 +1,1 @@
-fix(evolution): resolve strict type mismatches in orchestrator v11.37.4.2
+feat(evolution): stabilize autonomous signaling and harden types v11.37.5.0

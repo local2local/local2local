@@ -1,20 +1,21 @@
 /**
- * L2LAAF Phase 37.4.2: Autonomous Payload Generation (Type Hardening) (2)
+ * L2LAAF Phase 37.5.0: Autonomous Bridge Stabilization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Resolved TS2769 by using DocumentSnapshot and specific path params.
- * 2. FIX: Restored package.json block to ensure axios/stripe/uuid availability.
- * 3. BUMP: Phase 37.4.2 to force a fresh deployment loop.
+ * 1. BUMP: Phase 37.5.0 (Final Handshake).
+ * 2. FIX: Hardened TypeScript types for Firebase Functions v2.
+ * 3. SYNC: Full dependency alignment (axios, stripe, uuid).
+ * 4. SIGNAL: Automated signaling to n8n active.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): resolve strict type mismatches in orchestrator v11.37.4.2
+feat(evolution): stabilize autonomous signaling and harden types v11.37.5.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.4.2",
+  "current_phase": "37.5.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -67,7 +68,6 @@ import axios from "axios";
 
 const db = admin.firestore();
 
-// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
 
@@ -76,21 +76,21 @@ type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; me
  * Transmits the agent's proposed logic to n8n for GitHub writing.
  */
 async function signalOrchestrator(payload: any) {
-    const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
-    try {
-        await axios.post(N8N_WEBHOOK_URL, {
-            incoming_phase: "37.4.2",
-            build_id: payload.correlation_id || `EVO-${Date.now()}`,
-            summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
-            event: "DEPLOYMENT_COMPLETE",
-            filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
-            fileContent: payload.manifest.proposedLogic,
-            branch: "develop"
-        });
-        console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
-    } catch (error) {
-        console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
-    }
+  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
+  try {
+    await axios.post(N8N_WEBHOOK_URL, {
+      incoming_phase: "37.5.0",
+      build_id: payload.correlation_id || `EVO-${Date.now()}`,
+      summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
+      event: "DEPLOYMENT_COMPLETE",
+      filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest.proposedLogic,
+      branch: "develop"
+    });
+    console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
+  } catch (error) {
+    console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
+  }
 }
 
 /**
@@ -104,25 +104,23 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   const data = event.data?.after.data();
   if (!data || data.status !== "dispatched") return;
 
-  const { appId } = event.params;
+  const { appId, messageId } = event.params;
   const manifest = data.payload?.manifest;
-  const correlationId = data.correlation_id || "unknown";
+  const correlationId = data.correlation_id || messageId;
 
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
-    
     const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
-    
+
     try {
       await db.runTransaction(async (transaction) => {
         const lockSnap = await transaction.get(lockRef);
         if (lockSnap.exists) {
-            const existingLock = lockSnap.data();
-            if (existingLock?.correlation_id !== correlationId) {
-                throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
-            }
+          const existingLock = lockSnap.data();
+          if (existingLock?.correlation_id !== correlationId) {
+            throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
+          }
         }
-
         transaction.set(lockRef, {
           agentId,
           lockedAt: admin.firestore.FieldValue.serverTimestamp(),
