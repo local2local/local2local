@@ -5,7 +5,6 @@ import axios from "axios";
 
 const db = admin.firestore();
 
-// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
@@ -17,7 +16,7 @@ async function signalOrchestrator(payload: any) {
     const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
     try {
         await axios.post(N8N_WEBHOOK_URL, {
-            incoming_phase: "37.2",
+            incoming_phase: "37.4",
             build_id: payload.correlation_id || `EVO-${Date.now()}`,
             summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
             event: "DEPLOYMENT_COMPLETE",

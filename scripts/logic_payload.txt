@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 37.2.3: Autonomous Payload Generation (Hotfix 1)
+ * L2LAAF Phase 37.2.4: Autonomous Payload Generation (Hotfix 2)
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Added 'uuid' and '@types/uuid' to package.json to resolve TS7016.
- * 2. FIX: Hardened Firestore types in evolution.ts to resolve TS2769/TS2345.
- * 3. SIGNAL: Implemented 'signalOrchestrator' in evolution.ts.
+ * 1. FIX: Added 'stripe' to package.json to resolve MODULE_NOT_FOUND in finance.js.
+ * 2. SYNC: Maintained 'uuid' and 'axios' dependencies.
+ * 3. BUMP: Phase 37.4 for deployment synchronization.
  */
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): resolve dependency errors and strict type mismatches v11.37.3
+fix(evolution): add missing stripe dependency and sync orchestrator v11.37.4
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.2",
+  "current_phase": "37.4",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -51,6 +51,7 @@ L2LAAF_BLOCK_START(json:Functions Config:functions/package.json)
   "dependencies": {
     "axios": "^1.6.0",
     "uuid": "^9.0.1",
+    "stripe": "^14.25.0",
     "firebase-admin": "^11.11.0",
     "firebase-functions": "^4.5.0"
   },
@@ -70,7 +71,6 @@ import axios from "axios";
 
 const db = admin.firestore();
 
-// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
@@ -82,7 +82,7 @@ async function signalOrchestrator(payload: any) {
     const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
     try {
         await axios.post(N8N_WEBHOOK_URL, {
-            incoming_phase: "37.2",
+            incoming_phase: "37.4",
             build_id: payload.correlation_id || `EVO-${Date.now()}`,
             summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
             event: "DEPLOYMENT_COMPLETE",
