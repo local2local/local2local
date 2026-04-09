@@ -1,29 +1,55 @@
 /**
  * L2LAAF Phase 37.1: Global Logic Synchronization (v11.37.1)
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+ * * FIX: Restored missing getAppId and getProjectId exports in config.ts.
  * * ACTIONS:
  * 1. Synchronize System Entry Point (index.ts) to export ALL logic modules.
- * 2. Restore visibility of legacy business logic (Treasury, Dispatch, etc.) to Firebase.
+ * 2. Patch config.ts with helper functions required by agentBusClient and others.
  * 3. Maintain Mutex and Telemetry hooks in evolution.ts.
  */
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(orchestration): synchronize all logic modules and restore global function visibility v11.37.1
+feat(orchestration): restore config helpers and synchronize global logic v11.37.1
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(typescript:System Config:functions/src/config.ts)
+import * as admin from "firebase-admin";
+
+/**
+ * SHARED SYSTEM CONFIG
+ * This file is imported by many logic modules. We must guard initialization here.
+ */
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+export const db = admin.firestore();
+export const auth = admin.auth();
+
+/**
+ * Returns the current GCP Project ID.
+ */
+export const getProjectId = () => process.env.GCLOUD_PROJECT || "local2local-dev";
+
+/**
+ * Returns the App ID used in Firestore pathing.
+ * In L2LAAF, the App ID typically matches the Project ID.
+ */
+export const getAppId = () => getProjectId();
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
 import * as admin from "firebase-admin";
 
 /** * SYSTEM INITIALIZATION
- * This ensures Firebase is ready before any application logic exports.
+ * Guarded initialization at the primary entry point.
  */
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
 /** * GLOBAL LOGIC EXPORTS
- * These exports make the functions inside each file visible to the Firebase CLI.
- * Each module below represents a critical business pillar of L2LAAF.
+ * Restoring visibility to all business pillars.
  */
 export * from "./logic/analytics";
 export * from "./logic/compliance";

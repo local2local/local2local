@@ -1,15 +1,14 @@
 import * as admin from "firebase-admin";
 
 /** * SYSTEM INITIALIZATION
- * This ensures Firebase is ready before any application logic exports.
+ * Guarded initialization at the primary entry point.
  */
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
 /** * GLOBAL LOGIC EXPORTS
- * These exports make the functions inside each file visible to the Firebase CLI.
- * Each module below represents a critical business pillar of L2LAAF.
+ * Restoring visibility to all business pillars.
  */
 export * from "./logic/analytics";
 export * from "./logic/compliance";
