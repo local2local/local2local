@@ -16,7 +16,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.5.1",
+      incoming_phase: "37.5.3",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -32,7 +32,6 @@ async function signalOrchestrator(payload: any) {
 
 /**
  * [1] EVOLUTION ORCHESTRATOR
- * Now handles both Mutex locks AND n8n signaling.
  */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -65,7 +64,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         });
       });
 
-      // TRIGGER THE AUTONOMOUS WRITER
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -75,9 +73,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   }
 });
 
-/**
- * [2] AUTONOMOUS FIXER
- */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"

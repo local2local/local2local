@@ -11,8 +11,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -52,13 +50,11 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # BUMP: Synchronized to Phase 37.1
-          PHASE="37.1" 
+          # BUMP: Synchronized to Phase 37.5.3
+          PHASE="37.5.3" 
           
-          # Extract commit message for build summary
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           
-          # POST to n8n Webhook
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d "{

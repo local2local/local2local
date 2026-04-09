@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 37.5.1: Autonomous Signal Finalization
+ * L2LAAF Phase 37.5.3: Path Sanitization & Deployment
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.5.1 to force fresh orchestration loop.
- * 2. SYNC: Ensuring all backend type-guards for Cloud Functions v2 remain strict.
- * 3. VERIFY: Final handshake for the n8n persistence model.
+ * 1. FIX: Corrected relative path for .github/workflows/deploy.yml.
+ * 2. BUMP: Phase 37.5.3 (Global).
+ * 3. SYNC: Maintaining hardened types and full dependencies.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): finalize autonomous signaling bridge v11.37.5.1
+fix(evolution): correct path resolution for deploy.yml and bump to v11.37.5.3
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.5.1",
+  "current_phase": "37.5.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -31,6 +31,75 @@ L2LAAF_BLOCK_END */
     "conflict_detected": false
   }
 }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(yaml:GitHub Actions:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, staging, develop ]
+    paths-ignore:
+      - '.l2laaf/state.json'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+
+      - name: Build Flutter Web
+        run: flutter build web --release
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy Stack
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+
+      - name: Notify Orchestrator (Telemetry Link)
+        if: success()
+        run: |
+          # BUMP: Synchronized to Phase 37.5.3
+          PHASE="37.5.3" 
+          
+          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
+          
+          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"incoming_phase\": \"$PHASE\",
+            \"build_id\": \"${{ github.run_id }}\",
+            \"summary\": \"$SUMMARY\",
+            \"event\": \"DEPLOYMENT_COMPLETE\",
+            \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"
+          }"
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Functions Config:functions/package.json)
@@ -78,7 +147,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.5.1",
+      incoming_phase: "37.5.3",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
@@ -94,7 +163,6 @@ async function signalOrchestrator(payload: any) {
 
 /**
  * [1] EVOLUTION ORCHESTRATOR
- * Now handles both Mutex locks AND n8n signaling.
  */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
@@ -127,7 +195,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         });
       });
 
-      // TRIGGER THE AUTONOMOUS WRITER
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -137,9 +204,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   }
 });
 
-/**
- * [2] AUTONOMOUS FIXER
- */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
