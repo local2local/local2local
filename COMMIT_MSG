@@ -1,1 +1,1 @@
-fix(evolution): retire double-brace protocol and restore GitHub secrets v11.37.6.1
+fix(evolution): harden secret injection and add GHA debug step v11.37.7.0

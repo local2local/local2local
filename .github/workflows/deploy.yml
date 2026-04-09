@@ -30,6 +30,17 @@ jobs:
       - name: Build Flutter Web
         run: flutter build web --release
 
+      - name: Check Secret Presence
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "❌ FATAL: GCP_SA_KEY is empty or not injected. Check Repository Secrets."
+            exit 1
+          else
+            echo "✅ GCP_SA_KEY detected (Length: ${#SECRET_CHECK})"
+          fi
+        env:
+          SECRET_CHECK: ${{ secrets.GCP_SA_KEY }}
+
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -50,9 +61,8 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.6.1" 
+          PHASE="37.7.0" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d "{
