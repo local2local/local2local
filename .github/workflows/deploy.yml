@@ -2,6 +2,8 @@ name: L2LAAF Multi-Project Deployment
 on:
   push:
     branches: [ main, staging, develop ]
+    paths-ignore:
+      - '.l2laaf/state.json'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -50,13 +52,13 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # 1. Extract the current phase from logic_payload if possible, or fallback
-          PHASE="36.6" 
+          # BUMP: Synchronized to Phase 37.1
+          PHASE="37.1" 
           
-          # 2. Get the latest commit message for the summary
+          # Extract commit message for build summary
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           
-          # 3. POST to n8n Webhook
+          # POST to n8n Webhook
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d "{
