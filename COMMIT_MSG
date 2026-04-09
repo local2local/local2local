@@ -1,1 +1,1 @@
-feat(evolution): implement visual Mutex locks and refactor system entry point v11.36.6
+feat(orchestration): synchronize all logic modules and restore global function visibility v11.37.1
