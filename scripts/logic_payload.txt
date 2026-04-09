@@ -1,14 +1,14 @@
 /**
- * L2LAAF Phase 37.2.3: Autonomous Payload Generation
+ * L2LAAF Phase 37.2.3: Autonomous Payload Generation (Hotfix 1)
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. INTEGRATE: Added 'axios' dependency to package.json.
- * 2. SIGNAL: Implemented 'signalOrchestrator' in evolution.ts.
- * 3. AUTOMATE: Intent 'PROPOSE_LOGIC_CHANGE' now triggers the n8n Webhook.
+ * 1. FIX: Added 'uuid' and '@types/uuid' to package.json to resolve TS7016.
+ * 2. FIX: Hardened Firestore types in evolution.ts to resolve TS2769/TS2345.
+ * 3. SIGNAL: Implemented 'signalOrchestrator' in evolution.ts.
  */
 
 L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): add axios dependency and implement autonomous signaling v11.37.2
+fix(evolution): resolve dependency errors and strict type mismatches v11.37.3
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
@@ -50,11 +50,13 @@ L2LAAF_BLOCK_START(json:Functions Config:functions/package.json)
   "main": "lib/index.js",
   "dependencies": {
     "axios": "^1.6.0",
+    "uuid": "^9.0.1",
     "firebase-admin": "^11.11.0",
     "firebase-functions": "^4.5.0"
   },
   "devDependencies": {
-    "typescript": "^4.9.0"
+    "typescript": "^4.9.0",
+    "@types/uuid": "^9.0.7"
   },
   "private": true
 }
@@ -62,13 +64,14 @@ L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
+import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import axios from "axios";
 
 const db = admin.firestore();
 
-type L2LChange = Change<QueryDocumentSnapshot>;
+// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
+type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 /**
@@ -93,6 +96,9 @@ async function signalOrchestrator(payload: any) {
     }
 }
 
+/**
+ * [1] EVOLUTION ORCHESTRATOR
+ */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -124,7 +130,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         });
       });
 
-      // TRIGGER THE AUTONOMOUS WRITER
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -134,6 +139,9 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   }
 });
 
+/**
+ * [2] AUTONOMOUS FIXER
+ */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"

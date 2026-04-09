@@ -1,11 +1,12 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
+import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import axios from "axios";
 
 const db = admin.firestore();
 
-type L2LChange = Change<QueryDocumentSnapshot>;
+// Adjusted to use DocumentSnapshot to comply with onDocumentWritten's expected overloads
+type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 /**
@@ -30,6 +31,9 @@ async function signalOrchestrator(payload: any) {
     }
 }
 
+/**
+ * [1] EVOLUTION ORCHESTRATOR
+ */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -61,7 +65,6 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         });
       });
 
-      // TRIGGER THE AUTONOMOUS WRITER
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -71,6 +74,9 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   }
 });
 
+/**
+ * [2] AUTONOMOUS FIXER
+ */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
