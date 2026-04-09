@@ -1,20 +1,34 @@
 /**
- * L2LAAF Phase 37.6.0: Secret Access Restoration
+ * L2LAAF Phase 37.6.1: Protocol Retirement & Secret Restoration
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Removed 'environment' block from deploy.yml to restore access to Repo secrets.
- * 2. BUMP: Phase 37.6.0 (Handshake Reset).
- * 3. SYNC: Maintaining hardened types and orchestrator bridge.
+ * 1. FIX: Standardized GitHub secret syntax (RETIRED Double-Brace Protocol).
+ * 2. SYNC: Updated deployment.md to mark manual search-and-replace as obsolete.
+ * 3. BUMP: Phase 37.6.1 (Orchestration Reset).
+ * 4. PATH: Verified relative path for .github/workflows/deploy.yml.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): restore secret access by removing environment gate v11.37.6.0
+fix(evolution): retire double-brace protocol and restore GitHub secrets v11.37.6.1
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(markdown:Deployment Procedures:deployment.md)
+# L2LAAF Deployment: Zero-Touch Protocol (v10.0)
+
+## 1. Procedure: Sync
+1. Copy the full content of `scripts/logic_payload.js` from the canvas.
+2. Paste it into your local `scripts/logic_payload.txt`.
+3. **IMPORTANT**: DO NOT perform any Find & Replace operations. The protocol is now "Zero-Touch". Braces are handled by the patcher.
+
+## 2. Procedure: Relay Execution
+1. Save the file.
+2. Run `./scripts/relay.sh`.
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.6.0",
+  "current_phase": "37.6.1",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +100,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.6.0" 
+          PHASE="37.6.1" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
@@ -115,7 +129,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.6.0",
+      incoming_phase: "37.6.1",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",

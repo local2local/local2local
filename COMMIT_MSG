@@ -1,1 +1,1 @@
-fix(evolution): restore secret access by removing environment gate v11.37.6.0
+fix(evolution): retire double-brace protocol and restore GitHub secrets v11.37.6.1
