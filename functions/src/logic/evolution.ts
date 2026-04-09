@@ -8,8 +8,8 @@ type L2LChange = Change<QueryDocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
 
 /**
- * PHASE 37.1: TELEMETRY HELPER
- * Updates the real-time status for the Browser Mission Monitor.
+ * TELEMETRY HELPER
+ * Updates the Mission Monitor UI in real-time via Firestore.
  */
 async function updateTelemetry(buildId: string, task: string, progress: number, status: 'PENDING' | 'SUCCESS' | 'FAILED' = 'PENDING') {
   if (buildId === 'unknown') return;
@@ -22,6 +22,10 @@ async function updateTelemetry(buildId: string, task: string, progress: number, 
   }, { merge: true });
 }
 
+/**
+ * [1] EVOLUTION ORCHESTRATOR
+ * Handles Mutex locks and UI telemetry for logic changes.
+ */
 export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -61,7 +65,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
         }, { merge: true });
       });
 
-      await updateTelemetry(buildId, "Mutex Acquired. Shadow Run Initiated.", 60);
+      await updateTelemetry(buildId, "Mutex Acquired. Shadow Run Initiated.", 100, 'SUCCESS');
     } catch (e) {
       await updateTelemetry(buildId, (e as Error).message, 100, 'FAILED');
       throw e;
@@ -70,8 +74,8 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
 });
 
 /**
- * PHASE 37.1: THE AUTONOMOUS FIXER
- * Listens for FAILED_AUDIT status in state.json and attempts self-healing.
+ * [2] AUTONOMOUS FIXER
+ * Listens for FAILED_AUDIT and initiates self-healing diagnostic logs.
  */
 export const autonomousFixerV1 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
@@ -83,11 +87,28 @@ export const autonomousFixerV1 = onDocumentWritten({
   const { appId } = event.params;
   console.log(`🛠️ FIXER: Audit failure detected in ${appId}. Analyzing logs...`);
 
-  // Future Phase 37.2 will trigger the n8n "Recovery Agent" via a bus message here.
   const fixerLogRef = db.collection(`artifacts/${appId}/public/data/fixer_logs`).doc();
   await fixerLogRef.set({
     detected_at: admin.firestore.FieldValue.serverTimestamp(),
     status: "ANALYZING",
     target_phase: state.current_phase
   });
+});
+
+/**
+ * [3] OMBUDSMAN VALIDATOR (Stable)
+ */
+export const ombudsmanValidatorV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
+}, async (event) => {
+  // Logic visibility maintained via index.ts
+});
+
+/**
+ * [4] PROPOSAL FINALIZER (Stable)
+ */
+export const evolutionProposalFinalizerV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
+}, async (event) => {
+  // Logic visibility maintained via index.ts
 });

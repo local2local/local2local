@@ -1,14 +1,14 @@
 import * as admin from "firebase-admin";
 
 /** * SYSTEM INITIALIZATION
- * Guarded initialization at the primary entry point.
+ * Guarded initialization at the primary process entry point.
  */
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
 /** * GLOBAL LOGIC EXPORTS
- * Restoring visibility to all business pillars.
+ * Restoring visibility to all business pillars for the Firebase CLI.
  */
 export * from "./logic/analytics";
 export * from "./logic/compliance";
