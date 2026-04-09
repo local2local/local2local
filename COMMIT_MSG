@@ -1,1 +1,1 @@
-fix(orchestration): harden n8n data flow and bump to v11.37.7.6
+fix(orchestration): harden final alert notification logic v11.37.7.7

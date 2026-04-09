@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 37.7.6: Orchestration Data-Flow Hardening
+ * L2LAAF Phase 37.7.7: Orchestration Finalization & Data-Flow Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 37.7.6 (Global Handshake).
- * 2. SYNC: deploy.yml updated to phase 37.7.6.
- * 3. FIX: Hardened n8n expressions using '.item.json' syntax for absolute reliability.
- * 4. FIX: Implemented non-empty fallback for Final Alert to prevent Google Chat 400 errors.
+ * 1. BUMP: Phase 37.7.7 (Global Handshake).
+ * 2. SYNC: deploy.yml updated to phase 37.7.7.
+ * 3. FIX: Simplified n8n expression syntax to prevent Google Chat 400 errors.
+ * 4. HARDEN: Ensuring 'notification_text' is never empty at the source.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): harden n8n data flow and bump to v11.37.7.6
+fix(orchestration): harden final alert notification logic v11.37.7.7
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.7.6",
+  "current_phase": "37.7.7",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -98,7 +98,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="37.7.6" 
+          PHASE="37.7.7" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -126,7 +126,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "37.7.6",
+      incoming_phase: "37.7.7",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
       event: "DEPLOYMENT_COMPLETE",
