@@ -1,5 +1,5 @@
 /**
- * L2LAAF Phase 37.4.2: Autonomous Payload Generation (Type Hardening) (1)
+ * L2LAAF Phase 37.4.2: Autonomous Payload Generation (Type Hardening) (2)
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
  * 1. FIX: Resolved TS2769 by using DocumentSnapshot and specific path params.
