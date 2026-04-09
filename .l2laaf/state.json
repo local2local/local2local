@@ -1,17 +1,17 @@
 {
-  "system_status": "OPERATIONAL",
+  "system_status": "STALLED",
   "current_phase": "36.5",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
     "current_build_id": null,
-    "verification_status": "VERIFIED_STABLE"
+    "verification_status": "REJECTED_BY_USER"
   },
   "approval_gate": {
     "pending": false,
     "timeout_at": null,
     "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "status": "REJECTED"
   },
   "reconciliation": {
     "last_sync_timestamp": null,
