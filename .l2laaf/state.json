@@ -1,20 +1,20 @@
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "37.1",
+  "current_phase": "37.5.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
     "current_build_id": null,
-    "verification_status": "VERIFIED_STABLE"
+    "verification_status": "IDLE"
   },
   "approval_gate": {
     "pending": false,
     "timeout_at": null,
-    "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "gate_type": "HITL_REQUIRED"
   },
   "reconciliation": {
-    "last_sync_timestamp": null,
-    "conflict_detected": false
+    "last_sync_timestamp": "2026-04-09T18:31:21.537Z",
+    "conflict_detected": true,
+    "notes": "BLOCKED_ROLLBACK: Incoming 37.1 < Current 37.5"
   }
 }
