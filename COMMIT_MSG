@@ -1,1 +1,1 @@
-fix(orchestration): implement UI-first response logic and bump to v11.38.4.2
+fix(orchestration): reset environment and bump to v11.38.5.0 with auto-yaml sync
