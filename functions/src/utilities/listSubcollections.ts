@@ -1,30 +1,9 @@
-import * as functions from "firebase-functions/v2";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export const listSubcollectionsV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { documentPath } = req.body;
-    if (!documentPath || typeof documentPath !== "string") {
-      res.status(400).json({ error: "documentPath is required" });
-      return;
-    }
-    const docRef = admin.firestore().doc(documentPath);
-    const collections = await docRef.listCollections();
-    const subcollections = collections.map((col) => col.id);
-    res.status(200).json({ subcollections });
-  } catch (error) {
-    console.error("Error listing subcollections:", error);
-    res.status(500).json({ error: "Failed to list subcollections" });
-  }
+const db = admin.firestore();
+export const listSubcollectionsV2 = onDocumentWritten("artifacts/{appId}/public/data/discovery_requests/{reqId}", async (event) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "pending") return;
+  const collections = await db.doc(data.docPath).listCollections();
+  await event.data?.after.ref.update({ status: "discovered", collections: collections.map(c => c.id) });
 });

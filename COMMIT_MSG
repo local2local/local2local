@@ -1,1 +1,1 @@
-fix(project): restore full logic stack and align export names v11.39.1.1
+fix(functions): standardize utility paths to utilities/ subfolder and bump to v11.39.1.2
