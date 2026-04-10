@@ -1,1 +1,1 @@
-fix(orchestration): reset test environment and bump to v11.38.4.0
+fix(orchestration): implement instant UI response and automate deploy.yml phase sync
