@@ -5,7 +5,7 @@ if (admin.apps.length === 0) {
 }
 
 /** * EVOLUTION & ORCHESTRATION 
- * Explicit exports to ensure V2 suffix consistency.
+ * V2 suffix indicates Cloud Functions v2 SDK usage.
  */
 export { 
   evolutionOrchestratorV2, 
@@ -15,6 +15,7 @@ export {
 } from "./logic/evolution";
 
 /** * UTILITIES
+ * Restored for external application compatibility.
  */
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";

@@ -23,14 +23,15 @@ export class AgentBusClient {
   private appId: string;
 
   /**
-   * Constructor - Fixed for compatibility in Phase 38.1.2
-   * @param config Agent configuration object
-   * @param tenantId Optional tenant/app ID. Defaults to project ID if omitted.
+   * Constructor - Optimized for compatibility and Cloud Functions v2 environments.
+   * @param config Agent configuration object.
+   * @param tenantId Optional tenant ID. Defaults to GCLOUD_PROJECT if omitted.
    */
   constructor(config: AgentConfig, tenantId?: string) {
     this.config = config;
-    // Fallback to project ID or standard artifact ID to prevent breaking existing callers
-    this.appId = tenantId || (admin.app().options.projectId as string) || "local2local-kaskflow";
+    // Cloud Functions v2 sets GCLOUD_PROJECT automatically. 
+    // This allows existing logic (dispatch.ts, etc) to omit the argument.
+    this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
   }
 
   async register() {
@@ -52,7 +53,7 @@ export class AgentBusClient {
           last_heartbeat: new Date().toISOString()
         },
         deployment: {
-          project: admin.app().options.projectId,
+          project: process.env.GCLOUD_PROJECT || "unknown",
           environment: "production",
           last_deployed: new Date().toISOString()
         }

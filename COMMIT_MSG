@@ -1,1 +1,1 @@
-fix(evolution): restore AgentBusClient constructor compatibility and bump to v11.38.1.2
+fix(evolution): stabilize Phase 38.1.3 with robust constructor fallbacks

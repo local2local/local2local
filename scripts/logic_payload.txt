@@ -1,20 +1,21 @@
 /**
- * L2LAAF Phase 38.1.2: Constructor Compatibility & Build Fix
+ * L2LAAF Phase 38.1.3: Stabilization & Path Alignment
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Made 'tenantId' optional in AgentBusClient constructor to support existing logic callers.
- * 2. BUMP: Phase 38.1.2.
- * 3. SYNC: Maintained V2 SDK standardized naming and utility function exports.
+ * 1. BUMP: Phase 38.1.3.
+ * 2. FIX: Hardened AgentBusClient constructor fallback to use process.env.GCLOUD_PROJECT.
+ * 3. SYNC: Maintained strict 'V2' suffix indicating SDK generation across all exports.
+ * 4. CLEAN: Ensuring utility functions remain exported and active.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): restore AgentBusClient constructor compatibility and bump to v11.38.1.2
+fix(evolution): stabilize Phase 38.1.3 with robust constructor fallbacks
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.1.2",
+  "current_phase": "38.1.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -41,7 +42,7 @@ if (admin.apps.length === 0) {
 }
 
 /** * EVOLUTION & ORCHESTRATION 
- * Explicit exports to ensure V2 suffix consistency.
+ * V2 suffix indicates Cloud Functions v2 SDK usage.
  */
 export { 
   evolutionOrchestratorV2, 
@@ -51,6 +52,7 @@ export {
 } from "./logic/evolution";
 
 /** * UTILITIES
+ * Restored for external application compatibility.
  */
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
@@ -82,14 +84,15 @@ export class AgentBusClient {
   private appId: string;
 
   /**
-   * Constructor - Fixed for compatibility in Phase 38.1.2
-   * @param config Agent configuration object
-   * @param tenantId Optional tenant/app ID. Defaults to project ID if omitted.
+   * Constructor - Optimized for compatibility and Cloud Functions v2 environments.
+   * @param config Agent configuration object.
+   * @param tenantId Optional tenant ID. Defaults to GCLOUD_PROJECT if omitted.
    */
   constructor(config: AgentConfig, tenantId?: string) {
     this.config = config;
-    // Fallback to project ID or standard artifact ID to prevent breaking existing callers
-    this.appId = tenantId || (admin.app().options.projectId as string) || "local2local-kaskflow";
+    // Cloud Functions v2 sets GCLOUD_PROJECT automatically. 
+    // This allows existing logic (dispatch.ts, etc) to omit the argument.
+    this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
   }
 
   async register() {
@@ -111,7 +114,7 @@ export class AgentBusClient {
           last_heartbeat: new Date().toISOString()
         },
         deployment: {
-          project: admin.app().options.projectId,
+          project: process.env.GCLOUD_PROJECT || "unknown",
           environment: "production",
           last_deployed: new Date().toISOString()
         }
@@ -153,74 +156,6 @@ export class AgentBusClient {
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
-import * as functions from "firebase-functions/v2";
-import * as admin from "firebase-admin";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
-export const deleteSubcollectionV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { collectionPath } = req.body;
-    if (!collectionPath || typeof collectionPath !== "string") {
-      res.status(400).json({ error: "collectionPath is required" });
-      return;
-    }
-    const firestore = admin.firestore();
-    const collectionRef = firestore.collection(collectionPath);
-    const snapshot = await collectionRef.get();
-    const batch = firestore.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.status(200).json({ deletedCount: snapshot.size, collectionPath });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || "Internal server error" });
-  }
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:List Utility:functions/src/utilities/listSubcollections.ts)
-import * as functions from "firebase-functions/v2";
-import * as admin from "firebase-admin";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export const listSubcollectionsV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { documentPath } = req.body;
-    if (!documentPath || typeof documentPath !== "string") {
-      res.status(400).json({ error: "documentPath is required" });
-      return;
-    }
-    const docRef = admin.firestore().doc(documentPath);
-    const collections = await docRef.listCollections();
-    const subcollections = collections.map((col) => col.id);
-    res.status(200).json({ subcollections });
-  } catch (error) {
-    console.error("Error listing subcollections:", error);
-    res.status(500).json({ error: "Failed to list subcollections" });
-  }
-});
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -236,9 +171,9 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.1.2",
+      incoming_phase: "38.1.3",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
-      summary: payload.manifest.reason || "Autonomous logic evolution stabilization.",
+      summary: payload.manifest.reason || "Autonomous logic stabilization.",
       event: "DEPLOYMENT_COMPLETE",
       filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
       fileContent: payload.manifest.proposedLogic,
