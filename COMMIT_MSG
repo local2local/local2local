@@ -1,1 +1,1 @@
-fix(orchestration): implement resilient UI handshake and bump to v11.38.6.0
+fix(orchestration): implement zero-expression UI handshake and bump to v11.38.7.0
