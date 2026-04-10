@@ -1,32 +1,13 @@
-import * as functions from "firebase-functions/v2";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
+const db = admin.firestore();
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
-export const deleteSubcollectionV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { collectionPath } = req.body;
-    if (!collectionPath || typeof collectionPath !== "string") {
-      res.status(400).json({ error: "collectionPath is required" });
-      return;
-    }
-    const firestore = admin.firestore();
-    const collectionRef = firestore.collection(collectionPath);
-    const snapshot = await collectionRef.get();
-    const batch = firestore.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.status(200).json({ deletedCount: snapshot.size, collectionPath });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || "Internal server error" });
-  }
+export const deleteSubcollectionV2 = onDocumentWritten("artifacts/{appId}/public/data/cleanup_requests/{reqId}", async (event) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "pending") return;
+  const snapshot = await db.collection(data.path).get();
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+  await event.data?.after.ref.update({ status: "deleted", completed_at: admin.firestore.FieldValue.serverTimestamp() });
 });

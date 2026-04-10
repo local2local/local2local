@@ -11,6 +11,6 @@ export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment"
 export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
 export { unifiedActivityWorkerV2 } from "./logic/orchestration";
 
-/** * UTILITY FUNCTIONS (Corrected paths for subfolder structure) */
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollections";
+/** * UTILITY FUNCTIONS (Standardized paths) */
+export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";

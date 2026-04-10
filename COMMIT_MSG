@@ -1,1 +1,1 @@
-fix(functions): standardize utility paths to utilities/ subfolder and bump to v11.39.1.2
+fix(functions): sync utility paths, add CORS to listSubcollections, and bump to v11.39.1.3
