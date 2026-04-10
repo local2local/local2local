@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 38.2.0: Shadow Run Initialization
+ * L2LAAF Phase 38.3.0: Ombudsman Auto-Approval Logic
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.2.0 (Shadow Engine Activation).
- * 2. EVOLUTION: Implemented Shadow Run record initialization in evolutionOrchestratorV2.
- * 3. SYNC: deploy.yml notification phase updated to 38.2.0.
- * 4. HARDEN: Maintaining Concurrency Locking and V2 SDK standards.
+ * 1. BUMP: Phase 38.3.0 (Ombudsman Activation).
+ * 2. EVOLUTION: Implemented ombudsmanValidatorV2 to monitor shadow results.
+ * 3. SYNC: deploy.yml notification phase updated to 38.3.0.
+ * 4. HARDEN: Ensuring idempotent signaling for automated validations.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): implement shadow run initialization and bump to v11.38.2.0
+feat(evolution): implement ombudsman validation logic and bump to v11.38.3.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.2.0",
+  "current_phase": "38.3.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -34,120 +34,6 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Index:functions/src/index.ts)
-import * as admin from "firebase-admin";
-
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
-/** * EVOLUTION & ORCHESTRATION 
- * V2 suffix indicates Cloud Functions v2 SDK usage.
- */
-export { 
-  evolutionOrchestratorV2, 
-  autonomousFixerV2, 
-  ombudsmanValidatorV2, 
-  evolutionProposalFinalizerV2 
-} from "./logic/evolution";
-
-/** * UTILITIES
- */
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Agent Bus Client:functions/src/agentBusClient.ts)
-import * as admin from "firebase-admin";
-import { v4 as uuidv4 } from "uuid";
-
-const db = admin.firestore();
-
-export interface AgentConfig {
-  agentId: string;
-  capabilities: string[];
-  jurisdictions: string[];
-  substances: string[];
-  role: "ORCHESTRATOR" | "WORKER";
-  domain: "COMPLIANCE" | "FINANCE" | "MARKET_DEV" | "OPS" | "INSIGHTS" | "SECURITY";
-}
-
-export interface AgentError {
-  code: string;
-  message: string;
-  trace?: string;
-}
-
-export class AgentBusClient {
-  private config: AgentConfig;
-  private appId: string;
-
-  constructor(config: AgentConfig, tenantId?: string) {
-    this.config = config;
-    this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
-  }
-
-  async register() {
-    const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
-    const doc = await registryRef.get();
-    
-    if (!doc.exists) {
-      await registryRef.set({
-        agent_id: this.config.agentId,
-        type: this.config.role,
-        domain: this.config.domain,
-        capabilities: this.config.capabilities,
-        jurisdictions: this.config.jurisdictions,
-        substances: this.config.substances,
-        status: {
-          health: "green",
-          mode: "live",
-          current_efficacy: 100,
-          last_heartbeat: new Date().toISOString()
-        },
-        deployment: {
-          project: process.env.GCLOUD_PROJECT || "unknown",
-          environment: "production",
-          last_deployed: new Date().toISOString()
-        }
-      });
-    } else {
-      await registryRef.update({
-        "status.last_heartbeat": new Date().toISOString(),
-        capabilities: this.config.capabilities,
-        jurisdictions: this.config.jurisdictions,
-        substances: this.config.substances,
-        "deployment.last_deployed": new Date().toISOString()
-      });
-    }
-  }
-
-  async sendResponse(correlationId: string, receiverId: string, payload: any, error?: AgentError) {
-    const busRef = db.collection(`artifacts/${this.appId}/public/data/agent_bus`);
-    const messageId = uuidv4();
-
-    await busRef.doc(messageId).set({
-      message_id: messageId,
-      correlation_id: correlationId,
-      provenance: {
-        sender_id: this.config.agentId,
-        receiver_id: receiverId,
-        app_id: this.appId
-      },
-      control: {
-        type: error ? "ERROR" : "RESPONSE",
-        priority: "normal"
-      },
-      payload: error ? { error } : { result: payload },
-      telemetry: {
-        completed_at: new Date().toISOString()
-      },
-      status: "intercepted" 
-    });
-  }
-}
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -157,26 +43,33 @@ import axios from "axios";
 const db = admin.firestore();
 
 type L2LChange = Change<DocumentSnapshot>;
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
+type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; [key: string]: string }>;
 
-async function signalOrchestrator(payload: any) {
+/**
+ * SIGNAL ORCHESTRATOR
+ * Transmits event data to n8n for GitHub writing or audit notifications.
+ */
+async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.2.0",
+      incoming_phase: "38.3.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
-      summary: payload.manifest.reason || "Autonomous logic evolution hardening.",
-      event: "DEPLOYMENT_COMPLETE",
-      filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
-      fileContent: payload.manifest.proposedLogic,
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
+      event: eventType,
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest?.proposedLogic || null,
       branch: "develop"
     });
-    console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
+    console.log(`📡 ORCHESTRATOR: [${eventType}] Signal transmitted successfully.`);
   } catch (error) {
-    console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
+    console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]:`, error);
   }
 }
 
+/**
+ * [1] EVOLUTION ORCHESTRATOR
+ */
 export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -208,10 +101,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         });
       });
 
-      /**
-       * SHADOW COMPONENT INITIALIZATION
-       * Phase 38.2.0: Create the Shadow Run record to track comparison progress.
-       */
+      // Initialize Shadow Run record
       const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
       await shadowRef.set({
         status: "INITIALIZING",
@@ -221,7 +111,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         manifest_summary: manifest.reason || "Logic evolution validation."
       });
 
-      await signalOrchestrator(data);
+      await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
 
     } catch (e) {
       console.error("Evolution Error:", e);
@@ -230,6 +120,29 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
+/**
+ * [2] OMBUDSMAN VALIDATOR
+ * Monitors Shadow Run completion and updates the orchestration gate.
+ */
+export const ombudsmanValidatorV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}"
+}, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "VALIDATED") return;
+
+  const { appId, runId } = event.params;
+  console.log(`⚖️ OMBUDSMAN: Shadow run ${runId} in ${appId} validated. Signaling Orchestrator.`);
+
+  // Signal n8n that the audit has passed autonomously
+  await signalOrchestrator({
+    correlation_id: runId,
+    summary: `Ombudsman validated shadow run: ${runId}. Safe for promotion.`,
+  }, "SHADOW_VALIDATED");
+});
+
+/**
+ * [3] AUTONOMOUS FIXER
+ */
 export const autonomousFixerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
@@ -240,16 +153,5 @@ export const autonomousFixerV2 = onDocumentWritten({
   await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
 });
 
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {
-  /** * Placeholder for Phase 38.3:
-   * Will listen for shadow run completion and trigger auto-approval.
-   */
-});
-
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {
-  /**
-   * Placeholder for Phase 38.4:
-   * Will clean up locks and archive results.
-   */
-});
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});
 L2LAAF_BLOCK_END

@@ -6,26 +6,33 @@ import axios from "axios";
 const db = admin.firestore();
 
 type L2LChange = Change<DocumentSnapshot>;
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; messageId: string; }>;
+type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; [key: string]: string }>;
 
-async function signalOrchestrator(payload: any) {
+/**
+ * SIGNAL ORCHESTRATOR
+ * Transmits event data to n8n for GitHub writing or audit notifications.
+ */
+async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.2.0",
+      incoming_phase: "38.3.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
-      summary: payload.manifest.reason || "Autonomous logic evolution hardening.",
-      event: "DEPLOYMENT_COMPLETE",
-      filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
-      fileContent: payload.manifest.proposedLogic,
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
+      event: eventType,
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest?.proposedLogic || null,
       branch: "develop"
     });
-    console.log("📡 ORCHESTRATOR: Signal transmitted successfully.");
+    console.log(`📡 ORCHESTRATOR: [${eventType}] Signal transmitted successfully.`);
   } catch (error) {
-    console.error("❌ ORCHESTRATOR: Failed to signal n8n:", error);
+    console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]:`, error);
   }
 }
 
+/**
+ * [1] EVOLUTION ORCHESTRATOR
+ */
 export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -57,10 +64,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         });
       });
 
-      /**
-       * SHADOW COMPONENT INITIALIZATION
-       * Phase 38.2.0: Create the Shadow Run record to track comparison progress.
-       */
+      // Initialize Shadow Run record
       const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
       await shadowRef.set({
         status: "INITIALIZING",
@@ -70,7 +74,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         manifest_summary: manifest.reason || "Logic evolution validation."
       });
 
-      await signalOrchestrator(data);
+      await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
 
     } catch (e) {
       console.error("Evolution Error:", e);
@@ -79,6 +83,29 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
+/**
+ * [2] OMBUDSMAN VALIDATOR
+ * Monitors Shadow Run completion and updates the orchestration gate.
+ */
+export const ombudsmanValidatorV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}"
+}, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "VALIDATED") return;
+
+  const { appId, runId } = event.params;
+  console.log(`⚖️ OMBUDSMAN: Shadow run ${runId} in ${appId} validated. Signaling Orchestrator.`);
+
+  // Signal n8n that the audit has passed autonomously
+  await signalOrchestrator({
+    correlation_id: runId,
+    summary: `Ombudsman validated shadow run: ${runId}. Safe for promotion.`,
+  }, "SHADOW_VALIDATED");
+});
+
+/**
+ * [3] AUTONOMOUS FIXER
+ */
 export const autonomousFixerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
@@ -89,15 +116,4 @@ export const autonomousFixerV2 = onDocumentWritten({
   await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
 });
 
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {
-  /** * Placeholder for Phase 38.3:
-   * Will listen for shadow run completion and trigger auto-approval.
-   */
-});
-
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {
-  /**
-   * Placeholder for Phase 38.4:
-   * Will clean up locks and archive results.
-   */
-});
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});
