@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 38.3.3: UI Sequence Stabilization
+ * L2LAAF Phase 38.3.4: Async UI Response Optimization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.3.3 (UI Hardening).
- * 2. FIX: Adjusted evolution logic to match the new 38.3.3 handshake.
- * 3. SYNC: Ensuring all Firestore pathing references kaskflow/moonlitely correctly.
+ * 1. BUMP: Phase 38.3.4.
+ * 2. SYNC: deploy.yml notification phase set to 38.3.4.
+ * 3. FIX: Hardened the UI response loop to prevent JSON leaks.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): stabilize UI response sequence and bump to v11.38.3.3
+fix(orchestration): implement async UI response and bump to v11.38.3.4
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.3.3",
+  "current_phase": "38.3.4",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -48,7 +48,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.3.3",
+      incoming_phase: "38.3.4",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
