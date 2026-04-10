@@ -8,15 +8,11 @@ const db = admin.firestore();
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; [key: string]: string }>;
 
-/**
- * SIGNAL ORCHESTRATOR
- * Transmits event data to n8n for GitHub writing or audit notifications.
- */
 async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.3.0",
+      incoming_phase: "38.3.1",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
@@ -30,9 +26,6 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   }
 }
 
-/**
- * [1] EVOLUTION ORCHESTRATOR
- */
 export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
@@ -64,7 +57,6 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         });
       });
 
-      // Initialize Shadow Run record
       const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
       await shadowRef.set({
         status: "INITIALIZING",
@@ -75,7 +67,6 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
       });
 
       await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
-
     } catch (e) {
       console.error("Evolution Error:", e);
       throw e;
@@ -83,29 +74,19 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
-/**
- * [2] OMBUDSMAN VALIDATOR
- * Monitors Shadow Run completion and updates the orchestration gate.
- */
 export const ombudsmanValidatorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/shadow_runs/{runId}"
 }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
-
   const { appId, runId } = event.params;
   console.log(`⚖️ OMBUDSMAN: Shadow run ${runId} in ${appId} validated. Signaling Orchestrator.`);
-
-  // Signal n8n that the audit has passed autonomously
   await signalOrchestrator({
     correlation_id: runId,
     summary: `Ombudsman validated shadow run: ${runId}. Safe for promotion.`,
   }, "SHADOW_VALIDATED");
 });
 
-/**
- * [3] AUTONOMOUS FIXER
- */
 export const autonomousFixerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
