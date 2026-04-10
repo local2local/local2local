@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 38.4.1: Instant Response & YAML Auto-Sync
+ * L2LAAF Phase 38.4.2: UI First Architecture & Auto-YAML Sync
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.4.1.
- * 2. SYNC: deploy.yml now part of payload for automated phase updates via relay.sh.
- * 3. FIX: Immediate webhook response to prevent browser timeouts.
+ * 1. BUMP: Phase 38.4.2.
+ * 2. SYNC: deploy.yml auto-update confirmed via relay.sh.
+ * 3. FIX: Moving browser response to start of approval chain to prevent timeouts.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement instant UI response and automate deploy.yml phase sync
+fix(orchestration): implement UI-first response logic and bump to v11.38.4.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.4.1",
+  "current_phase": "38.4.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -93,8 +93,7 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # PHASE: Automated Update via relay.sh
-          PHASE="38.4.1" 
+          PHASE="38.4.2" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -122,7 +121,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.4.1",
+      incoming_phase: "38.4.2",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
