@@ -1,1 +1,1 @@
-fix(orchestration): synchronize GHA phase to 38.3.2 and harden browser response
+fix(orchestration): stabilize UI response sequence and bump to v11.38.3.3
