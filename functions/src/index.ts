@@ -5,16 +5,11 @@ if (admin.apps.length === 0) {
 }
 
 /** * EVOLUTION & ORCHESTRATION 
- * V2 suffix indicates Cloud Functions v2 SDK usage.
+ * V3 suffix indicates latest logic branch.
  */
 export { 
-  evolutionOrchestratorV2, 
+  evolutionOrchestratorV3, 
   autonomousFixerV2, 
   ombudsmanValidatorV2, 
   evolutionProposalFinalizerV2 
 } from "./logic/evolution";
-
-/** * UTILITIES
- */
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";

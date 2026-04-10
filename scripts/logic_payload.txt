@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 38.8.0: Parallel Response Architecture
+ * L2LAAF Phase 38.9.1: TS Strict Type Resolution & Auto-YAML Sync
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.8.0.
- * 2. SYNC: deploy.yml auto-update phase 38.8.0.
- * 3. FIX: Decoupled UI response from background deployment logic to prevent JSON leaks.
+ * 1. BUMP: Phase 38.9.1.
+ * 2. SYNC: deploy.yml auto-update phase 38.9.1.
+ * 3. FIX: Resolved TS2769 and TS2724 by aligning Snapshot types and index exports.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement parallel response architecture and bump to v11.38.8.0
+fix(evolution): resolve TS strict type mismatches and bump to v11.38.9.1
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.8.0",
+  "current_phase": "38.9.1",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -93,8 +93,8 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # PHASE SYNC: Updated to 38.8.0
-          PHASE="38.8.0" 
+          # PHASE SYNC: Updated to 38.9.1
+          PHASE="38.9.1" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -107,6 +107,24 @@ jobs:
           }"
 L2LAAF_BLOCK_END */
 
+/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
+import * as admin from "firebase-admin";
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+/** * EVOLUTION & ORCHESTRATION 
+ * V3 suffix indicates latest logic branch.
+ */
+export { 
+  evolutionOrchestratorV3, 
+  autonomousFixerV2, 
+  ombudsmanValidatorV2, 
+  evolutionProposalFinalizerV2 
+} from "./logic/evolution";
+L2LAAF_BLOCK_END */
+
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -115,6 +133,7 @@ import axios from "axios";
 
 const db = admin.firestore();
 
+// Fixed: Using DocumentSnapshot instead of QueryDocumentSnapshot to match v2 SDK DocumentOptions
 type L2LChange = Change<DocumentSnapshot>;
 type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, { appId: string; [key: string]: string }>;
 
@@ -122,7 +141,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.8.0",
+      incoming_phase: "38.9.1",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
@@ -136,16 +155,19 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   }
 }
 
-export const evolutionOrchestratorV2 = onDocumentWritten({
+/**
+ * [1] EVOLUTION ORCHESTRATOR V3
+ */
+export const evolutionOrchestratorV3 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "dispatched") return;
 
-  const { appId, messageId } = event.params;
+  const { appId } = event.params;
   const manifest = data.payload?.manifest;
-  const correlationId = data.correlation_id || messageId;
+  const correlationId = data.correlation_id || event.params.messageId;
 
   if (manifest?.intent === "PROPOSE_LOGIC_CHANGE") {
     const { hbrId, agentId } = manifest;
@@ -155,10 +177,7 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
       await db.runTransaction(async (transaction) => {
         const lockSnap = await transaction.get(lockRef);
         if (lockSnap.exists) {
-          const existingLock = lockSnap.data();
-          if (existingLock?.correlation_id !== correlationId) {
-            throw new Error(`COLLISION: HBR ${hbrId} locked by ${existingLock?.agentId}`);
-          }
+          throw new Error(`COLLISION: HBR ${hbrId} locked by ${lockSnap.data()?.agentId}`);
         }
         transaction.set(lockRef, {
           agentId,
@@ -184,19 +203,24 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
   }
 });
 
+/**
+ * [2] OMBUDSMAN VALIDATOR
+ */
 export const ombudsmanValidatorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/shadow_runs/{runId}"
 }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
   const { appId, runId } = event.params;
-  console.log(`⚖️ OMBUDSMAN: Shadow run ${runId} in ${appId} validated. Signaling Orchestrator.`);
   await signalOrchestrator({
     correlation_id: runId,
     summary: `Ombudsman validated shadow run: ${runId}. Safe for promotion.`,
   }, "SHADOW_VALIDATED");
 });
 
+/**
+ * [3] AUTONOMOUS FIXER
+ */
 export const autonomousFixerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
