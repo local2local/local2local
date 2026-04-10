@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 38.7.0: Zero-Expression UI Handshake
+ * L2LAAF Phase 38.8.0: Parallel Response Architecture
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.7.0.
- * 2. SYNC: deploy.yml auto-update phase 38.7.0 via relay.sh.
- * 3. FIX: Hardened Respond to Webhook with literal HTML to prevent JSON leaks.
+ * 1. BUMP: Phase 38.8.0.
+ * 2. SYNC: deploy.yml auto-update phase 38.8.0.
+ * 3. FIX: Decoupled UI response from background deployment logic to prevent JSON leaks.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement zero-expression UI handshake and bump to v11.38.7.0
+fix(orchestration): implement parallel response architecture and bump to v11.38.8.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.7.0",
+  "current_phase": "38.8.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -93,8 +93,8 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # PHASE SYNC: Updated to 38.7.0
-          PHASE="38.7.0" 
+          # PHASE SYNC: Updated to 38.8.0
+          PHASE="38.8.0" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -122,7 +122,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.7.0",
+      incoming_phase: "38.8.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
