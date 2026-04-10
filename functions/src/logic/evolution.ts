@@ -12,7 +12,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.1.4",
+      incoming_phase: "38.2.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution hardening.",
       event: "DEPLOYMENT_COMPLETE",
@@ -57,6 +57,19 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         });
       });
 
+      /**
+       * SHADOW COMPONENT INITIALIZATION
+       * Phase 38.2.0: Create the Shadow Run record to track comparison progress.
+       */
+      const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
+      await shadowRef.set({
+        status: "INITIALIZING",
+        proposal_id: hbrId,
+        agent_id: agentId,
+        started_at: admin.firestore.FieldValue.serverTimestamp(),
+        manifest_summary: manifest.reason || "Logic evolution validation."
+      });
+
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -76,5 +89,15 @@ export const autonomousFixerV2 = onDocumentWritten({
   await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
 });
 
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {});
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});
+export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {
+  /** * Placeholder for Phase 38.3:
+   * Will listen for shadow run completion and trigger auto-approval.
+   */
+});
+
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {
+  /**
+   * Placeholder for Phase 38.4:
+   * Will clean up locks and archive results.
+   */
+});

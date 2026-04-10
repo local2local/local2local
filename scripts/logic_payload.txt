@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 38.1.4: Concurrency Hardening & Deployment Lock
+ * L2LAAF Phase 38.2.0: Shadow Run Initialization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. FIX: Added 'concurrency' block to deploy.yml to prevent race conditions.
- * 2. BUMP: Phase 38.1.4.
- * 3. SYNC: Maintaining V2 SDK standardized naming and constructor compatibility.
- * 4. CLEAN: Ensuring utility functions and agent client integrity.
+ * 1. BUMP: Phase 38.2.0 (Shadow Engine Activation).
+ * 2. EVOLUTION: Implemented Shadow Run record initialization in evolutionOrchestratorV2.
+ * 3. SYNC: deploy.yml notification phase updated to 38.2.0.
+ * 4. HARDEN: Maintaining Concurrency Locking and V2 SDK standards.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): implement deployment concurrency locking and bump to v11.38.1.4
+feat(evolution): implement shadow run initialization and bump to v11.38.2.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.1.4",
+  "current_phase": "38.2.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -148,74 +148,6 @@ export class AgentBusClient {
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
-import * as functions from "firebase-functions/v2";
-import * as admin from "firebase-admin";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
-
-export const deleteSubcollectionV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { collectionPath } = req.body;
-    if (!collectionPath || typeof collectionPath !== "string") {
-      res.status(400).json({ error: "collectionPath is required" });
-      return;
-    }
-    const firestore = admin.firestore();
-    const collectionRef = firestore.collection(collectionPath);
-    const snapshot = await collectionRef.get();
-    const batch = firestore.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.status(200).json({ deletedCount: snapshot.size, collectionPath });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message || "Internal server error" });
-  }
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:List Utility:functions/src/utilities/listSubcollections.ts)
-import * as functions from "firebase-functions/v2";
-import * as admin from "firebase-admin";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export const listSubcollectionsV2 = functions.https.onRequest(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.set(CORS_HEADERS).status(204).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { documentPath } = req.body;
-    if (!documentPath || typeof documentPath !== "string") {
-      res.status(400).json({ error: "documentPath is required" });
-      return;
-    }
-    const docRef = admin.firestore().doc(documentPath);
-    const collections = await docRef.listCollections();
-    const subcollections = collections.map((col) => col.id);
-    res.status(200).json({ subcollections });
-  } catch (error) {
-    console.error("Error listing subcollections:", error);
-    res.status(500).json({ error: "Failed to list subcollections" });
-  }
-});
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -231,7 +163,7 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.1.4",
+      incoming_phase: "38.2.0",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest.reason || "Autonomous logic evolution hardening.",
       event: "DEPLOYMENT_COMPLETE",
@@ -276,6 +208,19 @@ export const evolutionOrchestratorV2 = onDocumentWritten({
         });
       });
 
+      /**
+       * SHADOW COMPONENT INITIALIZATION
+       * Phase 38.2.0: Create the Shadow Run record to track comparison progress.
+       */
+      const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
+      await shadowRef.set({
+        status: "INITIALIZING",
+        proposal_id: hbrId,
+        agent_id: agentId,
+        started_at: admin.firestore.FieldValue.serverTimestamp(),
+        manifest_summary: manifest.reason || "Logic evolution validation."
+      });
+
       await signalOrchestrator(data);
 
     } catch (e) {
@@ -295,6 +240,16 @@ export const autonomousFixerV2 = onDocumentWritten({
   await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
 });
 
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {});
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});
+export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event) => {
+  /** * Placeholder for Phase 38.3:
+   * Will listen for shadow run completion and trigger auto-approval.
+   */
+});
+
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {
+  /**
+   * Placeholder for Phase 38.4:
+   * Will clean up locks and archive results.
+   */
+});
 L2LAAF_BLOCK_END
