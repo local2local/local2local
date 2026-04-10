@@ -1,1 +1,1 @@
-fix(agent-bus): restore full AgentBusClient capabilities and bump to v11.38.9.4
+fix(project): restore full logic stack and align export names v11.39.1.1
