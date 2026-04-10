@@ -1,9 +1,18 @@
 name: L2LAAF Multi-Project Deployment
+
 on:
   push:
     branches: [ main, staging, develop ]
     paths-ignore:
       - '.l2laaf/state.json'
+
+# --- CONCURRENCY LOCK ---
+# This block ensures only one deployment runs at a time per branch.
+# If a new commit (like the State Update) arrives while the Logic Update
+# is still deploying, the first one is canceled to favor the latest state.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -35,7 +44,7 @@ jobs:
       - name: Check Secret Presence
         run: |
           if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ FATAL: GCP_SA_KEY is empty."
+            echo "❌ FATAL: GCP_SA_KEY is empty. Check GitHub Settings > Secrets > Actions."
             exit 1
           else
             echo "✅ GCP_SA_KEY detected."
@@ -61,7 +70,8 @@ jobs:
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          PHASE="38.0.1" 
+          # PHASE: Bumped to 38.1.4
+          PHASE="38.1.4" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \

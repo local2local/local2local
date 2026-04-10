@@ -15,7 +15,6 @@ export {
 } from "./logic/evolution";
 
 /** * UTILITIES
- * Restored for external application compatibility.
  */
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";

@@ -22,15 +22,8 @@ export class AgentBusClient {
   private config: AgentConfig;
   private appId: string;
 
-  /**
-   * Constructor - Optimized for compatibility and Cloud Functions v2 environments.
-   * @param config Agent configuration object.
-   * @param tenantId Optional tenant ID. Defaults to GCLOUD_PROJECT if omitted.
-   */
   constructor(config: AgentConfig, tenantId?: string) {
     this.config = config;
-    // Cloud Functions v2 sets GCLOUD_PROJECT automatically. 
-    // This allows existing logic (dispatch.ts, etc) to omit the argument.
     this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
   }
 
