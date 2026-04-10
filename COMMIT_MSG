@@ -1,1 +1,1 @@
-fix(orchestration): harden final alert notification logic v11.37.7.7
+feat(orchestration): implement real-time decision logging and bump to v11.37.8.0
