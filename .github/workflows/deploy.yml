@@ -21,28 +21,23 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.38.5'
-
       - name: Install Dependencies
         run: |
           cd functions && npm install
           cd ..
           flutter pub get
-
       - name: Build Flutter Web
         run: flutter build web --release
-
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-
       - name: Deploy Stack
         run: |
           if [[ "${{ github.ref_name }}" == "main" ]]; then
@@ -53,12 +48,10 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
-
       - name: Notify Orchestrator (Telemetry Link)
         if: success()
         run: |
-          # PHASE SYNC: Updated to 38.9.1
-          PHASE="38.9.1" 
+          PHASE="38.9.4" 
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \

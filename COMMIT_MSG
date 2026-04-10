@@ -1,1 +1,1 @@
-fix(evolution): resolve TS strict type mismatches and bump to v11.38.9.1
+fix(agent-bus): restore full AgentBusClient capabilities and bump to v11.38.9.4
