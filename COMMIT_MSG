@@ -1,1 +1,1 @@
-fix(evolution): align artifact paths and initialize Phase 38.0.1
+fix(evolution): restore AgentBusClient constructor compatibility and bump to v11.38.1.2

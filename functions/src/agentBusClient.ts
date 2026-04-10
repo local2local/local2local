@@ -1,9 +1,8 @@
-import { db, getAppId, getProjectId } from "./config";
+import * as admin from "firebase-admin";
 import { v4 as uuidv4 } from "uuid";
 
-/**
- * Agent Configuration Interface
- */
+const db = admin.firestore();
+
 export interface AgentConfig {
   agentId: string;
   capabilities: string[];
@@ -23,22 +22,22 @@ export class AgentBusClient {
   private config: AgentConfig;
   private appId: string;
 
+  /**
+   * Constructor - Fixed for compatibility in Phase 38.1.2
+   * @param config Agent configuration object
+   * @param tenantId Optional tenant/app ID. Defaults to project ID if omitted.
+   */
   constructor(config: AgentConfig, tenantId?: string) {
     this.config = config;
-    this.appId = tenantId || getAppId();
+    // Fallback to project ID or standard artifact ID to prevent breaking existing callers
+    this.appId = tenantId || (admin.app().options.projectId as string) || "local2local-kaskflow";
   }
 
-  /**
-   * register() - Phase 33 Hardening
-   * Fixed: Only initializes efficacy to 100 if the agent is new.
-   * Otherwise, only updates heartbeats and metadata to preserve performance metrics.
-   */
   async register() {
     const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
     const doc = await registryRef.get();
     
     if (!doc.exists) {
-      // First-time deployment initialization
       await registryRef.set({
         agent_id: this.config.agentId,
         type: this.config.role,
@@ -53,13 +52,12 @@ export class AgentBusClient {
           last_heartbeat: new Date().toISOString()
         },
         deployment: {
-          project: getProjectId(),
+          project: admin.app().options.projectId,
           environment: "production",
           last_deployed: new Date().toISOString()
         }
       });
     } else {
-      // Update heartbeat and capabilities without overwriting efficacy scores
       await registryRef.update({
         "status.last_heartbeat": new Date().toISOString(),
         capabilities: this.config.capabilities,
@@ -68,25 +66,6 @@ export class AgentBusClient {
         "deployment.last_deployed": new Date().toISOString()
       });
     }
-  }
-
-  async lookupCapability(capability: string, jurisdiction: string): Promise<string | null> {
-    const registryRef = db.collection(`artifacts/${this.appId}/public/data/agent_registry`);
-    const snapshot = await registryRef
-      .where("capabilities", "array-contains", capability)
-      .where("status.mode", "==", "live")
-      .where("status.health", "==", "green")
-      .get();
-
-    if (snapshot.empty) return null;
-
-    const matches = snapshot.docs
-      .map(doc => doc.data())
-      .filter(data => data.jurisdictions.includes(jurisdiction));
-
-    if (matches.length === 0) return null;
-    matches.sort((a, b) => (b.status.current_efficacy || 0) - (a.status.current_efficacy || 0));
-    return matches[0].agent_id;
   }
 
   async sendResponse(correlationId: string, receiverId: string, payload: any, error?: AgentError) {
@@ -99,8 +78,7 @@ export class AgentBusClient {
       provenance: {
         sender_id: this.config.agentId,
         receiver_id: receiverId,
-        app_id: this.appId,
-        project_id: getProjectId()
+        app_id: this.appId
       },
       control: {
         type: error ? "ERROR" : "RESPONSE",

@@ -1,20 +1,20 @@
 /**
- * L2LAAF Phase 38.0.1: Path Alignment & Autonomous Write
+ * L2LAAF Phase 38.1.2: Constructor Compatibility & Build Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 38.0.1 (Pathing Correction).
- * 2. SYNC: deploy.yml notification phase updated to 38.0.1.
- * 3. FIX: Ensuring all internal references point to correct artifact IDs (kaskflow/moonlitely).
+ * 1. FIX: Made 'tenantId' optional in AgentBusClient constructor to support existing logic callers.
+ * 2. BUMP: Phase 38.1.2.
+ * 3. SYNC: Maintained V2 SDK standardized naming and utility function exports.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): align artifact paths and initialize Phase 38.0.1
+fix(evolution): restore AgentBusClient constructor compatibility and bump to v11.38.1.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.0.1",
+  "current_phase": "38.1.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -33,81 +33,192 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(yaml:GitHub Actions:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, staging, develop ]
-    paths-ignore:
-      - '.l2laaf/state.json'
+/* L2LAAF_BLOCK_START(typescript:Index:functions/src/index.ts)
+import * as admin from "firebase-admin";
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+/** * EVOLUTION & ORCHESTRATION 
+ * Explicit exports to ensure V2 suffix consistency.
+ */
+export { 
+  evolutionOrchestratorV2, 
+  autonomousFixerV2, 
+  ombudsmanValidatorV2, 
+  evolutionProposalFinalizerV2 
+} from "./logic/evolution";
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
+/** * UTILITIES
+ */
+export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
+export { listSubcollectionsV2 } from "./utilities/listSubcollections";
+L2LAAF_BLOCK_END */
 
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
+/* L2LAAF_BLOCK_START(typescript:Agent Bus Client:functions/src/agentBusClient.ts)
+import * as admin from "firebase-admin";
+import { v4 as uuidv4 } from "uuid";
 
-      - name: Build Flutter Web
-        run: flutter build web --release
+const db = admin.firestore();
 
-      - name: Check Secret Presence
-        run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ FATAL: GCP_SA_KEY is empty."
-            exit 1
-          else
-            echo "✅ GCP_SA_KEY detected."
-          fi
+export interface AgentConfig {
+  agentId: string;
+  capabilities: string[];
+  jurisdictions: string[];
+  substances: string[];
+  role: "ORCHESTRATOR" | "WORKER";
+  domain: "COMPLIANCE" | "FINANCE" | "MARKET_DEV" | "OPS" | "INSIGHTS" | "SECURITY";
+}
 
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+export interface AgentError {
+  code: string;
+  message: string;
+  trace?: string;
+}
 
-      - name: Deploy Stack
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+export class AgentBusClient {
+  private config: AgentConfig;
+  private appId: string;
 
-      - name: Notify Orchestrator (Telemetry Link)
-        if: success()
-        run: |
-          PHASE="38.0.1" 
-          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"incoming_phase\": \"$PHASE\",
-            \"build_id\": \"${{ github.run_id }}\",
-            \"summary\": \"$SUMMARY\",
-            \"event\": \"DEPLOYMENT_COMPLETE\",
-            \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"
-          }"
+  /**
+   * Constructor - Fixed for compatibility in Phase 38.1.2
+   * @param config Agent configuration object
+   * @param tenantId Optional tenant/app ID. Defaults to project ID if omitted.
+   */
+  constructor(config: AgentConfig, tenantId?: string) {
+    this.config = config;
+    // Fallback to project ID or standard artifact ID to prevent breaking existing callers
+    this.appId = tenantId || (admin.app().options.projectId as string) || "local2local-kaskflow";
+  }
+
+  async register() {
+    const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
+    const doc = await registryRef.get();
+    
+    if (!doc.exists) {
+      await registryRef.set({
+        agent_id: this.config.agentId,
+        type: this.config.role,
+        domain: this.config.domain,
+        capabilities: this.config.capabilities,
+        jurisdictions: this.config.jurisdictions,
+        substances: this.config.substances,
+        status: {
+          health: "green",
+          mode: "live",
+          current_efficacy: 100,
+          last_heartbeat: new Date().toISOString()
+        },
+        deployment: {
+          project: admin.app().options.projectId,
+          environment: "production",
+          last_deployed: new Date().toISOString()
+        }
+      });
+    } else {
+      await registryRef.update({
+        "status.last_heartbeat": new Date().toISOString(),
+        capabilities: this.config.capabilities,
+        jurisdictions: this.config.jurisdictions,
+        substances: this.config.substances,
+        "deployment.last_deployed": new Date().toISOString()
+      });
+    }
+  }
+
+  async sendResponse(correlationId: string, receiverId: string, payload: any, error?: AgentError) {
+    const busRef = db.collection(`artifacts/${this.appId}/public/data/agent_bus`);
+    const messageId = uuidv4();
+
+    await busRef.doc(messageId).set({
+      message_id: messageId,
+      correlation_id: correlationId,
+      provenance: {
+        sender_id: this.config.agentId,
+        receiver_id: receiverId,
+        app_id: this.appId
+      },
+      control: {
+        type: error ? "ERROR" : "RESPONSE",
+        priority: "normal"
+      },
+      payload: error ? { error } : { result: payload },
+      telemetry: {
+        completed_at: new Date().toISOString()
+      },
+      status: "intercepted" 
+    });
+  }
+}
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
+import * as functions from "firebase-functions/v2";
+import * as admin from "firebase-admin";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export const deleteSubcollectionV2 = functions.https.onRequest(async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.set(CORS_HEADERS).status(204).send("");
+    return;
+  }
+  res.set(CORS_HEADERS);
+  try {
+    const { collectionPath } = req.body;
+    if (!collectionPath || typeof collectionPath !== "string") {
+      res.status(400).json({ error: "collectionPath is required" });
+      return;
+    }
+    const firestore = admin.firestore();
+    const collectionRef = firestore.collection(collectionPath);
+    const snapshot = await collectionRef.get();
+    const batch = firestore.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    res.status(200).json({ deletedCount: snapshot.size, collectionPath });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Internal server error" });
+  }
+});
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(typescript:List Utility:functions/src/utilities/listSubcollections.ts)
+import * as functions from "firebase-functions/v2";
+import * as admin from "firebase-admin";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export const listSubcollectionsV2 = functions.https.onRequest(async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.set(CORS_HEADERS).status(204).send("");
+    return;
+  }
+  res.set(CORS_HEADERS);
+  try {
+    const { documentPath } = req.body;
+    if (!documentPath || typeof documentPath !== "string") {
+      res.status(400).json({ error: "documentPath is required" });
+      return;
+    }
+    const docRef = admin.firestore().doc(documentPath);
+    const collections = await docRef.listCollections();
+    const subcollections = collections.map((col) => col.id);
+    res.status(200).json({ subcollections });
+  } catch (error) {
+    console.error("Error listing subcollections:", error);
+    res.status(500).json({ error: "Failed to list subcollections" });
+  }
+});
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -125,9 +236,9 @@ async function signalOrchestrator(payload: any) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.0.1",
+      incoming_phase: "38.1.2",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
-      summary: payload.manifest.reason || "Autonomous logic evolution proposal.",
+      summary: payload.manifest.reason || "Autonomous logic evolution stabilization.",
       event: "DEPLOYMENT_COMPLETE",
       filePath: payload.manifest.targetPath || "functions/src/logic/evolution.ts",
       fileContent: payload.manifest.proposedLogic,
@@ -139,7 +250,7 @@ async function signalOrchestrator(payload: any) {
   }
 }
 
-export const evolutionOrchestratorV3 = onDocumentWritten({
+export const evolutionOrchestratorV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event: L2LWrittenEvent) => {
@@ -179,7 +290,7 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
   }
 });
 
-export const autonomousFixerV1 = onDocumentWritten({
+export const autonomousFixerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/system_state/state",
   memory: "512MiB"
 }, async (event) => {

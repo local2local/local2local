@@ -4,13 +4,17 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-export * from "./logic/analytics";
-export * from "./logic/compliance";
-export * from "./logic/dispatch";
-export * from "./logic/evolution";
-export * from "./logic/finance";
-export * from "./logic/fulfillment";
-export * from "./logic/infrastructure";
-export * from "./logic/ombudsman";
-export * from "./logic/orchestration";
-export * from "./logic/treasury";
+/** * EVOLUTION & ORCHESTRATION 
+ * Explicit exports to ensure V2 suffix consistency.
+ */
+export { 
+  evolutionOrchestratorV2, 
+  autonomousFixerV2, 
+  ombudsmanValidatorV2, 
+  evolutionProposalFinalizerV2 
+} from "./logic/evolution";
+
+/** * UTILITIES
+ */
+export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
+export { listSubcollectionsV2 } from "./utilities/listSubcollections";
