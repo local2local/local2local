@@ -1,21 +1,16 @@
 /**
- * L2LAAF Phase 38.3.1: Sequential Sync Hardening
+ * L2LAAF Phase 38.3.2: Error Handling & Browser Sync
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * * ACTIONS:
- * 1. BUMP: Phase 38.3.1 (Handshake Restoration).
- * 2. FIX: Implemented logic to handle GitHub API 409 consistency delays.
- * 3. SYNC: deploy.yml updated to phase 38.3.1.
- * 4. HARDEN: Ombudsman signaling maintained for autonomous validation.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): resolve GitHub API 409 race condition and bump to v11.38.3.1
+fix(orchestration): synchronize GHA phase to 38.3.2 and harden browser response
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "38.3.1",
+  "current_phase": "38.3.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -49,7 +44,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "38.3.1",
+      incoming_phase: "38.3.2",
       build_id: payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
