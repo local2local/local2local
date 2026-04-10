@@ -1,20 +1,21 @@
 /**
- * L2LAAF Phase 39.1.4: 2nd Gen SDK Uniformity
+ * L2LAAF Phase 39.1.5: Trigger Type Harmonization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * * ACTIONS:
- * 1. BUMP: Phase 39.1.4.
- * 2. FIX: Migrated listSubcollectionsV2 to 2nd Gen HTTPS to resolve CPU config errors.
- * 3. SYNC: Maintained full restoration suite to prevent agent pruning.
+ * 1. BUMP: Phase 39.1.5.
+ * 2. FIX: Finalized 2nd Gen HTTPS listSubcollectionsV2 for CORS support.
+ * 3. SYNC: Switched to singular utility filename deleteSubcollection.ts.
+ * 4. PRESERVE: Full project logic exported to prevent CLI function pruning.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(functions): migrate listSubcollections to 2nd Gen SDK and bump to v11.39.1.4
+fix(functions): finalize HTTPS trigger migration and bump to v11.39.1.5
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "39.1.4",
+  "current_phase": "39.1.5",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -81,7 +82,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="39.1.4"
+          PHASE="39.1.5"
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" -H "Content-Type: application/json" -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
 L2LAAF_BLOCK_END */
 
@@ -158,21 +159,18 @@ import * as admin from "firebase-admin";
 
 /**
  * listSubcollectionsV2
- * Migrated to 2nd Gen SDK to support consistent CPU/Memory configuration.
- * Includes built-in CORS handling.
+ * Deploying as 2nd Gen HTTPS to provide stable CORS for Flutter Web.
  */
 export const listSubcollectionsV2 = onRequest({ cors: true }, async (req, res) => {
   try {
     const { documentPath } = req.body;
     if (!documentPath) {
-      res.status(400).json({ error: "Missing documentPath in request body" });
+      res.status(400).json({ error: "Missing documentPath" });
       return;
     }
     const docRef = admin.firestore().doc(documentPath);
     const collections = await docRef.listCollections();
-    const subcollections = collections.map((col) => col.id);
-    
-    res.json({ subcollections });
+    res.json({ subcollections: collections.map((col) => col.id) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -241,7 +239,7 @@ type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { ap
 async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
-    await axios.post(N8N_WEBHOOK_URL, { incoming_phase: "39.1.4", build_id: payload.correlation_id || `EVO-${Date.now()}`, summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", event: eventType, filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", fileContent: payload.manifest?.proposedLogic || null, branch: "develop" });
+    await axios.post(N8N_WEBHOOK_URL, { incoming_phase: "39.1.5", build_id: payload.correlation_id || `EVO-${Date.now()}`, summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", event: eventType, filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", fileContent: payload.manifest?.proposedLogic || null, branch: "develop" });
   } catch (error) { console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); }
 }
 export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
