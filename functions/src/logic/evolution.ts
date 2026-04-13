@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.4", 
+      incoming_phase: "40.1.5", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -47,7 +47,9 @@ export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/
 export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
-  await signalOrchestrator({ summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}.` }, "SHADOW_VALIDATED", { buildId: event.params.runId });
+  // Propagate hbrId from the shadow run data if available
+  const hbrId = data.proposal_id || null;
+  await signalOrchestrator({ summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}.` }, "SHADOW_VALIDATED", { buildId: event.params.runId, hbrId });
 });
 
 export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
