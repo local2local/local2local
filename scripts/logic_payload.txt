@@ -1,22 +1,21 @@
 /**
- * L2LAAF Phase 40.1.2: Package Logic Restoration
+ * L2LAAF Phase 40.1.3: Autonomous Closure Sync
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.1.2.
- * 2. FIX: Restored missing "scripts" section to functions/package.json.
- * 3. SYNC: Maintained full 14-function stack restoration.
- * 4. ENV: Node 22 and UUID types preserved.
+ * 1. BUMP: Phase 40.1.3.
+ * 2. FIX: Corrected Firestore path for hbr_registry (removed nested registry doc).
+ * 3. SYNC: Maintained full function stack and Node 22 runtime.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(functions): restore missing build scripts and bump to v11.40.1.2
+fix(evolution): correct registry pathing and bump to v11.40.1.3
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.1.2",
+  "current_phase": "40.1.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -35,109 +34,6 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(yaml:GitHub Actions:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, staging, develop ]
-    paths-ignore: [ '.l2laaf/state.json' ]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-      - name: Build Flutter Web
-        run: flutter build web --release
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Deploy Stack
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
-      - name: Notify Orchestrator
-        if: success()
-        run: |
-          PHASE="40.1.2"
-          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" -H "Content-Type: application/json" -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"summary\": \"$SUMMARY\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:Functions Config:functions/package.json)
-{
-  "name": "functions",
-  "scripts": {
-    "build": "tsc",
-    "serve": "npm run build && firebase emulators:start --only functions",
-    "shell": "npm run build && firebase functions:shell",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
-  },
-  "engines": { "node": "22" },
-  "main": "lib/index.js",
-  "dependencies": {
-    "axios": "^1.6.0",
-    "firebase-admin": "^12.0.0",
-    "firebase-functions": "^5.0.0",
-    "uuid": "^9.0.1"
-  },
-  "devDependencies": {
-    "@types/uuid": "^9.0.7",
-    "firebase-functions-test": "^3.1.0",
-    "typescript": "^4.9.0"
-  },
-  "private": true
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
-import * as admin from "firebase-admin";
-if (admin.apps.length === 0) admin.initializeApp();
-
-/** * EVOLUTION & CORE */
-export { evolutionOrchestratorV3, ombudsmanValidatorV2, autonomousFixerV2, evolutionProposalFinalizerV2 } from "./logic/evolution";
-
-/** * LOGIC AGENTS */
-export { complianceAgent } from "./logic/compliance";
-export { financeAgent, taxWorker, stripeOnboardingWorker } from "./logic/finance";
-export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
-export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
-export { unifiedActivityWorkerV2 } from "./logic/orchestration";
-
-/** * UTILITY FUNCTIONS */
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -152,10 +48,11 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.2", 
+      incoming_phase: "40.1.3", 
       build_id: payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
+      hbrId: payload.payload?.manifest?.hbrId || payload.manifest?.hbrId || null,
       filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
       fileContent: payload.manifest?.proposedLogic || null, 
       branch: "develop" 
@@ -168,15 +65,17 @@ export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/
   if (!data || data.status !== "dispatched" || data.payload?.manifest?.intent !== "PROPOSE_LOGIC_CHANGE") return;
   const { appId } = event.params;
   const manifest = data.payload.manifest;
-  const correlationId = data.correlation_id || event.params.messageId;
   const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(manifest.hbrId);
   try {
     await db.runTransaction(async (transaction) => {
       const lockSnap = await transaction.get(lockRef);
       if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
-      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
+      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: data.correlation_id });
+      // FIX: Correct registry pathing (removed /registry/ nesting)
+      const registryRef = db.doc(`artifacts/${appId}/public/data/hbr_registry/${manifest.hbrId}`);
+      transaction.set(registryRef, { lock_status: "LOCKED", locked_by: manifest.agentId, last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     });
-    const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
+    const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(data.correlation_id || event.params.messageId);
     await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
     await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
   } catch (e) { throw e; }
@@ -203,9 +102,13 @@ export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId
 export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "PROMOTED") return;
-  if (data.hbrId) {
-    await db.doc(`artifacts/${event.params.appId}/public/data/logic_locks/${data.hbrId}`).delete();
+  const { appId } = event.params;
+  const hbrId = data.hbrId;
+  if (hbrId) {
+    await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
+    // FIX: Correct registry pathing
+    await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
-  await db.collection(`artifacts/${event.params.appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
+  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
 L2LAAF_BLOCK_END
