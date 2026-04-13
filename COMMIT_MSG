@@ -1,1 +1,1 @@
-fix(orchestration): implement phase regression protection and bump to v11.40.1.0
+fix(functions): restore missing build scripts and bump to v11.40.1.2

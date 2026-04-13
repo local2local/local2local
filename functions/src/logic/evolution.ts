@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.0", 
+      incoming_phase: "40.1.2", 
       build_id: payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -44,30 +44,26 @@ export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/
 export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
-  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` }, "SHADOW_VALIDATED");
+  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}.` }, "SHADOW_VALIDATED");
 });
 
 export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
   const state = event.data?.after.data();
   if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
   const { appId } = event.params;
-  const messageId = uuidv4();
-  await db.collection(`artifacts/${appId}/public/data/agent_bus`).doc(messageId).set({
+  await db.collection(`artifacts/${appId}/public/data/agent_bus`).doc(uuidv4()).set({
     status: "dispatched",
     correlation_id: `FIX-${Date.now()}`,
     provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
-    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", phase: state.current_phase, details: "Audit detected fatal runtime errors. Initiating self-healing protocol." }
+    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", details: "Self-healing protocol initiated." }
   });
 });
 
 export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "PROMOTED") return;
-  const { appId } = event.params;
-  const hbrId = data.hbrId;
-  if (hbrId) {
-    await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
-    await db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`).update({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() });
+  if (data.hbrId) {
+    await db.doc(`artifacts/${event.params.appId}/public/data/logic_locks/${data.hbrId}`).delete();
   }
-  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
+  await db.collection(`artifacts/${event.params.appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
