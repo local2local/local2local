@@ -1,22 +1,21 @@
 /**
- * L2LAAF Phase 39.2.2: Node Runtime Upgrade & Patcher Feedback
+ * L2LAAF Phase 39.2.3: Type Definition Resolution
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 39.2.2.
- * 2. FIX: Upgraded Cloud Functions runtime to Node 22 via package.json engine.
- * 3. SYNC: deploy.yml telemetry and runtime flags updated.
- * 4. UPDATE: Patcher v8.2 integrated for descriptive commit logs.
+ * 1. BUMP: Phase 39.2.3.
+ * 2. FIX: Added @types/uuid to devDependencies in package.json to resolve TS7016.
+ * 3. SYNC: Maintained Node 22 runtime and descriptive patcher feedback.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(runtime): upgrade functions to Node 22 and bump to v11.39.2.2
+fix(types): add uuid type definitions and bump to v11.39.2.3
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "39.2.2",
+  "current_phase": "39.2.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -87,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="39.2.2"
+          PHASE="39.2.3"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -116,6 +115,7 @@ L2LAAF_BLOCK_END */
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/uuid": "^9.0.7",
     "firebase-functions-test": "^3.1.0",
     "typescript": "^4.9.0"
   },
@@ -154,7 +154,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "39.2.2", 
+      incoming_phase: "39.2.3", 
       build_id: payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 

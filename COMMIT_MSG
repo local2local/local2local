@@ -1,1 +1,1 @@
-fix(runtime): upgrade functions to Node 22 and bump to v11.39.2.2
+fix(types): add uuid type definitions and bump to v11.39.2.3
