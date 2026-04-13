@@ -1,1 +1,1 @@
-fix(telemetry): restore build details summary in chat cards and bump to v11.39.2.1
+fix(runtime): upgrade functions to Node 22 and bump to v11.39.2.2

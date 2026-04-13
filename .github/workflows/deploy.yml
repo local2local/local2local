@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -45,7 +49,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="39.2.1"
+          PHASE="39.2.2"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \

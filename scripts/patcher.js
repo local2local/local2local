@@ -2,8 +2,9 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * L2LAAF PATCHER v8.1 (Whitespace-Safe)
- * Fix: Only removes the wrapping newlines from blocks, preserving internal indentation.
+ * L2LAAF PATCHER v8.2 (User-Friendly Logs)
+ * Fix: Only removes the wrapping newlines from blocks.
+ * Update: Displays actual commit message in logs for COMMIT_MSG files.
  */
 
 try {
@@ -31,7 +32,12 @@ try {
         }
         
         fs.writeFileSync(finalPath, cleanContent, 'utf8');
-        console.log(`✅ [${++blocksProcessed}] Synchronized: ${filePath.trim()} (${title.trim()})`);
+
+        // Logic for specialized console logging
+        const isCommitMsg = filePath.trim().toUpperCase() === 'COMMIT_MSG';
+        const displayContext = isCommitMsg ? `"${cleanContent.trim()}"` : title.trim();
+        
+        console.log(`✅ [${++blocksProcessed}] Synchronized: ${filePath.trim()} (${displayContext})`);
     }
 
     if (blocksProcessed === 0) {

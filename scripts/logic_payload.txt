@@ -1,21 +1,22 @@
 /**
- * L2LAAF Phase 39.2.1: Telemetry Restoration
+ * L2LAAF Phase 39.2.2: Node Runtime Upgrade & Patcher Feedback
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 39.2.1.
- * 2. FIX: Restored Git summary capture in deploy.yml for Google Chat "Build Details".
- * 3. SYNC: Maintained 2nd Gen SDK and subfolder utility structure.
+ * 1. BUMP: Phase 39.2.2.
+ * 2. FIX: Upgraded Cloud Functions runtime to Node 22 via package.json engine.
+ * 3. SYNC: deploy.yml telemetry and runtime flags updated.
+ * 4. UPDATE: Patcher v8.2 integrated for descriptive commit logs.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(telemetry): restore build details summary in chat cards and bump to v11.39.2.1
+fix(runtime): upgrade functions to Node 22 and bump to v11.39.2.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "39.2.1",
+  "current_phase": "39.2.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -53,6 +54,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -82,11 +87,40 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="39.2.1"
+          PHASE="39.2.2"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"summary\": \"$SUMMARY\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:Functions Config:functions/package.json)
+{
+  "name": "functions",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
@@ -108,42 +142,6 @@ export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:List Utility:functions/src/utilities/listSubcollections.ts)
-import { onRequest } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-
-export const listSubcollectionsV2 = onRequest({ cors: true }, async (req, res) => {
-  try {
-    const { documentPath } = req.body;
-    if (!documentPath) {
-      res.status(400).json({ error: "Missing documentPath" });
-      return;
-    }
-    const docRef = admin.firestore().doc(documentPath);
-    const collections = await docRef.listCollections();
-    res.json({ subcollections: collections.map((col) => col.id) });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
-const db = admin.firestore();
-
-export const deleteSubcollectionV2 = onDocumentWritten("artifacts/{appId}/public/data/cleanup_requests/{reqId}", async (event) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "pending") return;
-  const snapshot = await db.collection(data.path).get();
-  const batch = db.batch();
-  snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-  await batch.commit();
-  await event.data?.after.ref.update({ status: "deleted", completed_at: admin.firestore.FieldValue.serverTimestamp() });
-});
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -156,7 +154,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "39.2.1", 
+      incoming_phase: "39.2.2", 
       build_id: payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
