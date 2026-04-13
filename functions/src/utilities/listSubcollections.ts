@@ -1,10 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
-/**
- * listSubcollectionsV2
- * Deploying as 2nd Gen HTTPS to provide stable CORS for Flutter Web.
- */
 export const listSubcollectionsV2 = onRequest({ cors: true }, async (req, res) => {
   try {
     const { documentPath } = req.body;

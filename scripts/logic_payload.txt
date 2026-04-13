@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 39.1.5: Trigger Type Harmonization
+ * L2LAAF Phase 39.2.0: Ghost Mitigation & Stack Re-Sync
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * * ACTIONS:
- * 1. BUMP: Phase 39.1.5.
- * 2. FIX: Finalized 2nd Gen HTTPS listSubcollectionsV2 for CORS support.
- * 3. SYNC: Switched to singular utility filename deleteSubcollection.ts.
- * 4. PRESERVE: Full project logic exported to prevent CLI function pruning.
+ *
+ * ACTIONS:
+ * 1. BUMP: Phase 39.2.0.
+ * 2. RESTORE: Re-syncing the 39.1.5 logic (CORS + 2nd Gen HTTPS).
+ * 3. FIX: Prevents state overwrite from legacy ghost executions.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(functions): finalize HTTPS trigger migration and bump to v11.39.1.5
+fix(orchestration): mitigate ghost executions and re-sync to v11.39.2.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "39.1.5",
+  "current_phase": "39.2.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -82,7 +82,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="39.1.5"
+          PHASE="39.2.0"
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" -H "Content-Type: application/json" -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
 L2LAAF_BLOCK_END */
 
@@ -105,62 +105,10 @@ export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Agent Bus Client:functions/src/agentBusClient.ts)
-import * as admin from "firebase-admin";
-import { v4 as uuidv4 } from "uuid";
-const db = admin.firestore();
-
-export interface AgentConfig {
-  agentId: string;
-  capabilities: string[];
-  jurisdictions: string[];
-  substances: string[];
-  role: "ORCHESTRATOR" | "WORKER";
-  domain: "COMPLIANCE" | "FINANCE" | "MARKET_DEV" | "OPS" | "INSIGHTS" | "SECURITY";
-}
-
-export interface AgentError {
-  code: string;
-  message: string;
-}
-
-export class AgentBusClient {
-  private config: AgentConfig;
-  private appId: string;
-  constructor(config: AgentConfig, tenantId?: string) {
-    this.config = config;
-    this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
-  }
-  async register() {
-    const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
-    await registryRef.set({
-      agent_id: this.config.agentId,
-      status: { health: "green", last_heartbeat: admin.firestore.FieldValue.serverTimestamp() }
-    }, { merge: true });
-  }
-  async sendResponse(correlationId: string, receiverId: string, payload: any, error?: AgentError) {
-    const messageId = uuidv4();
-    await db.collection(`artifacts/${this.appId}/public/data/agent_bus`).doc(messageId).set({
-      message_id: messageId,
-      correlation_id: correlationId,
-      provenance: { sender_id: this.config.agentId, receiver_id: receiverId, app_id: this.appId },
-      control: { type: error ? "ERROR" : "RESPONSE", priority: "normal" },
-      payload: error ? { error } : { result: payload },
-      status: "intercepted",
-      telemetry: { completed_at: new Date().toISOString() }
-    });
-  }
-}
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:List Utility:functions/src/utilities/listSubcollections.ts)
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
-/**
- * listSubcollectionsV2
- * Deploying as 2nd Gen HTTPS to provide stable CORS for Flutter Web.
- */
 export const listSubcollectionsV2 = onRequest({ cors: true }, async (req, res) => {
   try {
     const { documentPath } = req.body;
@@ -193,42 +141,6 @@ export const deleteSubcollectionV2 = onDocumentWritten("artifacts/{appId}/public
 });
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Compliance:functions/src/logic/compliance.ts)
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import { AgentBusClient } from "../agentBusClient";
-export const complianceAgent = onDocumentWritten("artifacts/{appId}/public/data/agent_bus/{messageId}", async (event) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "COMPLIANCE_ORCHESTRATOR") return;
-  const client = new AgentBusClient({ agentId: "COMPLIANCE_ORCHESTRATOR", capabilities: ["legal_audit"], jurisdictions: ["AB"], substances: ["DATA"], role: "ORCHESTRATOR", domain: "COMPLIANCE" }, event.params.appId);
-  await client.register();
-  await client.sendResponse(data.correlation_id, data.provenance.sender_id, { audit: "PASSED" });
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Finance:functions/src/logic/finance.ts)
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import { AgentBusClient } from "../agentBusClient";
-export const financeAgent = onDocumentWritten("artifacts/{appId}/public/data/agent_bus/{messageId}", async (event) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "FINANCE_ORCHESTRATOR") return;
-  const client = new AgentBusClient({ agentId: "FINANCE_ORCHESTRATOR", capabilities: ["ledger_sync"], jurisdictions: ["AB"], substances: ["FINANCE"], role: "ORCHESTRATOR", domain: "FINANCE" }, event.params.appId);
-  await client.register();
-  await client.sendResponse(data.correlation_id, data.provenance.sender_id, { status: "SYNCED" });
-});
-export const taxWorker = onDocumentWritten("artifacts/{appId}/public/data/agent_bus/{messageId}", async (event) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "TAX_WORKER") return;
-  const client = new AgentBusClient({ agentId: "TAX_WORKER", capabilities: ["tax_calc"], jurisdictions: ["AB"], substances: ["FINANCE"], role: "WORKER", domain: "FINANCE" }, event.params.appId);
-  await client.sendResponse(data.correlation_id, data.provenance.sender_id, { tax: 0.05 });
-});
-export const stripeOnboardingWorker = onDocumentWritten("artifacts/{appId}/public/data/agent_bus/{messageId}", async (event) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "STRIPE_ONBOARDING_WORKER") return;
-  const client = new AgentBusClient({ agentId: "STRIPE_ONBOARDING_WORKER", capabilities: ["onboarding"], jurisdictions: ["AB"], substances: ["FINANCE"], role: "WORKER", domain: "FINANCE" }, event.params.appId);
-  await client.sendResponse(data.correlation_id, data.provenance.sender_id, { link: "https://stripe.com/onboard" });
-});
-L2LAAF_BLOCK_END */
-
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
@@ -236,13 +148,28 @@ import * as admin from "firebase-admin";
 import axios from "axios";
 const db = admin.firestore();
 type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { appId: string; [key: string]: string }>;
+
 async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
-    await axios.post(N8N_WEBHOOK_URL, { incoming_phase: "39.1.5", build_id: payload.correlation_id || `EVO-${Date.now()}`, summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", event: eventType, filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", fileContent: payload.manifest?.proposedLogic || null, branch: "develop" });
-  } catch (error) { console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); }
+    await axios.post(N8N_WEBHOOK_URL, { 
+      incoming_phase: "39.2.0", 
+      build_id: payload.correlation_id || `EVO-${Date.now()}`, 
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
+      event: eventType, 
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
+      fileContent: payload.manifest?.proposedLogic || null, 
+      branch: "develop" 
+    });
+  } catch (error) { 
+    console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); 
+  }
 }
-export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
+
+export const evolutionOrchestratorV3 = onDocumentWritten({ 
+  document: "artifacts/{appId}/public/data/agent_bus/{messageId}", 
+  memory: "512MiB" 
+}, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "dispatched" || data.payload?.manifest?.intent !== "PROPOSE_LOGIC_CHANGE") return;
   const { appId } = event.params;
@@ -253,58 +180,50 @@ export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/
     await db.runTransaction(async (transaction) => {
       const lockSnap = await transaction.get(lockRef);
       if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
-      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
+      transaction.set(lockRef, { 
+        agentId: manifest.agentId, 
+        lockedAt: admin.firestore.FieldValue.serverTimestamp(), 
+        correlation_id: correlationId 
+      });
     });
     const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
-    await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
+    await shadowRef.set({ 
+      status: "INITIALIZING", 
+      proposal_id: manifest.hbrId, 
+      agent_id: manifest.agentId, 
+      started_at: admin.firestore.FieldValue.serverTimestamp() 
+    });
     await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
-  } catch (e) { throw e; }
+  } catch (e) { 
+    throw e; 
+  }
 });
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
+
+export const ombudsmanValidatorV2 = onDocumentWritten({ 
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}" 
+}, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
-  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` }, "SHADOW_VALIDATED");
+  await signalOrchestrator({ 
+    correlation_id: event.params.runId, 
+    summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` 
+  }, "SHADOW_VALIDATED");
 });
-export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
+
+export const autonomousFixerV2 = onDocumentWritten({ 
+  document: "artifacts/{appId}/public/data/system_state/state" 
+}, async (event) => {
   const state = event.data?.after.data();
   if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
   const fixerLogRef = db.collection(`artifacts/${event.params.appId}/public/data/fixer_logs`).doc();
-  await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
+  await fixerLogRef.set({ 
+    detected_at: admin.firestore.FieldValue.serverTimestamp(), 
+    status: "ANALYZING", 
+    target_phase: state.current_phase 
+  });
 });
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});
-L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Fulfillment:functions/src/logic/fulfillment.ts)
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { AgentBusClient } from "../agentBusClient";
-export const gpsTelemetryWorkerV2 = onDocumentUpdated("artifacts/{appId}/public/data/jobs/{jobId}", async (event) => {
-  const appId = event.params.appId;
-  const client = new AgentBusClient({ agentId: "TELEMETRY_WORKER", capabilities: ["gps"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "OPS" }, appId);
-  await client.register();
-});
-export const carrierBoardWorkerV2 = onDocumentUpdated("artifacts/{appId}/public/data/carriers/{carrierId}", async (event) => {
-  const appId = event.params.appId;
-  const client = new AgentBusClient({ agentId: "CARRIER_WORKER", capabilities: ["dispatch"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "OPS" }, appId);
-  await client.register();
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Infrastructure:functions/src/logic/infrastructure.ts)
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { AgentBusClient } from "../agentBusClient";
-export const facilityMatchingWorkerV2 = onDocumentUpdated("artifacts/{appId}/public/data/facilities/{facId}", async (event) => {
-  const appId = event.params.appId;
-  const client = new AgentBusClient({ agentId: "FACILITY_WORKER", capabilities: ["matching"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "OPS" }, appId);
-  await client.register();
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Orchestration:functions/src/logic/orchestration.ts)
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { AgentBusClient } from "../agentBusClient";
-export const unifiedActivityWorkerV2 = onDocumentUpdated("artifacts/{appId}/public/data/activity/{actId}", async (event) => {
-  const appId = event.params.appId;
-  const client = new AgentBusClient({ agentId: "ORCHESTRATION_WORKER", capabilities: ["sync"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "OPS" }, appId);
-  await client.register();
-});
-L2LAAF_BLOCK_END */
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ 
+  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" 
+}, async (event) => {});
+L2LAAF_BLOCK_END
