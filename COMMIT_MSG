@@ -1,1 +1,1 @@
-fix(types): add uuid type definitions and bump to v11.39.2.3
+feat(evolution): implement self-healing reasoning loop and bump to v11.40.0.0
