@@ -1,1 +1,1 @@
-feat(evolution): implement self-healing reasoning loop and bump to v11.40.0.0
+fix(orchestration): implement phase regression protection and bump to v11.40.1.0
