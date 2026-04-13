@@ -9,7 +9,7 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "39.2.0", 
+      incoming_phase: "39.2.1", 
       build_id: payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -36,23 +36,12 @@ export const evolutionOrchestratorV3 = onDocumentWritten({
     await db.runTransaction(async (transaction) => {
       const lockSnap = await transaction.get(lockRef);
       if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
-      transaction.set(lockRef, { 
-        agentId: manifest.agentId, 
-        lockedAt: admin.firestore.FieldValue.serverTimestamp(), 
-        correlation_id: correlationId 
-      });
+      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
     });
     const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
-    await shadowRef.set({ 
-      status: "INITIALIZING", 
-      proposal_id: manifest.hbrId, 
-      agent_id: manifest.agentId, 
-      started_at: admin.firestore.FieldValue.serverTimestamp() 
-    });
+    await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
     await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
-  } catch (e) { 
-    throw e; 
-  }
+  } catch (e) { throw e; }
 });
 
 export const ombudsmanValidatorV2 = onDocumentWritten({ 
@@ -60,25 +49,14 @@ export const ombudsmanValidatorV2 = onDocumentWritten({
 }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "VALIDATED") return;
-  await signalOrchestrator({ 
-    correlation_id: event.params.runId, 
-    summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` 
-  }, "SHADOW_VALIDATED");
+  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` }, "SHADOW_VALIDATED");
 });
 
-export const autonomousFixerV2 = onDocumentWritten({ 
-  document: "artifacts/{appId}/public/data/system_state/state" 
-}, async (event) => {
+export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
   const state = event.data?.after.data();
   if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
   const fixerLogRef = db.collection(`artifacts/${event.params.appId}/public/data/fixer_logs`).doc();
-  await fixerLogRef.set({ 
-    detected_at: admin.firestore.FieldValue.serverTimestamp(), 
-    status: "ANALYZING", 
-    target_phase: state.current_phase 
-  });
+  await fixerLogRef.set({ detected_at: admin.firestore.FieldValue.serverTimestamp(), status: "ANALYZING", target_phase: state.current_phase });
 });
 
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ 
-  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" 
-}, async (event) => {});
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {});

@@ -1,1 +1,1 @@
-fix(orchestration): mitigate ghost executions and re-sync to v11.39.2.0
+fix(telemetry): restore build details summary in chat cards and bump to v11.39.2.1
