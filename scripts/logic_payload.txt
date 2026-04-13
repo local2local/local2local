@@ -1,535 +1,183 @@
-L2LAAF Phase 36 Master Stabilization (v11.92)
-PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+/**
+ * L2LAAF Phase 40.1.0: Phase Regression Protection
+ * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+ *
+ * ACTIONS:
+ * 1. BUMP: Phase 40.1.0.
+ * 2. FIX: Implemented Phase Regression Protection in n8n logic.
+ * 3. SYNC: Maintained Self-Healing loops and Node 22 runtime.
+ */
 
-L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(cockpit): resolve credential retention and restore health/fleet data feeds v11.92
-L2LAAF_BLOCK_END
+/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
+fix(orchestration): implement phase regression protection and bump to v11.40.1.0
+L2LAAF_BLOCK_END */
 
-L2LAAF_BLOCK_START(dart:APP_MAIN:lib/main.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:local2local/core/app.dart';
-import 'package:local2local/firebase_options.dart';
+/* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
+{
+  "system_status": "OPERATIONAL",
+  "current_phase": "40.1.0",
+  "active_environment": "develop",
+  "deployment_telemetry": {
+    "last_success_commit": null,
+    "current_build_id": null,
+    "verification_status": "IDLE"
+  },
+  "approval_gate": {
+    "pending": false,
+    "timeout_at": null,
+    "gate_type": "HITL_REQUIRED"
+  },
+  "reconciliation": {
+    "last_sync_timestamp": null,
+    "conflict_detected": false
+  }
+}
+L2LAAF_BLOCK_END */
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  bool coreReady = false;
-  String? bootError;
+/* L2LAAF_BLOCK_START(yaml:GitHub Actions:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, staging, develop ]
+    paths-ignore: [ '.l2laaf/state.json' ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+      - name: Build Flutter Web
+        run: flutter build web --release
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Deploy Stack
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            PROJECT_ID="local2local-staging"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+      - name: Notify Orchestrator
+        if: success()
+        run: |
+          PHASE="40.1.0"
+          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
+          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"summary\": \"$SUMMARY\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
+L2LAAF_BLOCK_END */
 
+/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
+import * as admin from "firebase-admin";
+if (admin.apps.length === 0) admin.initializeApp();
+export { evolutionOrchestratorV3, ombudsmanValidatorV2, autonomousFixerV2, evolutionProposalFinalizerV2 } from "./logic/evolution";
+export { complianceAgent } from "./logic/compliance";
+export { financeAgent, taxWorker, stripeOnboardingWorker } from "./logic/finance";
+export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
+export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
+export { unifiedActivityWorkerV2 } from "./logic/orchestration";
+export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
+export { listSubcollectionsV2 } from "./utilities/listSubcollections";
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+
+const db = admin.firestore();
+type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { appId: string; [key: string]: string }>;
+
+async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
+  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
-    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.92.36...");
-    
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    
-    coreReady = true;
-    debugPrint("L2LAAF_BOOT: Firebase Core Ready.");
-  } catch (e) {
-    bootError = e.toString();
-    debugPrint("L2LAAF_BOOT_FATAL: $e");
-  }
-
-  runApp(
-    ProviderScope(
-      overrides: [
-        firebaseReadyProvider.overrideWith((ref) => coreReady),
-        initErrorProvider.overrideWith((ref) => bootError),
-      ],
-      child: const L2LAAFApp(),
-    ),
-  );
-}
-
-final firebaseReadyProvider = Provider<bool>((ref) => false);
-final initErrorProvider = Provider<String?>((ref) => null);
-
-final authStateProvider = StreamProvider<User?>((ref) {
-  return FirebaseAuth.instance.authStateChanges();
-});
-
-final isAdminProvider = FutureProvider<bool>((ref) async {
-  final user = ref.watch(authStateProvider).value;
-  if (user == null) return false;
-  final idToken = await user.getIdTokenResult(true); 
-  return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
-});
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(dart:COCKPIT_SHELL:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
-import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
-import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
-import 'package:local2local/main.dart';
-
-class CockpitShell extends ConsumerStatefulWidget {
-  const CockpitShell({super.key});
-
-  @override
-  ConsumerState<CockpitShell> createState() => _CockpitShellState();
-}
-
-class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3;
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLoggingIn = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  void _handleLogout() async {
-    await FirebaseAuth.instance.signOut();
-    _emailController.clear();
-    _passwordController.clear();
-    if (mounted) setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isReady = ref.watch(firebaseReadyProvider);
-    final error = ref.watch(initErrorProvider);
-    final authState = ref.watch(authStateProvider);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1E),
-      body: authState.when(
-        data: (user) {
-          if (user == null) return _buildLoginGate();
-          
-          return Row(
-            children: [
-              // SIDE NAVIGATION
-              Container(
-                width: 72,
-                color: const Color(0xFF16162A),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 24),
-                    const Icon(Icons.blur_on, color: Colors.greenAccent, size: 32),
-                    const SizedBox(height: 48),
-                    _buildNavItem(0, Icons.list_alt, 'Triage'),
-                    _buildNavItem(1, Icons.grid_view, 'Health'),
-                    _buildNavItem(2, Icons.directions_car, 'Fleet'),
-                    _buildNavItem(3, Icons.psychology, 'Evolution'),
-                    const Spacer(),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: IconButton(
-                        icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
-                        tooltip: 'Sign Out',
-                        onPressed: _handleLogout,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // MAIN CONTENT
-              Expanded(
-                child: Column(
-                  children: [
-                    const CockpitHeader(),
-                    Expanded(
-                      child: error != null 
-                        ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
-                        : !isReady 
-                            ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-                            : _buildBody(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('AUTH ERROR: $err', style: const TextStyle(color: Colors.redAccent))),
-      ),
-    );
-  }
-
-  Widget _buildLoginGate() {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(32),
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.shield_outlined, color: Colors.blueAccent, size: 64),
-            const SizedBox(height: 24),
-            const Text('L2LAAF COCKPIT', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
-            const SizedBox(height: 12),
-            const Text('CREDENTIAL ACCESS REQUIRED', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 48),
-            
-            TextField(
-              controller: _emailController,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Email address',
-                hintStyle: const TextStyle(color: Colors.white24),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Password',
-                hintStyle: const TextStyle(color: Colors.white24),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
-              ),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: _isLoggingIn ? null : _handleLogin,
-                child: _isLoggingIn 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('AUTHORIZE ACCESS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleLogin() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _showError('Email and Password are required.');
-      return;
-    }
-
-    setState(() => _isLoggingIn = true);
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-    } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? 'Authentication failed.');
-    } finally {
-      if (mounted) setState(() => _isLoggingIn = false);
-    }
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent)
-    );
-  }
-
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _selectedIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      child: Container(
-        width: double.infinity,
-        height: 64,
-        decoration: BoxDecoration(
-          border: isSelected ? const Border(left: BorderSide(color: Colors.blueAccent, width: 4)) : null,
-          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: isSelected ? Colors.blueAccent : Colors.white24, size: 24),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: isSelected ? Colors.blueAccent : Colors.white24, fontSize: 8)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    final env = ref.watch(environmentProvider);
-    final projectId = env.projectId;
-
-    switch (_selectedIndex) {
-      case 0: return _buildFirestoreList(projectId, 'agent_bus', 'Active Exceptions', Icons.list_alt);
-      case 1: return _buildFirestoreList(projectId, 'system_health', 'System Health', Icons.grid_view);
-      case 2: return _buildFirestoreList(projectId, 'fleet_status', 'Fleet Logistics', Icons.directions_car);
-      case 3: return _buildEvolutionTimeline(projectId);
-      default: return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildFirestoreList(String appId, String coll, String title, IconData icon) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection(coll)
-          .snapshots(), // RULE 2: Removed limit() to ensure connectivity
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
-        
-        final docs = snapshot.data?.docs ?? [];
-        if (docs.isEmpty) return _buildEmptyState(title, icon);
-        
-        return ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: docs.length,
-          itemBuilder: (ctx, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            
-            final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
-            final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
-            final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
-
-            return Card(
-              color: const Color(0xFF1E1E2C),
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              child: ListTile(
-                leading: Icon(Icons.circle, color: statusColor, size: 10),
-                title: Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                subtitle: Text(displaySub, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                trailing: data['timestamp'] != null ? Text(_formatTs(data['timestamp']), style: const TextStyle(color: Colors.white10, fontSize: 10)) : null,
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Color _getColorForStatus(dynamic status) {
-    final s = status.toString().toLowerCase();
-    if (s.contains('error') || s.contains('failed') || s.contains('critical')) return Colors.redAccent;
-    if (s.contains('warn')) return Colors.orangeAccent;
-    if (s.contains('healthy') || s.contains('ok') || s.contains('success')) return Colors.greenAccent;
-    return Colors.blueAccent;
-  }
-
-  String _formatTs(dynamic ts) {
-    if (ts is Timestamp) return "${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}";
-    return "";
-  }
-
-  Widget _buildEvolutionTimeline(String appId) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('artifacts')
-          .doc(appId)
-          .collection('public')
-          .doc('data')
-          .collection('evolution_timeline')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data?.docs ?? [];
-        final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
-        events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-        return Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  _buildAdminBadge(),
-                ],
-              ),
-              const SizedBox(height: 32),
-              Expanded(
-                child: events.isEmpty 
-                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
-                  : ListView.builder(
-                      itemCount: events.length,
-                      itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
-                    ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildAdminBadge() {
-    return Consumer(builder: (context, ref, child) {
-      final isAdmin = ref.watch(isAdminProvider).value ?? false;
-      if (!isAdmin) return const SizedBox.shrink();
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))),
-        child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-      );
+    await axios.post(N8N_WEBHOOK_URL, { 
+      incoming_phase: "40.1.0", 
+      build_id: payload.correlation_id || `EVO-${Date.now()}`, 
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
+      event: eventType, 
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
+      fileContent: payload.manifest?.proposedLogic || null, 
+      branch: "develop" 
     });
-  }
-
-  Widget _buildTimelineCard(EvolutionEventModel event) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(event.title, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-              Text(event.timeDisplay, style: const TextStyle(color: Colors.white24, fontSize: 10)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(event.description, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
-                child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9)),
-              ),
-              if (event.isAutonomous) ...[
-                const SizedBox(width: 8),
-                const Icon(Icons.bolt, color: Colors.greenAccent, size: 12),
-                const SizedBox(width: 4),
-                const Text('AUTONOMOUS', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.white10),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
-          const SizedBox(height: 8),
-          const Text('Waiting for data feed...', style: TextStyle(color: Colors.white10, fontSize: 10)),
-        ],
-      ),
-    );
-  }
+  } catch (error) { console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); }
 }
-L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(dart:ENV_PROVIDER:lib/features/triage_hub/providers/environment_provider.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "dispatched" || data.payload?.manifest?.intent !== "PROPOSE_LOGIC_CHANGE") return;
+  const { appId } = event.params;
+  const manifest = data.payload.manifest;
+  const correlationId = data.correlation_id || event.params.messageId;
+  const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(manifest.hbrId);
+  try {
+    await db.runTransaction(async (transaction) => {
+      const lockSnap = await transaction.get(lockRef);
+      if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
+      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
+    });
+    const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
+    await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
+    await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
+  } catch (e) { throw e; }
+});
 
-enum L2LEnvironment { dev, staging, prod }
+export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "VALIDATED") return;
+  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` }, "SHADOW_VALIDATED");
+});
 
-class EnvironmentState {
-  final L2LEnvironment environment;
-  final String projectId;
-  final Color headerColor;
-  final String version;
-
-  EnvironmentState({
-    required this.environment,
-    required this.projectId,
-    required this.headerColor,
-    required this.version,
+export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
+  const state = event.data?.after.data();
+  if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
+  const { appId } = event.params;
+  const messageId = uuidv4();
+  await db.collection(`artifacts/${appId}/public/data/agent_bus`).doc(messageId).set({
+    status: "dispatched",
+    correlation_id: `FIX-${Date.now()}`,
+    provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
+    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", phase: state.current_phase, details: "Audit detected fatal runtime errors. Initiating self-healing protocol." }
   });
+});
 
-  EnvironmentState copyWith({L2LEnvironment? environment}) {
-    final newEnv = environment ?? this.environment;
-    return EnvironmentState(
-      environment: newEnv,
-      projectId: _getProjectId(newEnv),
-      headerColor: _getHeaderColor(newEnv),
-      version: 'v11.92.36',
-    );
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "PROMOTED") return;
+  const { appId } = event.params;
+  const hbrId = data.hbrId;
+  if (hbrId) {
+    await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
+    await db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`).update({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() });
   }
-
-  static String _getProjectId(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.staging: return 'local2local-staging';
-      case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-kaskflow'; 
-    }
-  }
-
-  static Color _getHeaderColor(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.prod: return const Color(0xFFFF1744);
-      case L2LEnvironment.staging: return const Color(0xFFFF9100);
-      default: return const Color(0xFF1E1E2C);
-    }
-  }
-}
-
-class EnvironmentNotifier extends Notifier<EnvironmentState> {
-  @override
-  EnvironmentState build() {
-    return EnvironmentState(
-      environment: L2LEnvironment.dev,
-      projectId: 'local2local-kaskflow',
-      headerColor: const Color(0xFF1E1E2C),
-      version: 'v11.92.36',
-    );
-  }
-
-  void setEnvironment(L2LEnvironment env, BuildContext context) async {
-    if (env == L2LEnvironment.prod) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
-          content: const Text('Entering LIVE production environment. Extreme caution required.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('ENTER PROD'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-    state = state.copyWith(environment: env);
-  }
-}
-
-final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
-  return EnvironmentNotifier();
+  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
 L2LAAF_BLOCK_END

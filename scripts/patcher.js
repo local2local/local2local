@@ -2,15 +2,10 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * L2LAAF PATCHER v8.0 (Minimalist)
- * Processes multi-block payloads from stdin.
- * Zero-Touch implementation: No sanitization or character substitution.
+ * L2LAAF PATCHER v8.2 (User-Friendly Logs)
+ * Fix: Only removes the wrapping newlines from blocks.
+ * Update: Displays actual commit message in logs for COMMIT_MSG files.
  */
-
-function processContent(content) {
-    // Pure extraction - no modifications to the string
-    return content || "";
-}
 
 try {
     const rawInput = fs.readFileSync(0, 'utf8');
@@ -27,15 +22,22 @@ try {
         const [fullMatch, type, title, filePath, rawContent] = match;
         
         const finalPath = path.resolve(process.cwd(), filePath.trim());
-        const finalContent = processContent(rawContent.trim());
+        
+        // Clean only the leading and trailing newline added by the block format
+        const cleanContent = rawContent.replace(/^\r?\n/, "").replace(/\r?\n$/, "");
         
         const dir = path.dirname(finalPath);
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
         }
         
-        fs.writeFileSync(finalPath, finalContent, 'utf8');
-        console.log(`✅ [${++blocksProcessed}] Synchronized: ${filePath.trim()} (${title.trim()})`);
+        fs.writeFileSync(finalPath, cleanContent, 'utf8');
+
+        // Logic for specialized console logging
+        const isCommitMsg = filePath.trim().toUpperCase() === 'COMMIT_MSG';
+        const displayContext = isCommitMsg ? `"${cleanContent.trim()}"` : title.trim();
+        
+        console.log(`✅ [${++blocksProcessed}] Synchronized: ${filePath.trim()} (${displayContext})`);
     }
 
     if (blocksProcessed === 0) {

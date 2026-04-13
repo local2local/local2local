@@ -1,8 +1,9 @@
 #!/bin/bash
-# --- L2LAAF RELAY v4.1 ---
+# --- L2LAAF RELAY v4.1 (Phase 37.5.3 Optimized) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter) -> Git Commit -> Push.
 
+# Point to the TXT payload version for Cursor compatibility
 PAYLOAD_FILE="./scripts/logic_payload.txt"
 
 if [ ! -f "$PAYLOAD_FILE" ]; then

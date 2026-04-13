@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
+import 'package:local2local/features/triage_hub/presentation/widgets/hbr_lock_indicator.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
 import 'package:local2local/main.dart';
@@ -229,7 +230,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .collection('public')
           .doc('data')
           .collection(coll)
-          .snapshots(), // RULE 2: Removed limit() to ensure connectivity
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
@@ -246,6 +247,9 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
+            
+            // MUTEX VISUALIZATION
+            final isLocked = data['lock_status'] == 'LOCKED';
 
             return Card(
               color: const Color(0xFF1E1E2C),
@@ -253,7 +257,13 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               child: ListTile(
                 leading: Icon(Icons.circle, color: statusColor, size: 10),
-                title: Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                title: Row(
+                  children: [
+                    Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    HbrLockIndicator(isLocked: isLocked, lockedBy: data['locked_by']),
+                  ],
+                ),
                 subtitle: Text(displaySub, style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: data['timestamp'] != null ? Text(_formatTs(data['timestamp']), style: const TextStyle(color: Colors.white10, fontSize: 10)) : null,
               ),
@@ -326,7 +336,11 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       if (!isAdmin) return const SizedBox.shrink();
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))),
+        decoration: BoxDecoration(
+          color: Colors.blueAccent.withValues(alpha: 0.1), 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))
+        ),
         child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
       );
     });

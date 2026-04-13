@@ -1,194 +1,73 @@
-import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
-import { onRequest } from "firebase-functions/v2/https";
-import type { FirestoreEvent, Change, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
-import type { Request, Response } from "firebase-functions/v1";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../config";
-import { AgentBusClient } from "../agentBusClient";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 
-type L2LChange = Change<QueryDocumentSnapshot>;
-type L2LWrittenEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
-type L2LCreatedEvent = FirestoreEvent<QueryDocumentSnapshot | undefined, Record<string, string>>;
-type L2LUpdatedEvent = FirestoreEvent<L2LChange | undefined, Record<string, string>>;
+const db = admin.firestore();
+type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { appId: string; [key: string]: string }>;
 
-function areResultsIdentical(a: any, b: any): boolean {
+async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
+  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
-    const s1 = JSON.stringify(a || {}, Object.keys(a || {}).sort());
-    const s2 = JSON.stringify(b || {}, Object.keys(b || {}).sort());
-    return s1 === s2;
-  } catch (e) {
-    return false;
-  }
+    await axios.post(N8N_WEBHOOK_URL, { 
+      incoming_phase: "40.1.0", 
+      build_id: payload.correlation_id || `EVO-${Date.now()}`, 
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
+      event: eventType, 
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
+      fileContent: payload.manifest?.proposedLogic || null, 
+      branch: "develop" 
+    });
+  } catch (error) { console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); }
 }
 
-export const evolutionOrchestratorV2 = onDocumentWritten({
-  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
-  memory: "512MiB"
-}, async (event: L2LWrittenEvent) => {
+export const evolutionOrchestratorV3 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
-  const prev = event.data?.before.data();
-  if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
-  if (data.provenance?.receiver_id !== "EVOLUTION_WORKER") return;
-
+  if (!data || data.status !== "dispatched" || data.payload?.manifest?.intent !== "PROPOSE_LOGIC_CHANGE") return;
   const { appId } = event.params;
-  const client = new AgentBusClient({
-    agentId: "EVOLUTION_WORKER",
-    capabilities: ["logic_optimization", "memory_commit"],
-    jurisdictions: ["AB"],
-    substances: ["DAUA"],
-    role: "ORCHESTRATOR",
-    domain: "SECURITY"
-  }, appId);
-
-  await client.register();
-
+  const manifest = data.payload.manifest;
+  const correlationId = data.correlation_id || event.params.messageId;
+  const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(manifest.hbrId);
   try {
-    const manifest = data.payload?.manifest;
-    if (!manifest) return;
-
-    if (manifest.intent === "PROPOSE_LOGIC_CHANGE") {
-      const { hbrId, agentId, proposedLogic, reason } = manifest;
-
-      const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(hbrId);
-      const lockSnap = await lockRef.get();
-      if (lockSnap.exists) {
-        console.warn(`[ORCHESTRATOR] Collision: HBR ${hbrId} is currently locked.`);
-        return;
-      }
-
-      const proposalPath = `artifacts/${appId}/public/data/logic_proposals`;
-      const proposalRef = db.collection(proposalPath).doc();
-      
-      await proposalRef.set({
-        hbrId,
-        proposingAgentId: agentId,
-        proposedLogic,
-        reason,
-        status: "PENDING",
-        correlation_id: data.correlation_id,
-        commit_pending: false,
-        createdAt: new Date().toISOString()
-      });
-
-      return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
-        status: "REGISTERED",
-        proposalId: proposalRef.id
-      });
-    }
-  } catch (err) {
-    console.error("[ORCHESTRATOR] Error:", err);
-  }
+    await db.runTransaction(async (transaction) => {
+      const lockSnap = await transaction.get(lockRef);
+      if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
+      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
+    });
+    const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
+    await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
+    await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
+  } catch (e) { throw e; }
 });
 
-export const ombudsmanValidatorV2 = onDocumentCreated({
-  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
-  memory: "512MiB"
-}, async (event: L2LCreatedEvent) => {
-  const data = event.data?.data();
-  if (!data || data.status !== "validated") return;
-
-  const { appId } = event.params;
-  const correlationId = data.correlation_id;
-
-  try {
-    const proposalsPath = `artifacts/${appId}/public/data/logic_proposals`;
-    const proposalSnap = await db.collection(proposalsPath)
-      .where("correlation_id", "==", correlationId)
-      .get();
-
-    if (proposalSnap.empty) return;
-
-    const proposalRef = proposalSnap.docs[0].ref;
-    await proposalRef.update({
-      status: "APPROVED",
-      commit_pending: true,
-      validated_at: new Date().toISOString(),
-      validation_source: "OMBUDSMAN_AUTO_RUN"
-    });
-
-    console.log(`[OMBUDSMAN] Auto-approved proposal for correlation: ${correlationId}`);
-  } catch (err) {
-    console.error("[OMBUDSMAN] Error:", err);
-  }
+export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "VALIDATED") return;
+  await signalOrchestrator({ correlation_id: event.params.runId, summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}. Safe for promotion.` }, "SHADOW_VALIDATED");
 });
 
-export const evolutionProposalFinalizedV2 = onDocumentUpdated({
-  document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}",
-  memory: "512MiB"
-}, async (event: L2LUpdatedEvent) => {
-  const newData = event.data?.after.data();
-  const oldData = event.data?.before.data();
-  const { appId, proposalId } = event.params;
+export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
+  const state = event.data?.after.data();
+  if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
+  const { appId } = event.params;
+  const messageId = uuidv4();
+  await db.collection(`artifacts/${appId}/public/data/agent_bus`).doc(messageId).set({
+    status: "dispatched",
+    correlation_id: `FIX-${Date.now()}`,
+    provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
+    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", phase: state.current_phase, details: "Audit detected fatal runtime errors. Initiating self-healing protocol." }
+  });
+});
 
-  if (!newData || !oldData) return;
-
-  const isApproved = newData.status === "APPROVED";
-  const isCommitReady = newData.commit_pending === true;
-  const wasAlreadyProcessed = oldData.status === "APPROVED" && oldData.commit_pending === true;
-
-  if (!isApproved || !isCommitReady || wasAlreadyProcessed) return;
-
-  const dbInstance = admin.firestore();
-  const hbrId = newData.hbrId || "UNKNOWN";
-
-  try {
-    const batch = dbInstance.batch();
-
-    const lessonRef = dbInstance.collection("artifacts")
-      .doc(appId)
-      .collection("public")
-      .doc("data")
-      .collection("lessons_learned")
-      .doc();
-
-    batch.set(lessonRef, {
-      reasoning_vault: newData.reasoning_vault || {},
-      applied_logic: newData.proposedLogic || "N/A",
-      hbr_target: hbrId,
-      agent_id: newData.proposingAgentId || "SYSTEM",
-      finalized_at: FieldValue.serverTimestamp(),
-      source_proposal: proposalId
-    });
-
-    const timelineRef = dbInstance.collection("artifacts")
-      .doc(appId)
-      .collection("public")
-      .doc("data")
-      .collection("evolution_timeline")
-      .doc();
-
-    const strategicSummary = `Phase 36 Stabilization: Successfully committed optimized logic for Unit ${hbrId}. ` +
-      `Business Rule Enforcement: (1) Rule [MUTEX_LOCK] verified to prevent concurrent state collisions; ` +
-      `(2) Rule [OMBUDSMAN_AUDIT] autonomously verified shadow-integrity, bypassing manual review gates.`;
-
-    batch.set(timelineRef, {
-      type: "LOGIC_COMMIT_SUCCESS",
-      title: "LOGIC COMMIT SUCCESS",
-      details: strategicSummary,
-      is_autonomous: true,
-      source: "EVOLUTION_WORKER",
-      timestamp: new Date().toISOString(),
-      hbr_id: hbrId
-    });
-
-    const registryPath = `artifacts/${appId}/public/data/hbr_registry/${hbrId}`;
-    const hbrRef = dbInstance.doc(registryPath);
-    batch.set(hbrRef, {
-      lock_status: "IDLE",
-      last_modified: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
-    const lockRef = dbInstance.doc(lockPath);
-    batch.delete(lockRef);
-
-    if (event.data?.after.ref) {
-      batch.delete(event.data.after.ref);
-    }
-
-    await batch.commit();
-  } catch (e) {
-    console.error("[EVOLUTION-P36] Finalization Error:", e);
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "PROMOTED") return;
+  const { appId } = event.params;
+  const hbrId = data.hbrId;
+  if (hbrId) {
+    await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
+    await db.doc(`artifacts/${appId}/public/data/hbr_registry/registry/${hbrId}`).update({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() });
   }
+  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
