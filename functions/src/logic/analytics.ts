@@ -1,4 +1,4 @@
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
@@ -12,8 +12,6 @@ export const evolutionTimelineWorkerV2 = onDocumentCreated({
     if (!runData) return;
     const { appId } = event.params;
     
-    console.log(`[TIMELINE_PROBE] Shadow Run Triggered for ${appId}`);
-
     try {
         return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
             type: runData.status === "validated" ? "LOGIC_VALIDATION_SUCCESS" : "LOGIC_VALIDATION_FAILURE",
@@ -47,8 +45,6 @@ export const logisticsTimelineWorkerV2 = onDocumentUpdated({
     if (!statusChanged && !sobrietyTriggered) return;
     const { appId, jobId } = event.params;
 
-    console.log(`[TIMELINE_PROBE] Logistics Milestone Triggered for ${appId}`);
-
     try {
         return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
             type: sobrietyTriggered ? "REGULATORY_CHECK_ENABLED" : "LOGISTICS_MILESTONE",
@@ -67,20 +63,15 @@ export const logisticsTimelineWorkerV2 = onDocumentUpdated({
 });
 
 /**
- * 3. INTERVENTION TIMELINE WORKER (Step 16.3: Hardening)
- * Hardened: uses try/catch with explicit collection references to avoid Eventarc silent drops.
+ * 3. INTERVENTION TIMELINE WORKER
  */
 export const interventionTimelineWorkerV2 = onDocumentCreated({
     document: "artifacts/{appId}/public/data/interventions/{interventionId}"
 }, async (event) => {
     const data = event.data?.data();
-    if (!data) {
-        console.log("[TIMELINE_CRITICAL] No data in event snapshot.");
-        return;
-    }
+    if (!data) return;
 
     const { appId, interventionId } = event.params;
-    console.log(`[TIMELINE_PROBE] Intercepted Intervention in ${appId}: ${interventionId}`);
 
     try {
         const payload = {
@@ -94,28 +85,39 @@ export const interventionTimelineWorkerV2 = onDocumentCreated({
             correlation_id: data.correlation_id || "N/A"
         };
 
-        // Explicitly write to the timeline of the same appId
         await db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add(payload);
-        console.log(`[TIMELINE_SUCCESS] Written to artifacts/${appId}/public/data/evolution_timeline`);
-
     } catch (error: any) {
-        console.error(`[TIMELINE_ERROR] Failed during intervention log in ${appId}:`, error.message);
+        console.error(`[TIMELINE_ERROR] Failed during intervention log:`, error.message);
     }
 });
 
 /**
  * 4. PROFIT ANALYSIS WORKER
+ * Hardened: Added state-transition guard to prevent infinite loops.
  */
-export const profitAnalysisWorkerV2 = onDocumentUpdated({
+export const profitAnalysisWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
-    if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "ANALYTICS_WORKER") return;
-    const client = new AgentBusClient({ agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"], jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "FINANCE" }, event.params.appId);
+    const prev = event.data?.before.data();
+    
+    // GUARD: Only trigger when status TRANSITIONS to dispatched
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+    if (data.provenance?.receiver_id !== "ANALYTICS_WORKER" || data.control?.type !== "REQUEST") return;
+
+    const client = new AgentBusClient({ 
+        agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"], 
+        jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "FINANCE" 
+    }, event.params.appId);
+    
     await client.register();
+
     try {
-        const { intent } = data.payload.manifest;
+        const manifest = data.payload?.manifest;
+        if (!manifest) throw new Error("MISSING_MANIFEST");
+
+        const { intent } = manifest;
         if (intent === "GENERATE_PROFIT_REPORT") {
             const ordersSnap = await db.collection(`artifacts/${event.params.appId}/public/data/orders`).where("status", "==", "completed").get();
             let totalGMVCents = 0;
@@ -129,32 +131,93 @@ export const profitAnalysisWorkerV2 = onDocumentUpdated({
                 timestamp: new Date().toISOString() 
             });
         }
-    } catch (error: any) { return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, { code: "ANALYTICS_ERROR", message: error.message }); }
+    } catch (error: any) { 
+        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, { 
+            code: "ANALYTICS_ERROR", 
+            message: error.message 
+        }); 
+    }
 });
 
 /**
  * 5. EFFICACY AUDIT WORKER
+ * Fixed: Now uses onDocumentWritten with transition guard to support manual testing 
+ * without re-triggering loops.
  */
-export const efficacyAuditWorkerV2 = onDocumentUpdated({
+export const efficacyAuditWorkerV2 = onDocumentWritten({
   document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
   memory: "512MiB"
 }, async (event) => {
     const data = event.data?.after.data();
-    if (!data || data.control?.type !== "RESPONSE") return;
+    const prev = event.data?.before.data();
+    
+    // Transition Guard: Only audit when the status HAS CHANGED to 'dispatched'
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+    
+    const type = data.control?.type;
+    if (type !== "RESPONSE" && type !== "ERROR") return;
+    
+    if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
+    if (data.correlation_id?.startsWith("healing-")) return;
 
     const { appId } = event.params;
-    const agentId = data.provenance.sender_id;
+    const agentId = data.provenance?.sender_id;
+    if (!agentId || agentId === "ANALYTICS_WORKER") return;
+
+    const getTime = (val: any) => {
+        if (!val) return NaN;
+        if (val.toDate && typeof val.toDate === 'function') return val.toDate().getTime();
+        if (typeof val === 'string') {
+            const dateStr = val.endsWith('Z') ? val : val + 'Z';
+            return Date.parse(dateStr);
+        }
+        return NaN;
+    };
+
+    const end = getTime(data.telemetry?.completed_at);
+    const start = getTime(data.telemetry?.processed_at);
+
+    if (isNaN(start) || isNaN(end)) return;
+    const latencyMs = end - start;
 
     try {
-        const auditRef = db.collection(`artifacts/${appId}/public/data/efficacy_audit`).doc();
-        await auditRef.set({
-            agentId,
-            timestamp: new Date().toISOString(),
-            latencyMs: new Date(data.telemetry.completed_at).getTime() - new Date(data.telemetry.processed_at).getTime(),
-            status: "success",
-            correlation_id: data.correlation_id
+        const BASELINE_MS = 5000;
+        let perfScore = 1.0;
+        if (latencyMs > BASELINE_MS) perfScore = Math.max(0, 1 - (latencyMs - BASELINE_MS) / 15000);
+
+        let complianceScore = 1.0;
+        const errorData = data.payload?.error;
+        if (errorData) {
+            const trace = (errorData.trace || "").toLowerCase();
+            const msg = (errorData.message || "").toLowerCase();
+            if (trace.length < 20) complianceScore = 0.5;
+            if (msg.includes("unexpected") || msg.includes("unknown")) complianceScore = 0.2;
+        }
+
+        const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
+
+        await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
+            agentId, timestamp: new Date().toISOString(), latencyMs, performanceScore: perfScore, complianceScore, totalEfficacy, correlation_id: data.correlation_id
         });
-    } catch (error) {
-        console.error("Audit Logging Error:", error);
+
+        const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
+        await registryRef.update({
+            "status.latency_ms": latencyMs,
+            "status.current_efficacy": Number(totalEfficacy.toFixed(1)),
+            "status.last_heartbeat": new Date().toISOString()
+        });
+
+        if (totalEfficacy < 90) {
+            console.log(`[SELF-HEALING_TRIGGER] Efficacy drop to ${totalEfficacy.toFixed(1)}% for ${agentId}.`);
+            await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
+                correlation_id: `healing-${data.correlation_id}`,
+                status: "pending",
+                control: { type: "REQUEST", priority: "normal" },
+                provenance: { sender_id: "ANALYTICS_WORKER", receiver_id: "INFRASTRUCTURE_WORKER" },
+                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } }
+            });
+        }
+    } catch (error: any) {
+        console.error("[AUDIT_ERROR]", error.message);
     }
 });

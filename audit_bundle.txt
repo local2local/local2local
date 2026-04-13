@@ -1475,4 +1475,5256 @@ export const stripeOnboardingWorkerV2 = onDocumentUpdated({
 });
 ```eof
 
+### FILE: lib/features/triage_hub/providers/app_providers.dart
+```dart:app_providers.dart:lib/features/triage_hub/providers/app_providers.dart
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:local2local/features/triage_hub/models/intervention_model.dart';
+import 'package:local2local/features/triage_hub/models/orchestrator_model.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+
+/// Available app tenants
+enum AppTenant {
+  kaskflow('local2local-kaskflow', 'Kaskflow'),
+  moonlitely('local2local-moonlitely', 'Moonlitely');
+
+  const AppTenant(this.id, this.displayName);
+  final String id;
+  final String displayName;
+}
+
+/// Environment types
+enum AppEnvironment {
+  prod('PROD', 'Production'),
+  staging('STAGING', 'Staging'),
+  dev('DEV', 'Development');
+
+  const AppEnvironment(this.label, this.displayName);
+  final String label;
+  final String displayName;
+}
+
+/// Notifier for the currently selected app tenant
+class CurrentAppNotifier extends Notifier<AppTenant> {
+  @override
+  AppTenant build() => AppTenant.kaskflow;
+
+  void setApp(AppTenant tenant) => state = tenant;
+}
+
+/// Provider for the currently selected app tenant
+final currentAppProvider = NotifierProvider<CurrentAppNotifier, AppTenant>(
+  CurrentAppNotifier.new,
+);
+
+/// Notifier for the current environment
+class CurrentEnvironmentNotifier extends Notifier<AppEnvironment> {
+  @override
+  AppEnvironment build() => AppEnvironment.prod;
+
+  void setEnvironment(AppEnvironment env) => state = env;
+}
+
+/// Provider for the current environment
+final currentEnvironmentProvider = NotifierProvider<CurrentEnvironmentNotifier, AppEnvironment>(
+  CurrentEnvironmentNotifier.new,
+);
+
+/// Search query provider for global search
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
+/// Mock intervention data service
+/// In production, connects to: artifacts/{appId}/public/data/interventions
+class InterventionService {
+  static final Map<String, List<InterventionModel>> _mockInterventions = {
+    'local2local-kaskflow': [
+      InterventionModel(
+        id: 'int_001',
+        category: InterventionCategory.finance,
+        severity: InterventionSeverity.red,
+        summary: 'High-Value Payout Approval Required (\$1,500)',
+        reasoningTrace: '''
+[Step 1] Transaction TXN_78234 received for payout processing.
+[Step 2] Amount \$1,500.00 exceeds threshold of \$1,000.00 defined in HBR-FIN-003.
+[Step 3] Vendor "Premium Logistics Inc" has positive history (45 successful payouts).
+[Step 4] DECISION: Amount triggers mandatory human review per HBR-FIN-003.
+[Step 5] Escalating to Triage Hub for human sign-off.
+''',
+        hbrRuleId: 'HBR-FIN-003',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/finance/003',
+        agentId: 'orch_finance',
+        agentName: 'Finance Orchestrator',
+        transactionId: 'TXN_78234',
+        amountUsd: 1500.00,
+        createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      ),
+      InterventionModel(
+        id: 'int_002',
+        category: InterventionCategory.compliance,
+        severity: InterventionSeverity.red,
+        summary: 'AGLC Age Verification Failed - Order #ORD_9912',
+        reasoningTrace: '''
+[Step 1] Order ORD_9912 contains age-restricted items (category: alcohol).
+[Step 2] Customer profile age: 19 years.
+[Step 3] Delivery address in Alberta (legal age: 18) - PASS
+[Step 4] ID verification scan returned: INCONCLUSIVE
+[Step 5] HBR-COMP-001 requires positive ID match for alcohol delivery.
+[Step 6] DECISION: Block delivery pending human verification.
+''',
+        hbrRuleId: 'HBR-COMP-001',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/compliance/001',
+        agentId: 'orch_compliance',
+        agentName: 'Compliance Orchestrator',
+        transactionId: 'ORD_9912',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 12)),
+      ),
+      InterventionModel(
+        id: 'int_003',
+        category: InterventionCategory.safety,
+        severity: InterventionSeverity.yellow,
+        summary: 'Weather Alert - Route Risk Elevated',
+        reasoningTrace: '''
+[Step 1] Active delivery route RT_445 from Edmonton to Calgary.
+[Step 2] Weather API reports: Heavy snowfall warning.
+[Step 3] Road conditions: "Slippery sections" per 511 Alberta.
+[Step 4] Current carrier has winter tire certification.
+[Step 5] HBR-SAFE-007 recommends human review for severe weather.
+[Step 6] DECISION: Flagging for optional reroute consideration.
+''',
+        hbrRuleId: 'HBR-SAFE-007',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/safety/007',
+        agentId: 'orch_logistics',
+        agentName: 'Logistics Orchestrator',
+        transactionId: 'RT_445',
+        createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+      ),
+      InterventionModel(
+        id: 'int_004',
+        category: InterventionCategory.talent,
+        severity: InterventionSeverity.yellow,
+        summary: 'Worker Overtime Threshold Reached',
+        reasoningTrace: '''
+[Step 1] Worker WRK_2234 (John D.) scheduled for shift.
+[Step 2] Current week hours: 44 of 44 max per HBR-TAL-002.
+[Step 3] New assignment would add 6 hours = 50 total.
+[Step 4] Worker has opted-in to overtime availability.
+[Step 5] DECISION: Requires manager approval for overtime exception.
+''',
+        hbrRuleId: 'HBR-TAL-002',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/talent/002',
+        agentId: 'orch_talent',
+        agentName: 'Talent Orchestrator',
+        transactionId: 'WRK_2234',
+        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      ),
+    ],
+    'local2local-moonlitely': [
+      InterventionModel(
+        id: 'int_101',
+        category: InterventionCategory.finance,
+        severity: InterventionSeverity.red,
+        summary: 'Suspicious Transaction Pattern Detected',
+        reasoningTrace: '''
+[Step 1] Transaction TXN_M_4421 flagged by fraud detection.
+[Step 2] Pattern match: Multiple small orders from same IP.
+[Step 3] Total value in 1hr: \$847.00 across 12 transactions.
+[Step 4] Customer account age: 2 days.
+[Step 5] HBR-FIN-009 fraud threshold exceeded.
+[Step 6] DECISION: Blocking pending human review.
+''',
+        hbrRuleId: 'HBR-FIN-009',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/finance/009',
+        agentId: 'orch_finance',
+        agentName: 'Finance Orchestrator',
+        transactionId: 'TXN_M_4421',
+        amountUsd: 847.00,
+        createdAt: DateTime.now().subtract(const Duration(minutes: 8)),
+      ),
+      InterventionModel(
+        id: 'int_102',
+        category: InterventionCategory.logistics,
+        severity: InterventionSeverity.yellow,
+        summary: 'Carrier Assignment Conflict',
+        reasoningTrace: '''
+[Step 1] Order ORD_M_8823 requires refrigerated transport.
+[Step 2] Assigned carrier CAR_445 has refrigerated unit.
+[Step 3] Carrier reports equipment malfunction.
+[Step 4] Alternative carriers: 2 available, 15km further.
+[Step 5] Customer paid for priority delivery.
+[Step 6] DECISION: Requires human decision on reassignment vs delay.
+''',
+        hbrRuleId: 'HBR-LOG-004',
+        hbrRuleLink: 'https://rules.local2local.app/hbr/logistics/004',
+        agentId: 'orch_logistics',
+        agentName: 'Logistics Orchestrator',
+        transactionId: 'ORD_M_8823',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 25)),
+      ),
+    ],
+  };
+
+  /// Get all interventions for an app
+  static List<InterventionModel> getInterventions(String appId) {
+    return _mockInterventions[appId] ?? [];
+  }
+
+  /// Get active (unresolved) interventions
+  static List<InterventionModel> getActiveInterventions(String appId) {
+    return getInterventions(appId).where((i) => i.isActive).toList();
+  }
+
+  /// Stream of active intervention counts for a given app
+  static Stream<int> getActiveInterventionCount(String appId) {
+    return Stream.periodic(const Duration(seconds: 1), (_) {
+      return getActiveInterventions(appId).length;
+    });
+  }
+
+  /// Stream of interventions for real-time updates
+  static Stream<List<InterventionModel>> getInterventionsStream(String appId) {
+    return Stream.periodic(const Duration(seconds: 2), (_) {
+      return getActiveInterventions(appId);
+    });
+  }
+
+  /// Resolve an intervention with a macro response
+  static Future<void> resolveIntervention(String appId, String interventionId, String macroId) async {
+    // In production, this would update Firestore and publish to the bus
+    await Future.delayed(const Duration(milliseconds: 500));
+    final interventions = _mockInterventions[appId];
+    if (interventions != null) {
+      final index = interventions.indexWhere((i) => i.id == interventionId);
+      if (index >= 0) {
+        interventions[index] = interventions[index].copyWith(
+          resolvedAt: DateTime.now(),
+          resolvedBy: 'admin@local2local.app',
+          resolution: macroId,
+        );
+      }
+    }
+  }
+}
+
+/// Mock orchestrator agent registry service
+/// In production, connects to: artifacts/{appId}/public/data/agent_registry
+class OrchestratorService {
+  static final Map<String, List<OrchestratorModel>> _mockOrchestrators = {
+    'local2local-kaskflow': [
+      OrchestratorModel(
+        id: 'orch_compliance',
+        type: OrchestratorType.compliance,
+        status: OrchestratorStatus.online,
+        efficacyScore: 98.5,
+        latencyMs: 45,
+        currentBacklog: 2,
+        processedToday: 1247,
+        errorsToday: 3,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 5)),
+      ),
+      OrchestratorModel(
+        id: 'orch_finance',
+        type: OrchestratorType.finance,
+        status: OrchestratorStatus.online,
+        efficacyScore: 94.2,
+        latencyMs: 78,
+        currentBacklog: 5,
+        processedToday: 3892,
+        errorsToday: 12,
+        version: 'v2.4.0',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 3)),
+      ),
+      OrchestratorModel(
+        id: 'orch_logistics',
+        type: OrchestratorType.logistics,
+        status: OrchestratorStatus.degraded,
+        efficacyScore: 76.8,
+        latencyMs: 234,
+        currentBacklog: 18,
+        processedToday: 892,
+        errorsToday: 45,
+        version: 'v2.3.8',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 12)),
+      ),
+      OrchestratorModel(
+        id: 'orch_talent',
+        type: OrchestratorType.talent,
+        status: OrchestratorStatus.online,
+        efficacyScore: 91.3,
+        latencyMs: 56,
+        currentBacklog: 3,
+        processedToday: 567,
+        errorsToday: 8,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 2)),
+      ),
+      OrchestratorModel(
+        id: 'orch_customer',
+        type: OrchestratorType.customer,
+        status: OrchestratorStatus.online,
+        efficacyScore: 96.7,
+        latencyMs: 34,
+        currentBacklog: 1,
+        processedToday: 2341,
+        errorsToday: 5,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 1)),
+      ),
+      OrchestratorModel(
+        id: 'orch_inventory',
+        type: OrchestratorType.inventory,
+        status: OrchestratorStatus.online,
+        efficacyScore: 99.1,
+        latencyMs: 23,
+        currentBacklog: 0,
+        processedToday: 4521,
+        errorsToday: 2,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 4)),
+      ),
+      OrchestratorModel(
+        id: 'orch_analytics',
+        type: OrchestratorType.analytics,
+        status: OrchestratorStatus.online,
+        efficacyScore: 88.4,
+        latencyMs: 156,
+        currentBacklog: 7,
+        processedToday: 234,
+        errorsToday: 1,
+        version: 'v2.4.0',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 8)),
+      ),
+    ],
+    'local2local-moonlitely': [
+      OrchestratorModel(
+        id: 'orch_compliance',
+        type: OrchestratorType.compliance,
+        status: OrchestratorStatus.online,
+        efficacyScore: 97.2,
+        latencyMs: 52,
+        currentBacklog: 1,
+        processedToday: 892,
+        errorsToday: 2,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 3)),
+      ),
+      OrchestratorModel(
+        id: 'orch_finance',
+        type: OrchestratorType.finance,
+        status: OrchestratorStatus.online,
+        efficacyScore: 95.8,
+        latencyMs: 67,
+        currentBacklog: 3,
+        processedToday: 2134,
+        errorsToday: 7,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 2)),
+      ),
+      OrchestratorModel(
+        id: 'orch_logistics',
+        type: OrchestratorType.logistics,
+        status: OrchestratorStatus.online,
+        efficacyScore: 92.4,
+        latencyMs: 89,
+        currentBacklog: 4,
+        processedToday: 654,
+        errorsToday: 11,
+        version: 'v2.4.0',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 5)),
+      ),
+      OrchestratorModel(
+        id: 'orch_talent',
+        type: OrchestratorType.talent,
+        status: OrchestratorStatus.paused,
+        efficacyScore: 85.1,
+        latencyMs: 0,
+        currentBacklog: 12,
+        processedToday: 234,
+        errorsToday: 0,
+        version: 'v2.3.9',
+        lastHeartbeat: DateTime.now().subtract(const Duration(minutes: 15)),
+      ),
+      OrchestratorModel(
+        id: 'orch_customer',
+        type: OrchestratorType.customer,
+        status: OrchestratorStatus.online,
+        efficacyScore: 94.3,
+        latencyMs: 41,
+        currentBacklog: 2,
+        processedToday: 1567,
+        errorsToday: 4,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 1)),
+      ),
+      OrchestratorModel(
+        id: 'orch_inventory',
+        type: OrchestratorType.inventory,
+        status: OrchestratorStatus.online,
+        efficacyScore: 98.7,
+        latencyMs: 28,
+        currentBacklog: 0,
+        processedToday: 3245,
+        errorsToday: 1,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 2)),
+      ),
+      OrchestratorModel(
+        id: 'orch_analytics',
+        type: OrchestratorType.analytics,
+        status: OrchestratorStatus.online,
+        efficacyScore: 91.2,
+        latencyMs: 134,
+        currentBacklog: 5,
+        processedToday: 189,
+        errorsToday: 0,
+        version: 'v2.4.1',
+        lastHeartbeat: DateTime.now().subtract(const Duration(seconds: 6)),
+      ),
+    ],
+  };
+
+  /// Get all orchestrators for an app
+  static List<OrchestratorModel> getOrchestrators(String appId) {
+    return _mockOrchestrators[appId] ?? [];
+  }
+
+  /// Stream of orchestrators for real-time updates
+  static Stream<List<OrchestratorModel>> getOrchestratorsStream(String appId) {
+    return Stream.periodic(const Duration(seconds: 3), (_) {
+      return getOrchestrators(appId);
+    });
+  }
+
+  /// Pause an orchestrator
+  static Future<void> pauseOrchestrator(String appId, String orchestratorId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final orchestrators = _mockOrchestrators[appId];
+    if (orchestrators != null) {
+      final index = orchestrators.indexWhere((o) => o.id == orchestratorId);
+      if (index >= 0) {
+        orchestrators[index] = orchestrators[index].copyWith(
+          status: OrchestratorStatus.paused,
+        );
+      }
+    }
+  }
+
+  /// Resume an orchestrator
+  static Future<void> resumeOrchestrator(String appId, String orchestratorId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final orchestrators = _mockOrchestrators[appId];
+    if (orchestrators != null) {
+      final index = orchestrators.indexWhere((o) => o.id == orchestratorId);
+      if (index >= 0) {
+        orchestrators[index] = orchestrators[index].copyWith(
+          status: OrchestratorStatus.online,
+        );
+      }
+    }
+  }
+
+  /// Rollback an orchestrator to previous version
+  static Future<void> rollbackOrchestrator(String appId, String orchestratorId) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final orchestrators = _mockOrchestrators[appId];
+    if (orchestrators != null) {
+      final index = orchestrators.indexWhere((o) => o.id == orchestratorId);
+      if (index >= 0) {
+        orchestrators[index] = orchestrators[index].copyWith(
+          status: OrchestratorStatus.rollback,
+          lastRollback: DateTime.now(),
+        );
+      }
+    }
+  }
+}
+
+/// Mock evolution timeline service
+/// In production, connects to: artifacts/{appId}/public/data/evolution_timeline
+class EvolutionTimelineService {
+  static final Map<String, List<EvolutionEventModel>> _mockEvents = {
+    'local2local-kaskflow': [
+      EvolutionEventModel(
+        id: 'evt_001',
+        type: EvolutionEventType.agentDeployed,
+        title: 'Finance Orchestrator v2.4.0 Deployed',
+        description: 'New fraud detection patterns and improved payout processing.',
+        agentId: 'orch_finance',
+        agentName: 'Finance Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+        isAutonomous: false,
+        triggeredBy: 'admin@local2local.app',
+      ),
+      EvolutionEventModel(
+        id: 'evt_002',
+        type: EvolutionEventType.patternLearned,
+        title: 'New Delivery Route Pattern Identified',
+        description: 'AI recognized optimal route for Edmonton-Calgary corridor during peak hours.',
+        agentId: 'orch_logistics',
+        agentName: 'Logistics Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(hours: 5)),
+        isAutonomous: true,
+      ),
+      EvolutionEventModel(
+        id: 'evt_003',
+        type: EvolutionEventType.thresholdChanged,
+        title: 'Payout Threshold Adjusted',
+        description: 'Auto-approval threshold increased from \$500 to \$1,000 based on risk analysis.',
+        agentId: 'orch_finance',
+        agentName: 'Finance Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        isAutonomous: true,
+      ),
+      EvolutionEventModel(
+        id: 'evt_004',
+        type: EvolutionEventType.humanOverride,
+        title: 'Manual AGLC Override Applied',
+        description: 'Admin approved age-restricted delivery for verified customer.',
+        agentId: 'orch_compliance',
+        agentName: 'Compliance Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 4)),
+        isAutonomous: false,
+        triggeredBy: 'admin@local2local.app',
+      ),
+      EvolutionEventModel(
+        id: 'evt_005',
+        type: EvolutionEventType.ruleAdded,
+        title: 'New Weather Safety Rule HBR-SAFE-007',
+        description: 'Added automatic weather-based route risk assessment.',
+        agentId: 'orch_logistics',
+        agentName: 'Logistics Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(days: 3)),
+        isAutonomous: false,
+        triggeredBy: 'admin@local2local.app',
+      ),
+    ],
+    'local2local-moonlitely': [
+      EvolutionEventModel(
+        id: 'evt_101',
+        type: EvolutionEventType.rollback,
+        title: 'Talent Orchestrator Rolled Back',
+        description: 'Reverted to v2.3.9 due to scheduling conflicts.',
+        agentId: 'orch_talent',
+        agentName: 'Talent Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+        isAutonomous: false,
+        triggeredBy: 'admin@local2local.app',
+      ),
+      EvolutionEventModel(
+        id: 'evt_102',
+        type: EvolutionEventType.systemEvolved,
+        title: 'Customer Support Escalation Logic Improved',
+        description: 'AI optimized escalation paths reducing average resolution time by 15%.',
+        agentId: 'orch_customer',
+        agentName: 'Customer Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(hours: 8)),
+        isAutonomous: true,
+      ),
+      EvolutionEventModel(
+        id: 'evt_103',
+        type: EvolutionEventType.ruleModified,
+        title: 'Fraud Detection Rule Updated',
+        description: 'Adjusted transaction velocity thresholds based on holiday patterns.',
+        agentId: 'orch_finance',
+        agentName: 'Finance Orchestrator',
+        timestamp: DateTime.now().subtract(const Duration(days: 2)),
+        isAutonomous: true,
+      ),
+    ],
+  };
+
+  /// Get evolution events for an app
+  static List<EvolutionEventModel> getEvents(String appId) {
+    return _mockEvents[appId] ?? [];
+  }
+
+  /// Stream of evolution events
+  static Stream<List<EvolutionEventModel>> getEventsStream(String appId) {
+    return Stream.periodic(const Duration(seconds: 5), (_) {
+      return getEvents(appId);
+    });
+  }
+}
+
+// ============= RIVERPOD PROVIDERS =============
+
+/// StreamProvider for active intervention count
+final activeInterventionCountProvider = StreamProvider<int>((ref) {
+  final currentApp = ref.watch(currentAppProvider);
+  return InterventionService.getActiveInterventionCount(currentApp.id);
+});
+
+/// StreamProvider for interventions list
+final interventionsProvider = StreamProvider<List<InterventionModel>>((ref) {
+  final currentApp = ref.watch(currentAppProvider);
+  return InterventionService.getInterventionsStream(currentApp.id);
+});
+
+/// StreamProvider for orchestrators list
+final orchestratorsProvider = StreamProvider<List<OrchestratorModel>>((ref) {
+  final currentApp = ref.watch(currentAppProvider);
+  return OrchestratorService.getOrchestratorsStream(currentApp.id);
+});
+
+/// StreamProvider for evolution timeline
+final evolutionTimelineProvider = StreamProvider<List<EvolutionEventModel>>((ref) {
+  final currentApp = ref.watch(currentAppProvider);
+  return EvolutionTimelineService.getEventsStream(currentApp.id);
+});
+
+/// Provider for selected intervention (for detail panel)
+final selectedInterventionProvider = StateProvider<InterventionModel?>((ref) => null);
+
+```eof
+
+### FILE: lib/features/triage_hub/models/intervention_model.dart
+```dart:intervention_model.dart:lib/features/triage_hub/models/intervention_model.dart
+/// Intervention Categories
+enum InterventionCategory {
+  compliance('Compliance', 'AGLC/Regulatory violations'),
+  finance('Finance', 'High-value transactions requiring approval'),
+  safety('Safety', 'Safety protocol violations'),
+  logistics('Logistics', 'Delivery/routing issues'),
+  talent('Talent', 'Worker-related issues');
+
+  const InterventionCategory(this.label, this.description);
+  final String label;
+  final String description;
+}
+
+/// Intervention Severity Levels
+enum InterventionSeverity {
+  red('Critical', 'Immediate action required'),
+  yellow('Warning', 'Action needed soon'),
+  green('Info', 'Informational only');
+
+  const InterventionSeverity(this.label, this.description);
+  final String label;
+  final String description;
+}
+
+/// Macro Response Options for intervention resolution
+class MacroResponse {
+  final String id;
+  final String label;
+  final String description;
+
+  const MacroResponse({
+    required this.id,
+    required this.label,
+    required this.description,
+  });
+}
+
+/// Intervention data model matching Firestore structure
+/// Path: artifacts/{appId}/public/data/interventions
+class InterventionModel {
+  final String id;
+  final InterventionCategory category;
+  final InterventionSeverity severity;
+  final String summary;
+  final String reasoningTrace;
+  final String hbrRuleId;
+  final String hbrRuleLink;
+  final String agentId;
+  final String agentName;
+  final String transactionId;
+  final double? amountUsd;
+  final DateTime createdAt;
+  final DateTime? resolvedAt;
+  final String? resolvedBy;
+  final String? resolution;
+  final Map<String, dynamic>? metadata;
+
+  const InterventionModel({
+    required this.id,
+    required this.category,
+    required this.severity,
+    required this.summary,
+    required this.reasoningTrace,
+    required this.hbrRuleId,
+    required this.hbrRuleLink,
+    required this.agentId,
+    required this.agentName,
+    required this.transactionId,
+    required this.createdAt,
+    this.amountUsd,
+    this.resolvedAt,
+    this.resolvedBy,
+    this.resolution,
+    this.metadata,
+  });
+
+  bool get isActive => resolvedAt == null;
+
+  Duration get age => DateTime.now().difference(createdAt);
+
+  String get ageDisplay {
+    final mins = age.inMinutes;
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return '$mins min ago';
+    final hours = age.inHours;
+    if (hours < 24) return '$hours hr ago';
+    final days = age.inDays;
+    return '$days day${days > 1 ? 's' : ''} ago';
+  }
+
+  /// Available macro responses based on category
+  List<MacroResponse> get availableMacros {
+    switch (category) {
+      case InterventionCategory.compliance:
+        return const [
+          MacroResponse(id: 'aglc_override', label: 'Manual AGLC Override', description: 'Approve with regulatory exemption'),
+          MacroResponse(id: 'aglc_reject', label: 'Reject - AGLC Violation', description: 'Deny transaction'),
+          MacroResponse(id: 'escalate_legal', label: 'Escalate to Legal', description: 'Send to legal team'),
+        ];
+      case InterventionCategory.finance:
+        return const [
+          MacroResponse(id: 'approve_payout', label: 'Approve Payout', description: 'Release funds'),
+          MacroResponse(id: 'hold_review', label: 'Hold for Review', description: 'Flag for finance review'),
+          MacroResponse(id: 'reject_fraud', label: 'Reject - Suspected Fraud', description: 'Block transaction'),
+        ];
+      case InterventionCategory.safety:
+        return const [
+          MacroResponse(id: 'safety_override', label: 'Safety Override', description: 'Acknowledge risk, proceed'),
+          MacroResponse(id: 'safety_halt', label: 'Halt Operations', description: 'Stop all related activities'),
+          MacroResponse(id: 'safety_review', label: 'Schedule Safety Review', description: 'Flag for review'),
+        ];
+      case InterventionCategory.logistics:
+        return const [
+          MacroResponse(id: 'reroute', label: 'Approve Reroute', description: 'Allow alternate route'),
+          MacroResponse(id: 'cancel_delivery', label: 'Cancel Delivery', description: 'Abort delivery'),
+          MacroResponse(id: 'reassign', label: 'Reassign Carrier', description: 'Assign new carrier'),
+        ];
+      case InterventionCategory.talent:
+        return const [
+          MacroResponse(id: 'approve_assignment', label: 'Approve Assignment', description: 'Confirm talent assignment'),
+          MacroResponse(id: 'flag_performance', label: 'Flag Performance Issue', description: 'Add to review queue'),
+          MacroResponse(id: 'suspend', label: 'Suspend Worker', description: 'Temporarily disable'),
+        ];
+    }
+  }
+
+  InterventionModel copyWith({
+    String? id,
+    InterventionCategory? category,
+    InterventionSeverity? severity,
+    String? summary,
+    String? reasoningTrace,
+    String? hbrRuleId,
+    String? hbrRuleLink,
+    String? agentId,
+    String? agentName,
+    String? transactionId,
+    double? amountUsd,
+    DateTime? createdAt,
+    DateTime? resolvedAt,
+    String? resolvedBy,
+    String? resolution,
+    Map<String, dynamic>? metadata,
+  }) {
+    return InterventionModel(
+      id: id ?? this.id,
+      category: category ?? this.category,
+      severity: severity ?? this.severity,
+      summary: summary ?? this.summary,
+      reasoningTrace: reasoningTrace ?? this.reasoningTrace,
+      hbrRuleId: hbrRuleId ?? this.hbrRuleId,
+      hbrRuleLink: hbrRuleLink ?? this.hbrRuleLink,
+      agentId: agentId ?? this.agentId,
+      agentName: agentName ?? this.agentName,
+      transactionId: transactionId ?? this.transactionId,
+      amountUsd: amountUsd ?? this.amountUsd,
+      createdAt: createdAt ?? this.createdAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
+      resolvedBy: resolvedBy ?? this.resolvedBy,
+      resolution: resolution ?? this.resolution,
+      metadata: metadata ?? this.metadata,
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/models/orchestrator_model.dart
+```dart:orchestrator_model.dart:lib/features/triage_hub/models/orchestrator_model.dart
+/// Orchestrator Agent Status
+enum OrchestratorStatus {
+  online('Online', 'Operating normally'),
+  degraded('Degraded', 'Performance issues detected'),
+  paused('Paused', 'Manually paused by admin'),
+  offline('Offline', 'Not responding'),
+  rollback('Rollback', 'Rolling back to previous version');
+
+  const OrchestratorStatus(this.label, this.description);
+  final String label;
+  final String description;
+}
+
+/// The 7 "Brain" Orchestrator Agents
+enum OrchestratorType {
+  compliance('Compliance', 'AGLC & regulatory enforcement'),
+  finance('Finance', 'Payouts, invoicing, fraud detection'),
+  logistics('Logistics', 'Route optimization, carrier dispatch'),
+  talent('Talent', 'Worker matching & scheduling'),
+  customer('Customer', 'Support, escalation handling'),
+  inventory('Inventory', 'Stock management & forecasting'),
+  analytics('Analytics', 'Reporting & insights generation');
+
+  const OrchestratorType(this.label, this.description);
+  final String label;
+  final String description;
+}
+
+/// Orchestrator Agent Model matching Firestore structure
+/// Path: artifacts/{appId}/public/data/agent_registry
+class OrchestratorModel {
+  final String id;
+  final OrchestratorType type;
+  final OrchestratorStatus status;
+  final double efficacyScore; // E score (0-100)
+  final int latencyMs; // P score - latency in milliseconds
+  final int currentBacklog; // Queue depth
+  final int processedToday;
+  final int errorsToday;
+  final String version;
+  final DateTime lastHeartbeat;
+  final DateTime? lastRollback;
+  final Map<String, dynamic>? config;
+
+  const OrchestratorModel({
+    required this.id,
+    required this.type,
+    required this.status,
+    required this.efficacyScore,
+    required this.latencyMs,
+    required this.currentBacklog,
+    required this.processedToday,
+    required this.errorsToday,
+    required this.version,
+    required this.lastHeartbeat,
+    this.lastRollback,
+    this.config,
+  });
+
+  bool get isHealthy => status == OrchestratorStatus.online && efficacyScore >= 80;
+  bool get isWarning => efficacyScore >= 60 && efficacyScore < 80;
+  bool get isCritical => efficacyScore < 60 || status == OrchestratorStatus.offline;
+
+  String get efficacyDisplay => '${efficacyScore.toStringAsFixed(1)}%';
+  String get latencyDisplay => '${latencyMs}ms';
+
+  OrchestratorModel copyWith({
+    String? id,
+    OrchestratorType? type,
+    OrchestratorStatus? status,
+    double? efficacyScore,
+    int? latencyMs,
+    int? currentBacklog,
+    int? processedToday,
+    int? errorsToday,
+    String? version,
+    DateTime? lastHeartbeat,
+    DateTime? lastRollback,
+    Map<String, dynamic>? config,
+  }) {
+    return OrchestratorModel(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      efficacyScore: efficacyScore ?? this.efficacyScore,
+      latencyMs: latencyMs ?? this.latencyMs,
+      currentBacklog: currentBacklog ?? this.currentBacklog,
+      processedToday: processedToday ?? this.processedToday,
+      errorsToday: errorsToday ?? this.errorsToday,
+      version: version ?? this.version,
+      lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
+      lastRollback: lastRollback ?? this.lastRollback,
+      config: config ?? this.config,
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/models/evolution_event_model.dart
+```dart:evolution_event_model.dart:lib/features/triage_hub/models/evolution_event_model.dart
+/// Evolution Event Types for the system diary
+enum EvolutionEventType {
+  agentDeployed('Agent Deployed', 'New orchestrator version deployed'),
+  ruleAdded('Rule Added', 'New HBR rule created'),
+  ruleModified('Rule Modified', 'Existing rule updated'),
+  thresholdChanged('Threshold Changed', 'Business threshold adjusted'),
+  rollback('Rollback', 'System rolled back to previous state'),
+  humanOverride('Human Override', 'Admin intervention recorded'),
+  patternLearned('Pattern Learned', 'New pattern recognized by AI'),
+  systemEvolved('System Evolved', 'Autonomous improvement applied');
+
+  const EvolutionEventType(this.label, this.description);
+  final String label;
+  final String description;
+}
+
+/// Evolution Timeline Event Model
+/// Path: artifacts/{appId}/public/data/evolution_timeline
+class EvolutionEventModel {
+  final String id;
+  final EvolutionEventType type;
+  final String title;
+  final String description;
+  final String agentId;
+  final String agentName;
+  final DateTime timestamp;
+  final Map<String, dynamic>? beforeState;
+  final Map<String, dynamic>? afterState;
+  final String? triggeredBy;
+  final bool isAutonomous;
+
+  const EvolutionEventModel({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.description,
+    required this.agentId,
+    required this.agentName,
+    required this.timestamp,
+    this.beforeState,
+    this.afterState,
+    this.triggeredBy,
+    this.isAutonomous = false,
+  });
+
+  String get timeDisplay {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+    
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    
+    return '${timestamp.month}/${timestamp.day}/${timestamp.year}';
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/theme/admin_theme.dart
+```dart:admin_theme.dart:lib/features/triage_hub/theme/admin_theme.dart
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+/// Super Admin Hub Color Palette
+/// Slate/Dark theme with Emerald Green and Ruby Red accents
+class AdminColors {
+  // Primary Accent: Emerald Green
+  static const Color emeraldGreen = Color(0xFF50C878);
+  static const Color emeraldGreenLight = Color(0xFF7DD99B);
+  static const Color emeraldGreenDark = Color(0xFF3BA55C);
+
+  // Alert Accent: Ruby Red
+  static const Color rubyRed = Color(0xFFE0115F);
+  static const Color rubyRedLight = Color(0xFFFF4D8D);
+  static const Color rubyRedDark = Color(0xFFB00D4A);
+
+  // Slate/Dark Background Colors
+  static const Color slateDarkest = Color(0xFF0D1117);
+  static const Color slateDark = Color(0xFF161B22);
+  static const Color slateMedium = Color(0xFF21262D);
+  static const Color slateLight = Color(0xFF30363D);
+  static const Color slateLighter = Color(0xFF484F58);
+
+  // Text Colors
+  static const Color textPrimary = Color(0xFFF0F6FC);
+  static const Color textSecondary = Color(0xFF8B949E);
+  static const Color textMuted = Color(0xFF6E7681);
+
+  // Border Colors
+  static const Color borderDefault = Color(0xFF30363D);
+  static const Color borderMuted = Color(0xFF21262D);
+
+  // Status Colors
+  static const Color statusSuccess = emeraldGreen;
+  static const Color statusWarning = Color(0xFFD29922);
+  static const Color statusError = rubyRed;
+  static const Color statusInfo = Color(0xFF58A6FF);
+}
+
+/// Super Admin Hub Theme
+ThemeData get adminDarkTheme => ThemeData(
+  useMaterial3: true,
+  brightness: Brightness.dark,
+  colorScheme: ColorScheme.dark(
+    primary: AdminColors.emeraldGreen,
+    onPrimary: AdminColors.slateDarkest,
+    primaryContainer: AdminColors.emeraldGreenDark,
+    onPrimaryContainer: AdminColors.textPrimary,
+    secondary: AdminColors.textSecondary,
+    onSecondary: AdminColors.slateDarkest,
+    tertiary: AdminColors.rubyRed,
+    onTertiary: AdminColors.textPrimary,
+    error: AdminColors.rubyRed,
+    onError: AdminColors.textPrimary,
+    errorContainer: AdminColors.rubyRedDark,
+    onErrorContainer: AdminColors.textPrimary,
+    surface: AdminColors.slateDark,
+    onSurface: AdminColors.textPrimary,
+    surfaceContainerHighest: AdminColors.slateMedium,
+    onSurfaceVariant: AdminColors.textSecondary,
+    outline: AdminColors.borderDefault,
+    shadow: Colors.black,
+  ),
+  scaffoldBackgroundColor: AdminColors.slateDarkest,
+  appBarTheme: const AppBarTheme(
+    backgroundColor: AdminColors.slateDark,
+    foregroundColor: AdminColors.textPrimary,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    centerTitle: false,
+  ),
+  cardTheme: CardThemeData(
+    color: AdminColors.slateMedium,
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: const BorderSide(color: AdminColors.borderDefault, width: 1),
+    ),
+  ),
+  drawerTheme: const DrawerThemeData(
+    backgroundColor: AdminColors.slateDark,
+    surfaceTintColor: Colors.transparent,
+  ),
+  navigationRailTheme: NavigationRailThemeData(
+    backgroundColor: AdminColors.slateDark,
+    selectedIconTheme: const IconThemeData(color: AdminColors.emeraldGreen),
+    unselectedIconTheme: const IconThemeData(color: AdminColors.textSecondary),
+    selectedLabelTextStyle: GoogleFonts.inter(
+      color: AdminColors.emeraldGreen,
+      fontWeight: FontWeight.w600,
+    ),
+    unselectedLabelTextStyle: GoogleFonts.inter(
+      color: AdminColors.textSecondary,
+    ),
+    indicatorColor: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+  ),
+  dividerTheme: const DividerThemeData(
+    color: AdminColors.borderDefault,
+    thickness: 1,
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    color: AdminColors.slateMedium,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: const BorderSide(color: AdminColors.borderDefault),
+    ),
+  ),
+  dropdownMenuTheme: DropdownMenuThemeData(
+    menuStyle: MenuStyle(
+      backgroundColor: WidgetStateProperty.all(AdminColors.slateMedium),
+      shape: WidgetStateProperty.all(
+        RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: AdminColors.borderDefault),
+        ),
+      ),
+    ),
+  ),
+  textTheme: _buildAdminTextTheme(),
+  iconTheme: const IconThemeData(color: AdminColors.textSecondary),
+);
+
+TextTheme _buildAdminTextTheme() => TextTheme(
+  displayLarge: GoogleFonts.inter(
+    fontSize: 57,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textPrimary,
+  ),
+  displayMedium: GoogleFonts.inter(
+    fontSize: 45,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textPrimary,
+  ),
+  displaySmall: GoogleFonts.inter(
+    fontSize: 36,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textPrimary,
+  ),
+  headlineLarge: GoogleFonts.inter(
+    fontSize: 32,
+    fontWeight: FontWeight.w600,
+    color: AdminColors.textPrimary,
+  ),
+  headlineMedium: GoogleFonts.inter(
+    fontSize: 28,
+    fontWeight: FontWeight.w600,
+    color: AdminColors.textPrimary,
+  ),
+  headlineSmall: GoogleFonts.inter(
+    fontSize: 24,
+    fontWeight: FontWeight.w600,
+    color: AdminColors.textPrimary,
+  ),
+  titleLarge: GoogleFonts.inter(
+    fontSize: 22,
+    fontWeight: FontWeight.w600,
+    color: AdminColors.textPrimary,
+  ),
+  titleMedium: GoogleFonts.inter(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    color: AdminColors.textPrimary,
+  ),
+  titleSmall: GoogleFonts.inter(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: AdminColors.textPrimary,
+  ),
+  labelLarge: GoogleFonts.inter(
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    color: AdminColors.textPrimary,
+  ),
+  labelMedium: GoogleFonts.inter(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: AdminColors.textSecondary,
+  ),
+  labelSmall: GoogleFonts.inter(
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    color: AdminColors.textMuted,
+  ),
+  bodyLarge: GoogleFonts.inter(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textPrimary,
+  ),
+  bodyMedium: GoogleFonts.inter(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textSecondary,
+  ),
+  bodySmall: GoogleFonts.inter(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    color: AdminColors.textMuted,
+  ),
+);
+
+```eof
+
+### FILE: lib/features/triage_hub/triage_hub.dart
+```dart:triage_hub.dart:lib/features/triage_hub/triage_hub.dart
+/// Triage Hub Feature Barrel Export
+library;
+
+// Models
+export 'models/intervention_model.dart';
+export 'models/orchestrator_model.dart';
+export 'models/evolution_event_model.dart';
+
+// Providers
+export 'providers/app_providers.dart';
+
+// Theme
+export 'theme/admin_theme.dart';
+
+// Widgets
+export 'widgets/admin_sidebar.dart';
+export 'widgets/admin_appbar.dart';
+
+// Pages
+export 'pages/admin_shell.dart';
+export 'pages/triage_queue_page.dart';
+export 'pages/health_grid_page.dart';
+export 'pages/fleet_map_page.dart';
+export 'pages/evolution_timeline_page.dart';
+export 'pages/admin_hub_page.dart';
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/triage_queue_page.dart
+```dart:triage_queue_page.dart:lib/features/triage_hub/pages/triage_queue_page.dart
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/intervention_model.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// Triage Queue Page - Primary workspace for human interventions
+/// Listens to: artifacts/{appId}/public/data/interventions
+class TriageQueuePage extends ConsumerWidget {
+  const TriageQueuePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final interventionsAsync = ref.watch(interventionsProvider);
+    final selectedIntervention = ref.watch(selectedInterventionProvider);
+
+    return Row(
+      children: [
+        // Main intervention list
+        Expanded(
+          flex: selectedIntervention != null ? 5 : 1,
+          child: interventionsAsync.when(
+            data: (interventions) => _InterventionListView(interventions: interventions),
+            loading: () => const Center(
+              child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
+            ),
+            error: (e, _) => Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: AdminColors.rubyRed, size: 48),
+                  const SizedBox(height: 16),
+                  Text('Error loading interventions', style: TextStyle(color: AdminColors.textSecondary)),
+                  const SizedBox(height: 8),
+                  Text(e.toString(), style: const TextStyle(color: AdminColors.textMuted, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Context panel (slide-out)
+        if (selectedIntervention != null) ...[
+          const VerticalDivider(width: 1, color: AdminColors.borderDefault),
+          Expanded(
+            flex: 4,
+            child: InterventionContextPanel(intervention: selectedIntervention),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// List view of intervention cards
+class _InterventionListView extends ConsumerWidget {
+  final List<InterventionModel> interventions;
+
+  const _InterventionListView({required this.interventions});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeInterventions = interventions.where((i) => i.isActive).toList();
+    final resolvedInterventions = interventions.where((i) => !i.isActive).toList();
+
+    // Sort by severity (red first), then by age
+    activeInterventions.sort((a, b) {
+      final severityCompare = a.severity.index.compareTo(b.severity.index);
+      if (severityCompare != 0) return severityCompare;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+
+    if (activeInterventions.isEmpty) {
+      return _EmptyStateView();
+    }
+
+    return CustomScrollView(
+      slivers: [
+        // Header
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AdminColors.rubyRed.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded, color: AdminColors.rubyRed, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Active Interventions',
+                        style: TextStyle(
+                          color: AdminColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '${activeInterventions.length} items requiring human sign-off',
+                        style: const TextStyle(color: AdminColors.textSecondary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                _FilterChip(label: 'All', isSelected: true),
+                const SizedBox(width: 8),
+                _FilterChip(label: 'Critical', isSelected: false),
+                const SizedBox(width: 8),
+                _FilterChip(label: 'Warning', isSelected: false),
+              ],
+            ),
+          ),
+        ),
+        // Intervention cards
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final intervention = activeInterventions[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: InterventionCard(intervention: intervention),
+                );
+              },
+              childCount: activeInterventions.length,
+            ),
+          ),
+        ),
+        // Resolved section (collapsed)
+        if (resolvedInterventions.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  'Recently Resolved (${resolvedInterventions.length})',
+                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+                ),
+                leading: const Icon(Icons.check_circle_outline, color: AdminColors.emeraldGreen, size: 20),
+                children: resolvedInterventions
+                    .map((i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: InterventionCard(intervention: i, isCompact: true),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
+    );
+  }
+}
+
+/// Filter chip widget
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+
+  const _FilterChip({required this.label, required this.isSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isSelected ? AdminColors.emeraldGreen.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? AdminColors.emeraldGreen : AdminColors.borderDefault,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Empty state when all interventions are green
+class _EmptyStateView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AdminColors.emeraldGreen.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: AdminColors.emeraldGreen,
+              size: 64,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'All Clear',
+            style: TextStyle(
+              color: AdminColors.textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'No interventions requiring attention.\nThe business is running itself.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Individual intervention card
+class InterventionCard extends ConsumerWidget {
+  final InterventionModel intervention;
+  final bool isCompact;
+
+  const InterventionCard({
+    super.key,
+    required this.intervention,
+    this.isCompact = false,
+  });
+
+  Color get severityColor {
+    switch (intervention.severity) {
+      case InterventionSeverity.red:
+        return AdminColors.rubyRed;
+      case InterventionSeverity.yellow:
+        return AdminColors.statusWarning;
+      case InterventionSeverity.green:
+        return AdminColors.emeraldGreen;
+    }
+  }
+
+  IconData get categoryIcon {
+    switch (intervention.category) {
+      case InterventionCategory.compliance:
+        return Icons.gavel_rounded;
+      case InterventionCategory.finance:
+        return Icons.account_balance_rounded;
+      case InterventionCategory.safety:
+        return Icons.shield_rounded;
+      case InterventionCategory.logistics:
+        return Icons.local_shipping_rounded;
+      case InterventionCategory.talent:
+        return Icons.person_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSelected = ref.watch(selectedInterventionProvider)?.id == intervention.id;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (intervention.isActive) {
+            ref.read(selectedInterventionProvider.notifier).state =
+                isSelected ? null : intervention;
+          }
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: EdgeInsets.all(isCompact ? 12 : 16),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.08)
+                : AdminColors.slateMedium,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AdminColors.emeraldGreen : AdminColors.borderDefault,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row: Category, Severity, Age
+              Row(
+                children: [
+                  // Severity indicator
+                  Container(
+                    width: 4,
+                    height: isCompact ? 32 : 40,
+                    decoration: BoxDecoration(
+                      color: severityColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Category badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AdminColors.slateLight,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(categoryIcon, size: 14, color: AdminColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          intervention.category.label,
+                          style: const TextStyle(
+                            color: AdminColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Severity badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: severityColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      intervention.severity.label.toUpperCase(),
+                      style: TextStyle(
+                        color: severityColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Age
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule, size: 14, color: AdminColors.textMuted),
+                      const SizedBox(width: 4),
+                      Text(
+                        intervention.ageDisplay,
+                        style: const TextStyle(color: AdminColors.textMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (!isCompact) ...[
+                const SizedBox(height: 12),
+                // Summary
+                Text(
+                  intervention.summary,
+                  style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Agent info
+                Row(
+                  children: [
+                    const Icon(Icons.smart_toy_outlined, size: 14, color: AdminColors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      intervention.agentName,
+                      style: const TextStyle(color: AdminColors.textMuted, fontSize: 12),
+                    ),
+                    const SizedBox(width: 16),
+                    const Icon(Icons.tag, size: 14, color: AdminColors.textMuted),
+                    const SizedBox(width: 4),
+                    Text(
+                      intervention.transactionId,
+                      style: const TextStyle(
+                        color: AdminColors.textMuted,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (!intervention.isActive) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check, size: 14, color: AdminColors.emeraldGreen),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Resolved: ${intervention.resolution ?? "Unknown"}',
+                        style: const TextStyle(
+                          color: AdminColors.emeraldGreen,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Slide-out context panel for intervention details
+class InterventionContextPanel extends ConsumerStatefulWidget {
+  final InterventionModel intervention;
+
+  const InterventionContextPanel({super.key, required this.intervention});
+
+  @override
+  ConsumerState<InterventionContextPanel> createState() => _InterventionContextPanelState();
+}
+
+class _InterventionContextPanelState extends ConsumerState<InterventionContextPanel> {
+  String? _selectedMacroId;
+  bool _isCommitting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final intervention = widget.intervention;
+
+    return Container(
+      color: AdminColors.slateDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Panel header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AdminColors.borderDefault)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.description_outlined, color: AdminColors.emeraldGreen),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Context Bundle',
+                    style: TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  color: AdminColors.textMuted,
+                  onPressed: () {
+                    ref.read(selectedInterventionProvider.notifier).state = null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Scrollable content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Transaction summary
+                  _SectionHeader(title: 'Summary'),
+                  const SizedBox(height: 8),
+                  Text(
+                    intervention.summary,
+                    style: const TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 15,
+                    ),
+                  ),
+                  if (intervention.amountUsd != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AdminColors.statusWarning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.attach_money, color: AdminColors.statusWarning, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Amount: \$${intervention.amountUsd!.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: AdminColors.statusWarning,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  // Reasoning Trace
+                  _SectionHeader(title: 'Reasoning Trace'),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AdminColors.slateDarkest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AdminColors.borderDefault),
+                    ),
+                    child: SelectableText(
+                      intervention.reasoningTrace,
+                      style: const TextStyle(
+                        color: AdminColors.textSecondary,
+                        fontSize: 13,
+                        height: 1.6,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // HBR Link
+                  _SectionHeader(title: 'Rule Reference'),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () => _launchUrl(intervention.hbrRuleLink),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AdminColors.slateMedium,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdminColors.borderDefault),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.rule, color: AdminColors.statusInfo, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  intervention.hbrRuleId,
+                                  style: const TextStyle(
+                                    color: AdminColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  intervention.hbrRuleLink,
+                                  style: const TextStyle(
+                                    color: AdminColors.statusInfo,
+                                    fontSize: 12,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.content_copy, size: 18),
+                            color: AdminColors.textMuted,
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: intervention.hbrRuleLink));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Link copied to clipboard')),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Macro Selector
+                  _SectionHeader(title: 'Response Macros'),
+                  const SizedBox(height: 8),
+                  ...intervention.availableMacros.map((macro) => _MacroOption(
+                        macro: macro,
+                        isSelected: _selectedMacroId == macro.id,
+                        onTap: () => setState(() => _selectedMacroId = macro.id),
+                      )),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+          // Commit button
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: AdminColors.slateMedium,
+              border: Border(top: BorderSide(color: AdminColors.borderDefault)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _selectedMacroId != null
+                        ? 'Ready to commit: ${intervention.availableMacros.firstWhere((m) => m.id == _selectedMacroId).label}'
+                        : 'Select a response macro above',
+                    style: TextStyle(
+                      color: _selectedMacroId != null
+                          ? AdminColors.textPrimary
+                          : AdminColors.textMuted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _selectedMacroId != null && !_isCommitting
+                      ? () => _commitResponse(context)
+                      : null,
+                  icon: _isCommitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AdminColors.slateDarkest,
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded, size: 18),
+                  label: Text(_isCommitting ? 'Committing...' : 'Commit Response'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.emeraldGreen,
+                    foregroundColor: AdminColors.slateDarkest,
+                    disabledBackgroundColor: AdminColors.slateLight,
+                    disabledForegroundColor: AdminColors.textMuted,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _commitResponse(BuildContext context) async {
+    if (_selectedMacroId == null) return;
+
+    setState(() => _isCommitting = true);
+
+    try {
+      final currentApp = ref.read(currentAppProvider);
+      await InterventionService.resolveIntervention(
+        currentApp.id,
+        widget.intervention.id,
+        _selectedMacroId!,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Response committed successfully'),
+            backgroundColor: AdminColors.emeraldGreen,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        ref.read(selectedInterventionProvider.notifier).state = null;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AdminColors.rubyRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCommitting = false);
+      }
+    }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+}
+
+/// Section header widget
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: AdminColors.textMuted,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1,
+      ),
+    );
+  }
+}
+
+/// Macro option tile
+class _MacroOption extends StatelessWidget {
+  final MacroResponse macro;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _MacroOption({
+    required this.macro,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.1)
+                : AdminColors.slateMedium,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? AdminColors.emeraldGreen : AdminColors.borderDefault,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? AdminColors.emeraldGreen : Colors.transparent,
+                  border: Border.all(
+                    color: isSelected ? AdminColors.emeraldGreen : AdminColors.textMuted,
+                    width: 2,
+                  ),
+                ),
+                child: isSelected
+                    ? const Icon(Icons.check, size: 14, color: AdminColors.slateDarkest)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      macro.label,
+                      style: TextStyle(
+                        color: isSelected ? AdminColors.emeraldGreen : AdminColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      macro.description,
+                      style: const TextStyle(color: AdminColors.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/evolution_timeline_page.dart
+```dart:evolution_timeline_page.dart:lib/features/triage_hub/pages/evolution_timeline_page.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+/// Evolution Timeline Page - The "Diary" of system growth
+/// Displays chronological events of system evolution and human overrides
+/// Listens to: artifacts/{appId}/public/data/evolution_timeline
+class EvolutionTimelinePage extends ConsumerWidget {
+  const EvolutionTimelinePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eventsAsync = ref.watch(evolutionTimelineProvider);
+
+    return eventsAsync.when(
+      data: (events) => _TimelineContent(events: events),
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
+      ),
+      error: (e, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: AdminColors.rubyRed, size: 48),
+            const SizedBox(height: 16),
+            Text('Error loading timeline', style: TextStyle(color: AdminColors.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimelineContent extends StatelessWidget {
+  final List<EvolutionEventModel> events;
+
+  const _TimelineContent({required this.events});
+
+  @override
+  Widget build(BuildContext context) {
+    // Sort events by timestamp (newest first)
+    final sortedEvents = List<EvolutionEventModel>.from(events)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Group events by date
+    final Map<String, List<EvolutionEventModel>> groupedEvents = {};
+    for (final event in sortedEvents) {
+      final dateKey = _formatDateKey(event.timestamp);
+      groupedEvents.putIfAbsent(dateKey, () => []).add(event);
+    }
+
+    return CustomScrollView(
+      slivers: [
+        // Header
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: _TimelineHeader(
+              totalEvents: events.length,
+              autonomousCount: events.where((e) => e.isAutonomous).length,
+            ),
+          ),
+        ),
+        // Timeline
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final entries = groupedEvents.entries.toList();
+                if (index >= entries.length) return null;
+
+                final entry = entries[index];
+                return _DateSection(
+                  dateLabel: entry.key,
+                  events: entry.value,
+                  isFirst: index == 0,
+                );
+              },
+              childCount: groupedEvents.length,
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
+    );
+  }
+
+  String _formatDateKey(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final eventDate = DateTime(date.year, date.month, date.day);
+
+    if (eventDate == today) {
+      return 'Today';
+    } else if (eventDate == today.subtract(const Duration(days: 1))) {
+      return 'Yesterday';
+    } else {
+      return '${date.month}/${date.day}/${date.year}';
+    }
+  }
+}
+
+/// Timeline header with stats
+class _TimelineHeader extends StatelessWidget {
+  final int totalEvents;
+  final int autonomousCount;
+
+  const _TimelineHeader({
+    required this.totalEvents,
+    required this.autonomousCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.auto_graph_rounded,
+              color: AdminColors.emeraldGreen,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Evolution Timeline',
+                  style: TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'The chronological diary of system growth and human interventions',
+                  style: TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          _StatBadge(
+            label: 'Total Events',
+            value: totalEvents.toString(),
+            icon: Icons.history,
+            color: AdminColors.statusInfo,
+          ),
+          const SizedBox(width: 16),
+          _StatBadge(
+            label: 'Autonomous',
+            value: autonomousCount.toString(),
+            icon: Icons.smart_toy_outlined,
+            color: AdminColors.emeraldGreen,
+          ),
+          const SizedBox(width: 16),
+          _StatBadge(
+            label: 'Human',
+            value: (totalEvents - autonomousCount).toString(),
+            icon: Icons.person_outline,
+            color: AdminColors.statusWarning,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Stat badge widget
+class _StatBadge extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatBadge({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(color: AdminColors.textMuted, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Date section with events
+class _DateSection extends StatelessWidget {
+  final String dateLabel;
+  final List<EvolutionEventModel> events;
+  final bool isFirst;
+
+  const _DateSection({
+    required this.dateLabel,
+    required this.events,
+    required this.isFirst,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!isFirst) const SizedBox(height: 24),
+        // Date header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AdminColors.slateLight,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            dateLabel,
+            style: const TextStyle(
+              color: AdminColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Events
+        ...events.asMap().entries.map((entry) {
+          final index = entry.key;
+          final event = entry.value;
+          return _TimelineEventCard(
+            event: event,
+            isLast: index == events.length - 1,
+          );
+        }),
+      ],
+    );
+  }
+}
+
+/// Individual timeline event card
+class _TimelineEventCard extends StatelessWidget {
+  final EvolutionEventModel event;
+  final bool isLast;
+
+  const _TimelineEventCard({
+    required this.event,
+    required this.isLast,
+  });
+
+  IconData get typeIcon {
+    switch (event.type) {
+      case EvolutionEventType.agentDeployed:
+        return Icons.rocket_launch_rounded;
+      case EvolutionEventType.ruleAdded:
+        return Icons.add_circle_rounded;
+      case EvolutionEventType.ruleModified:
+        return Icons.edit_rounded;
+      case EvolutionEventType.thresholdChanged:
+        return Icons.tune_rounded;
+      case EvolutionEventType.rollback:
+        return Icons.history_rounded;
+      case EvolutionEventType.humanOverride:
+        return Icons.person_rounded;
+      case EvolutionEventType.patternLearned:
+        return Icons.lightbulb_rounded;
+      case EvolutionEventType.systemEvolved:
+        return Icons.auto_awesome_rounded;
+    }
+  }
+
+  Color get typeColor {
+    switch (event.type) {
+      case EvolutionEventType.agentDeployed:
+        return AdminColors.statusInfo;
+      case EvolutionEventType.ruleAdded:
+        return AdminColors.emeraldGreen;
+      case EvolutionEventType.ruleModified:
+        return AdminColors.statusWarning;
+      case EvolutionEventType.thresholdChanged:
+        return AdminColors.statusWarning;
+      case EvolutionEventType.rollback:
+        return AdminColors.rubyRed;
+      case EvolutionEventType.humanOverride:
+        return AdminColors.statusWarning;
+      case EvolutionEventType.patternLearned:
+        return AdminColors.emeraldGreen;
+      case EvolutionEventType.systemEvolved:
+        return AdminColors.emeraldGreen;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline connector
+          SizedBox(
+            width: 40,
+            child: Column(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: typeColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(typeIcon, color: typeColor, size: 16),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: AdminColors.borderDefault,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Event card
+          Expanded(
+            child: Container(
+              margin: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AdminColors.slateMedium,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AdminColors.borderDefault),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      // Type badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          event.type.label,
+                          style: TextStyle(
+                            color: typeColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Autonomous badge
+                      if (event.isAutonomous)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.smart_toy_outlined, size: 12, color: AdminColors.emeraldGreen),
+                              SizedBox(width: 4),
+                              Text(
+                                'AUTONOMOUS',
+                                style: TextStyle(
+                                  color: AdminColors.emeraldGreen,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const Spacer(),
+                      // Time
+                      Text(
+                        event.timeDisplay,
+                        style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Title
+                  Text(
+                    event.title,
+                    style: const TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Description
+                  Text(
+                    event.description,
+                    style: const TextStyle(color: AdminColors.textSecondary, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  // Footer
+                  Row(
+                    children: [
+                      const Icon(Icons.smart_toy_outlined, size: 14, color: AdminColors.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        event.agentName,
+                        style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
+                      ),
+                      if (event.triggeredBy != null) ...[
+                        const SizedBox(width: 16),
+                        const Icon(Icons.person_outline, size: 14, color: AdminColors.textMuted),
+                        const SizedBox(width: 6),
+                        Text(
+                          event.triggeredBy!,
+                          style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/fleet_map_page.dart
+```dart:fleet_map_page.dart:lib/features/triage_hub/pages/fleet_map_page.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+/// Fleet Map Page - Real-time GPS view of logistics carriers and talent
+class FleetMapPage extends ConsumerWidget {
+  const FleetMapPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentApp = ref.watch(currentAppProvider);
+
+    // Mock fleet data
+    final carriers = currentApp == AppTenant.kaskflow
+        ? _kaskflowCarriers
+        : _moonlitelyCarriers;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with stats
+          _FleetHeader(carriers: carriers),
+          const SizedBox(height: 24),
+          // Map placeholder
+          _MapPlaceholder(carriers: carriers),
+          const SizedBox(height: 24),
+          // Active carriers list
+          Row(
+            children: [
+              const Text(
+                'Active Fleet',
+                style: TextStyle(
+                  color: AdminColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              _FilterToggle(label: 'Carriers', isActive: true),
+              const SizedBox(width: 8),
+              _FilterToggle(label: 'Talent', isActive: true),
+              const SizedBox(width: 8),
+              _FilterToggle(label: 'Alerts', isActive: false, isAlert: true),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _CarriersList(carriers: carriers),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fleet header with summary stats
+class _FleetHeader extends StatelessWidget {
+  final List<_CarrierData> carriers;
+
+  const _FleetHeader({required this.carriers});
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCount = carriers.where((c) => c.status == 'active').length;
+    final enRouteCount = carriers.where((c) => c.status == 'en_route').length;
+    final idleCount = carriers.where((c) => c.status == 'idle').length;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AdminColors.statusInfo.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.gps_fixed_rounded,
+              color: AdminColors.statusInfo,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Fleet Map',
+                  style: TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Real-time GPS tracking of logistics carriers and talent',
+                  style: TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          _StatPill(
+            label: 'Active',
+            value: activeCount.toString(),
+            color: AdminColors.emeraldGreen,
+          ),
+          const SizedBox(width: 12),
+          _StatPill(
+            label: 'En Route',
+            value: enRouteCount.toString(),
+            color: AdminColors.statusInfo,
+          ),
+          const SizedBox(width: 12),
+          _StatPill(
+            label: 'Idle',
+            value: idleCount.toString(),
+            color: AdminColors.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Stat pill widget
+class _StatPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Filter toggle button
+class _FilterToggle extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final bool isAlert;
+
+  const _FilterToggle({
+    required this.label,
+    required this.isActive,
+    this.isAlert = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = isAlert ? AdminColors.rubyRed : AdminColors.emeraldGreen;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? activeColor.withValues(alpha: 0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? activeColor : AdminColors.borderDefault,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: isActive ? activeColor : AdminColors.textMuted,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? activeColor : AdminColors.textSecondary,
+              fontSize: 12,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Map placeholder with simulated carrier positions
+class _MapPlaceholder extends StatelessWidget {
+  final List<_CarrierData> carriers;
+
+  const _MapPlaceholder({required this.carriers});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 350,
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Stack(
+        children: [
+          // Grid background
+          CustomPaint(
+            size: const Size(double.infinity, 350),
+            painter: _GridPainter(),
+          ),
+          // Carrier markers
+          ...carriers.asMap().entries.map((entry) {
+            final index = entry.key;
+            final carrier = entry.value;
+            // Distribute markers across the map
+            final left = 50.0 + (index % 4) * 180.0 + (index * 23) % 50;
+            final top = 40.0 + (index ~/ 4) * 120.0 + (index * 17) % 40;
+            return Positioned(
+              left: left,
+              top: top,
+              child: _CarrierMarker(carrier: carrier),
+            );
+          }),
+          // Legend
+          Positioned(
+            bottom: 16,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AdminColors.slateDark.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _LegendItem(color: AdminColors.emeraldGreen, label: 'Active'),
+                  const SizedBox(width: 16),
+                  _LegendItem(color: AdminColors.statusInfo, label: 'En Route'),
+                  const SizedBox(width: 16),
+                  _LegendItem(color: AdminColors.textMuted, label: 'Idle'),
+                  const SizedBox(width: 16),
+                  _LegendItem(color: AdminColors.rubyRed, label: 'Alert'),
+                ],
+              ),
+            ),
+          ),
+          // Zoom controls
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: Column(
+              children: [
+                _MapControl(icon: Icons.add, onTap: () {}),
+                const SizedBox(height: 4),
+                _MapControl(icon: Icons.remove, onTap: () {}),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Grid painter for map background
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AdminColors.borderDefault.withValues(alpha: 0.3)
+      ..strokeWidth = 1;
+
+    // Vertical lines
+    for (var x = 0.0; x < size.width; x += 40) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    // Horizontal lines
+    for (var y = 0.0; y < size.height; y += 40) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Carrier marker on map
+class _CarrierMarker extends StatelessWidget {
+  final _CarrierData carrier;
+
+  const _CarrierMarker({required this.carrier});
+
+  Color get statusColor {
+    if (carrier.hasAlert) return AdminColors.rubyRed;
+    switch (carrier.status) {
+      case 'active':
+        return AdminColors.emeraldGreen;
+      case 'en_route':
+        return AdminColors.statusInfo;
+      default:
+        return AdminColors.textMuted;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '${carrier.name}\n${carrier.type} • ${carrier.currentTask}',
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: statusColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: AdminColors.slateDarkest, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: statusColor.withValues(alpha: 0.4),
+              blurRadius: 8,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Icon(
+          carrier.type == 'carrier' ? Icons.local_shipping : Icons.person,
+          color: AdminColors.slateDarkest,
+          size: 16,
+        ),
+      ),
+    );
+  }
+}
+
+/// Legend item
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: AdminColors.textMuted, fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+/// Map control button
+class _MapControl extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _MapControl({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: AdminColors.slateDark,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AdminColors.borderDefault),
+        ),
+        child: Icon(icon, color: AdminColors.textSecondary, size: 18),
+      ),
+    );
+  }
+}
+
+/// Carriers list
+class _CarriersList extends StatelessWidget {
+  final List<_CarrierData> carriers;
+
+  const _CarriersList({required this.carriers});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Column(
+        children: carriers.asMap().entries.map((entry) {
+          final carrier = entry.value;
+          final isLast = entry.key == carriers.length - 1;
+          return _CarrierTile(carrier: carrier, isLast: isLast);
+        }).toList(),
+      ),
+    );
+  }
+}
+
+/// Individual carrier tile
+class _CarrierTile extends StatelessWidget {
+  final _CarrierData carrier;
+  final bool isLast;
+
+  const _CarrierTile({required this.carrier, required this.isLast});
+
+  Color get statusColor {
+    if (carrier.hasAlert) return AdminColors.rubyRed;
+    switch (carrier.status) {
+      case 'active':
+        return AdminColors.emeraldGreen;
+      case 'en_route':
+        return AdminColors.statusInfo;
+      default:
+        return AdminColors.textMuted;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(bottom: BorderSide(color: AdminColors.borderDefault)),
+      ),
+      child: Row(
+        children: [
+          // Status indicator
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              carrier.type == 'carrier' ? Icons.local_shipping : Icons.person,
+              color: statusColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      carrier.name,
+                      style: const TextStyle(
+                        color: AdminColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AdminColors.slateLight,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        carrier.id,
+                        style: const TextStyle(
+                          color: AdminColors.textMuted,
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    if (carrier.hasAlert) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AdminColors.rubyRed.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.warning_amber, size: 12, color: AdminColors.rubyRed),
+                            SizedBox(width: 4),
+                            Text(
+                              'ALERT',
+                              style: TextStyle(
+                                color: AdminColors.rubyRed,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  carrier.currentTask,
+                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          // Location
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.location_on, size: 14, color: AdminColors.textMuted),
+                  const SizedBox(width: 4),
+                  Text(
+                    carrier.location,
+                    style: const TextStyle(color: AdminColors.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Updated ${carrier.lastUpdate}',
+                style: const TextStyle(color: AdminColors.textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Carrier data model
+class _CarrierData {
+  final String id;
+  final String name;
+  final String type;
+  final String status;
+  final String currentTask;
+  final String location;
+  final String lastUpdate;
+  final bool hasAlert;
+
+  const _CarrierData({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.status,
+    required this.currentTask,
+    required this.location,
+    required this.lastUpdate,
+    this.hasAlert = false,
+  });
+}
+
+/// Mock data for Kaskflow
+const _kaskflowCarriers = [
+  _CarrierData(
+    id: 'CAR_001',
+    name: 'Express Delivery Unit #1',
+    type: 'carrier',
+    status: 'en_route',
+    currentTask: 'Delivering ORD_9912 to 123 Main St',
+    location: 'Edmonton, AB',
+    lastUpdate: '2 min ago',
+  ),
+  _CarrierData(
+    id: 'CAR_002',
+    name: 'Heavy Freight Truck #7',
+    type: 'carrier',
+    status: 'active',
+    currentTask: 'Loading at Warehouse C',
+    location: 'Calgary, AB',
+    lastUpdate: '30 sec ago',
+  ),
+  _CarrierData(
+    id: 'WRK_445',
+    name: 'John D.',
+    type: 'talent',
+    status: 'active',
+    currentTask: 'Shift in progress - Warehouse B',
+    location: 'Edmonton, AB',
+    lastUpdate: '1 min ago',
+  ),
+  _CarrierData(
+    id: 'CAR_003',
+    name: 'Refrigerated Unit #3',
+    type: 'carrier',
+    status: 'en_route',
+    currentTask: 'Route RT_445 - Edmonton to Calgary',
+    location: 'Red Deer, AB',
+    lastUpdate: '5 min ago',
+    hasAlert: true,
+  ),
+  _CarrierData(
+    id: 'WRK_223',
+    name: 'Sarah M.',
+    type: 'talent',
+    status: 'idle',
+    currentTask: 'Available for assignment',
+    location: 'Calgary, AB',
+    lastUpdate: '15 min ago',
+  ),
+  _CarrierData(
+    id: 'CAR_005',
+    name: 'Express Van #12',
+    type: 'carrier',
+    status: 'active',
+    currentTask: 'Pickup at Supplier XYZ',
+    location: 'Edmonton, AB',
+    lastUpdate: '45 sec ago',
+  ),
+];
+
+/// Mock data for Moonlitely
+const _moonlitelyCarriers = [
+  _CarrierData(
+    id: 'CAR_M01',
+    name: 'Night Delivery Unit #1',
+    type: 'carrier',
+    status: 'active',
+    currentTask: 'Evening route - Downtown Vancouver',
+    location: 'Vancouver, BC',
+    lastUpdate: '1 min ago',
+  ),
+  _CarrierData(
+    id: 'WRK_M12',
+    name: 'Alex K.',
+    type: 'talent',
+    status: 'en_route',
+    currentTask: 'Delivering ORD_M_8823',
+    location: 'Burnaby, BC',
+    lastUpdate: '3 min ago',
+    hasAlert: true,
+  ),
+  _CarrierData(
+    id: 'CAR_M03',
+    name: 'Premium Service Van #5',
+    type: 'carrier',
+    status: 'idle',
+    currentTask: 'Awaiting dispatch',
+    location: 'Richmond, BC',
+    lastUpdate: '20 min ago',
+  ),
+  _CarrierData(
+    id: 'WRK_M08',
+    name: 'Lisa T.',
+    type: 'talent',
+    status: 'active',
+    currentTask: 'Customer support - Priority call',
+    location: 'Vancouver, BC',
+    lastUpdate: '30 sec ago',
+  ),
+];
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/admin_hub_page.dart
+```dart:admin_hub_page.dart:lib/features/triage_hub/pages/admin_hub_page.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/triage_hub.dart';
+import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
+
+/// Main Admin Hub Page that combines shell with content switching
+class AdminHubPage extends ConsumerWidget {
+  const AdminHubPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIndex = ref.watch(selectedNavIndexProvider);
+
+    return AdminShell(
+      child: _buildPageContent(selectedIndex),
+    );
+  }
+
+  Widget _buildPageContent(int index) {
+    switch (index) {
+      case 0:
+        return const TriageQueuePage();
+      case 1:
+        return const HealthGridPage();
+      case 2:
+        return const FleetMapPage();
+      case 3:
+        return const EvolutionTimelinePage();
+      default:
+        return const TriageQueuePage();
+    }
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/health_grid_page.dart
+```dart:health_grid_page.dart:lib/features/triage_hub/pages/health_grid_page.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/orchestrator_model.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+/// Orchestrator Health Grid Page - The "Brain" Map
+/// Displays the 7 orchestrator agents with real-time health metrics
+/// Listens to: artifacts/{appId}/public/data/agent_registry
+class HealthGridPage extends ConsumerWidget {
+  const HealthGridPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final orchestratorsAsync = ref.watch(orchestratorsProvider);
+    final currentApp = ref.watch(currentAppProvider);
+
+    return orchestratorsAsync.when(
+      data: (orchestrators) => _HealthGridContent(orchestrators: orchestrators),
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
+      ),
+      error: (e, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: AdminColors.rubyRed, size: 48),
+            const SizedBox(height: 16),
+            Text('Error loading orchestrators', style: TextStyle(color: AdminColors.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthGridContent extends StatelessWidget {
+  final List<OrchestratorModel> orchestrators;
+
+  const _HealthGridContent({required this.orchestrators});
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate overall health
+    final healthyCount = orchestrators.where((o) => o.isHealthy).length;
+    final totalCount = orchestrators.length;
+    final overallHealth = totalCount > 0 ? (healthyCount / totalCount * 100) : 0.0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with overall status
+          _OverallHealthHeader(
+            healthyCount: healthyCount,
+            totalCount: totalCount,
+            overallHealth: overallHealth,
+          ),
+          const SizedBox(height: 24),
+          // Grid of orchestrator cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 1200
+                  ? 4
+                  : constraints.maxWidth > 800
+                      ? 3
+                      : 2;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.1,
+                ),
+                itemCount: orchestrators.length,
+                itemBuilder: (context, index) {
+                  return OrchestratorCard(orchestrator: orchestrators[index]);
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Overall health header with summary stats
+class _OverallHealthHeader extends StatelessWidget {
+  final int healthyCount;
+  final int totalCount;
+  final double overallHealth;
+
+  const _OverallHealthHeader({
+    required this.healthyCount,
+    required this.totalCount,
+    required this.overallHealth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isHealthy = overallHealth >= 80;
+    final isWarning = overallHealth >= 60 && overallHealth < 80;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          // Brain icon with pulsing effect
+          _PulsingStatusIndicator(
+            isHealthy: isHealthy,
+            isWarning: isWarning,
+            size: 56,
+            child: Icon(
+              Icons.psychology_rounded,
+              size: 32,
+              color: isHealthy
+                  ? AdminColors.emeraldGreen
+                  : isWarning
+                      ? AdminColors.statusWarning
+                      : AdminColors.rubyRed,
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Orchestrator Health Grid',
+                  style: TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The "Brain" Map - $healthyCount of $totalCount agents operating normally',
+                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+          // Overall health score
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: (isHealthy
+                      ? AdminColors.emeraldGreen
+                      : isWarning
+                          ? AdminColors.statusWarning
+                          : AdminColors.rubyRed)
+                  .withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '${overallHealth.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    color: isHealthy
+                        ? AdminColors.emeraldGreen
+                        : isWarning
+                            ? AdminColors.statusWarning
+                            : AdminColors.rubyRed,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Text(
+                  'Overall Health',
+                  style: TextStyle(color: AdminColors.textMuted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Individual orchestrator card with metrics and controls
+class OrchestratorCard extends ConsumerStatefulWidget {
+  final OrchestratorModel orchestrator;
+
+  const OrchestratorCard({super.key, required this.orchestrator});
+
+  @override
+  ConsumerState<OrchestratorCard> createState() => _OrchestratorCardState();
+}
+
+class _OrchestratorCardState extends ConsumerState<OrchestratorCard> {
+  bool _isLoading = false;
+
+  IconData get typeIcon {
+    switch (widget.orchestrator.type) {
+      case OrchestratorType.compliance:
+        return Icons.gavel_rounded;
+      case OrchestratorType.finance:
+        return Icons.account_balance_rounded;
+      case OrchestratorType.logistics:
+        return Icons.local_shipping_rounded;
+      case OrchestratorType.talent:
+        return Icons.people_rounded;
+      case OrchestratorType.customer:
+        return Icons.support_agent_rounded;
+      case OrchestratorType.inventory:
+        return Icons.inventory_2_rounded;
+      case OrchestratorType.analytics:
+        return Icons.analytics_rounded;
+    }
+  }
+
+  Color get statusColor {
+    if (widget.orchestrator.isCritical) return AdminColors.rubyRed;
+    if (widget.orchestrator.isWarning) return AdminColors.statusWarning;
+    return AdminColors.emeraldGreen;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orch = widget.orchestrator;
+    final isPaused = orch.status == OrchestratorStatus.paused;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: orch.isCritical ? AdminColors.rubyRed.withValues(alpha: 0.5) : AdminColors.borderDefault,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with status light
+          Row(
+            children: [
+              _PulsingStatusIndicator(
+                isHealthy: orch.isHealthy,
+                isWarning: orch.isWarning,
+                isPaused: isPaused,
+                size: 12,
+              ),
+              const SizedBox(width: 10),
+              Icon(typeIcon, size: 18, color: AdminColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  orch.type.label,
+                  style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // Version badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AdminColors.slateLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  orch.version,
+                  style: const TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Status text
+          Text(
+            orch.status.label,
+            style: TextStyle(
+              color: statusColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Metrics
+          Row(
+            children: [
+              _MetricTile(
+                label: 'Efficacy',
+                value: orch.efficacyDisplay,
+                icon: Icons.speed_rounded,
+                color: statusColor,
+              ),
+              const SizedBox(width: 12),
+              _MetricTile(
+                label: 'Latency',
+                value: orch.latencyDisplay,
+                icon: Icons.timer_outlined,
+                color: orch.latencyMs > 200
+                    ? AdminColors.statusWarning
+                    : AdminColors.textSecondary,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _MetricTile(
+                label: 'Backlog',
+                value: orch.currentBacklog.toString(),
+                icon: Icons.pending_actions_rounded,
+                color: orch.currentBacklog > 10
+                    ? AdminColors.statusWarning
+                    : AdminColors.textSecondary,
+              ),
+              const SizedBox(width: 12),
+              _MetricTile(
+                label: 'Processed',
+                value: _formatNumber(orch.processedToday),
+                icon: Icons.check_circle_outline,
+                color: AdminColors.textSecondary,
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Controls
+          Row(
+            children: [
+              Expanded(
+                child: _ControlButton(
+                  label: isPaused ? 'Resume' : 'Pause',
+                  icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                  isLoading: _isLoading,
+                  onPressed: () => _togglePause(isPaused),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ControlButton(
+                  label: 'Rollback',
+                  icon: Icons.history_rounded,
+                  isLoading: _isLoading,
+                  isDangerous: true,
+                  onPressed: _showRollbackDialog,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatNumber(int num) {
+    if (num >= 1000) {
+      return '${(num / 1000).toStringAsFixed(1)}k';
+    }
+    return num.toString();
+  }
+
+  Future<void> _togglePause(bool isPaused) async {
+    setState(() => _isLoading = true);
+    try {
+      final currentApp = ref.read(currentAppProvider);
+      if (isPaused) {
+        await OrchestratorService.resumeOrchestrator(currentApp.id, widget.orchestrator.id);
+      } else {
+        await OrchestratorService.pauseOrchestrator(currentApp.id, widget.orchestrator.id);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showRollbackDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminColors.slateMedium,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AdminColors.borderDefault),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AdminColors.statusWarning),
+            const SizedBox(width: 12),
+            const Text('Confirm Rollback', style: TextStyle(color: AdminColors.textPrimary)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to rollback ${widget.orchestrator.type.label}?',
+              style: const TextStyle(color: AdminColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AdminColors.slateDark,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: AdminColors.statusInfo, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'This will revert to the previous stable version and may affect ongoing transactions.',
+                      style: TextStyle(color: AdminColors.textMuted, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel', style: TextStyle(color: AdminColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              setState(() => _isLoading = true);
+              try {
+                final currentApp = ref.read(currentAppProvider);
+                await OrchestratorService.rollbackOrchestrator(currentApp.id, widget.orchestrator.id);
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminColors.statusWarning,
+              foregroundColor: AdminColors.slateDarkest,
+            ),
+            child: const Text('Rollback'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Metric tile widget
+class _MetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: AdminColors.slateDark,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: TextStyle(
+                      color: color == AdminColors.textSecondary ? AdminColors.textPrimary : color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: const TextStyle(color: AdminColors.textMuted, fontSize: 9),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Control button for pause/rollback
+class _ControlButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isLoading;
+  final bool isDangerous;
+  final VoidCallback onPressed;
+
+  const _ControlButton({
+    required this.label,
+    required this.icon,
+    required this.isLoading,
+    this.isDangerous = false,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: isDangerous ? AdminColors.statusWarning : AdminColors.textSecondary,
+        side: BorderSide(
+          color: isDangerous
+              ? AdminColors.statusWarning.withValues(alpha: 0.5)
+              : AdminColors.borderDefault,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      ),
+      child: isLoading
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 14),
+                const SizedBox(width: 4),
+                Text(label, style: const TextStyle(fontSize: 11)),
+              ],
+            ),
+    );
+  }
+}
+
+/// Pulsing status indicator with animation
+class _PulsingStatusIndicator extends StatefulWidget {
+  final bool isHealthy;
+  final bool isWarning;
+  final bool isPaused;
+  final double size;
+  final Widget? child;
+
+  const _PulsingStatusIndicator({
+    required this.isHealthy,
+    this.isWarning = false,
+    this.isPaused = false,
+    required this.size,
+    this.child,
+  });
+
+  @override
+  State<_PulsingStatusIndicator> createState() => _PulsingStatusIndicatorState();
+}
+
+class _PulsingStatusIndicatorState extends State<_PulsingStatusIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    if (!widget.isPaused) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_PulsingStatusIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPaused && _controller.isAnimating) {
+      _controller.stop();
+    } else if (!widget.isPaused && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Color get statusColor {
+    if (widget.isPaused) return AdminColors.textMuted;
+    if (!widget.isHealthy && !widget.isWarning) return AdminColors.rubyRed;
+    if (widget.isWarning) return AdminColors.statusWarning;
+    return AdminColors.emeraldGreen;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.child != null) {
+      return AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: _animation.value * 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Center(child: widget.child),
+          );
+        },
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            color: statusColor,
+            shape: BoxShape.circle,
+            boxShadow: widget.isPaused
+                ? null
+                : [
+                    BoxShadow(
+                      color: statusColor.withValues(alpha: _animation.value * 0.5),
+                      blurRadius: widget.size * 0.5,
+                      spreadRadius: widget.size * 0.1,
+                    ),
+                  ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/pages/admin_shell.dart
+```dart:admin_shell.dart:lib/features/triage_hub/pages/admin_shell.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/widgets/admin_sidebar.dart';
+import 'package:local2local/features/triage_hub/widgets/admin_appbar.dart';
+
+/// Notifier for tracking selected navigation index
+class SelectedNavIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setIndex(int index) => state = index;
+}
+
+/// Provider for tracking selected navigation index
+final selectedNavIndexProvider = NotifierProvider<SelectedNavIndexNotifier, int>(
+  SelectedNavIndexNotifier.new,
+);
+
+/// Main shell layout for Super Admin Hub
+/// Provides persistent sidebar and top appbar with child content area
+class AdminShell extends ConsumerWidget {
+  final Widget child;
+
+  const AdminShell({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIndex = ref.watch(selectedNavIndexProvider);
+
+    // Get the current page title based on selected index
+    final pageTitle = adminNavItems[selectedIndex].label;
+
+    return Scaffold(
+      backgroundColor: AdminColors.slateDarkest,
+      body: Row(
+        children: [
+          // Persistent Left Sidebar
+          AdminSidebar(
+            selectedIndex: selectedIndex,
+            onItemSelected: (index) {
+              ref.read(selectedNavIndexProvider.notifier).setIndex(index);
+            },
+          ),
+          // Main Content Area
+          Expanded(
+            child: Column(
+              children: [
+                // Top AppBar
+                AdminAppBar(title: pageTitle),
+                // Page Content
+                Expanded(
+                  child: Container(
+                    color: AdminColors.slateDarkest,
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/widgets/admin_sidebar.dart
+```dart:admin_sidebar.dart:lib/features/triage_hub/widgets/admin_sidebar.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+/// Navigation item definition
+class NavItem {
+  final String label;
+  final IconData icon;
+  final String route;
+  final bool showBadge;
+
+  const NavItem({
+    required this.label,
+    required this.icon,
+    required this.route,
+    this.showBadge = false,
+  });
+}
+
+/// Admin Sidebar navigation items
+const List<NavItem> adminNavItems = [
+  NavItem(
+    label: 'Triage Queue',
+    icon: Icons.warning_amber_rounded,
+    route: '/triage-queue',
+    showBadge: true,
+  ),
+  NavItem(
+    label: 'Orchestrator Health',
+    icon: Icons.psychology_rounded,
+    route: '/orchestrator-health',
+  ),
+  NavItem(
+    label: 'Fleet Map',
+    icon: Icons.gps_fixed_rounded,
+    route: '/fleet-map',
+  ),
+  NavItem(
+    label: 'Evolution Timeline',
+    icon: Icons.auto_graph_rounded,
+    route: '/evolution-timeline',
+  ),
+];
+
+/// Persistent Left Sidebar for Super Admin Hub
+class AdminSidebar extends ConsumerWidget {
+  final int selectedIndex;
+  final Function(int) onItemSelected;
+
+  const AdminSidebar({
+    super.key,
+    required this.selectedIndex,
+    required this.onItemSelected,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      width: 240,
+      decoration: const BoxDecoration(
+        color: AdminColors.slateDark,
+        border: Border(
+          right: BorderSide(color: AdminColors.borderDefault, width: 1),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Logo/Brand Section
+          _buildBrandHeader(),
+          const Divider(height: 1),
+          // Navigation Items
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: adminNavItems.length,
+              itemBuilder: (context, index) {
+                final item = adminNavItems[index];
+                final isSelected = selectedIndex == index;
+                return _NavItemTile(
+                  item: item,
+                  isSelected: isSelected,
+                  onTap: () => onItemSelected(index),
+                );
+              },
+            ),
+          ),
+          // Footer
+          _buildFooter(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrandHeader() {
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AdminColors.emeraldGreen,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.hub_rounded,
+              color: AdminColors.slateDarkest,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Super Admin',
+                  style: TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Triage Hub',
+                  style: TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AdminColors.borderDefault)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AdminColors.slateMedium,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.person_rounded,
+              color: AdminColors.textSecondary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Admin User',
+                  style: TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  'Super Admin',
+                  style: TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            color: AdminColors.textSecondary,
+            onPressed: () {},
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Individual navigation item tile with badge support
+class _NavItemTile extends ConsumerWidget {
+  final NavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItemTile({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final interventionCount = ref.watch(activeInterventionCountProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Material(
+        color: isSelected
+            ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: AdminColors.slateLight.withValues(alpha: 0.5),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Icon(
+                  item.icon,
+                  size: 20,
+                  color: isSelected
+                      ? AdminColors.emeraldGreen
+                      : AdminColors.textSecondary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      color: isSelected
+                          ? AdminColors.emeraldGreen
+                          : AdminColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                // Intervention Badge
+                if (item.showBadge)
+                  interventionCount.when(
+                    data: (count) => count > 0
+                        ? _InterventionBadge(count: count)
+                        : const SizedBox.shrink(),
+                    loading: () => const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AdminColors.textMuted,
+                      ),
+                    ),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Red badge showing active intervention count
+class _InterventionBadge extends StatelessWidget {
+  final int count;
+
+  const _InterventionBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AdminColors.rubyRed,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        count > 99 ? '99+' : count.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/features/triage_hub/widgets/admin_appbar.dart
+```dart:admin_appbar.dart:lib/features/triage_hub/widgets/admin_appbar.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+/// Top AppBar for Super Admin Hub with tenant selector, environment badge, and global search
+class AdminAppBar extends ConsumerStatefulWidget implements PreferredSizeWidget {
+  final String title;
+
+  const AdminAppBar({super.key, required this.title});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
+
+  @override
+  ConsumerState<AdminAppBar> createState() => _AdminAppBarState();
+}
+
+class _AdminAppBarState extends ConsumerState<AdminAppBar> {
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _isSearchExpanded = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onSearchSubmit(String query) {
+    if (query.trim().isEmpty) return;
+    ref.read(searchQueryProvider.notifier).state = query.trim();
+    // Show search results dialog
+    _showSearchResults(context, query.trim());
+  }
+
+  void _showSearchResults(BuildContext context, String query) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _SearchResultsDialog(query: query),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentApp = ref.watch(currentAppProvider);
+    final currentEnv = ref.watch(currentEnvironmentProvider);
+
+    return Container(
+      height: 64,
+      decoration: const BoxDecoration(
+        color: AdminColors.slateDark,
+        border: Border(
+          bottom: BorderSide(color: AdminColors.borderDefault, width: 1),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          // Page Title
+          Expanded(
+            child: Text(
+              widget.title,
+              style: const TextStyle(
+                color: AdminColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          // Global Search
+          _GlobalSearchField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            isExpanded: _isSearchExpanded,
+            onToggle: () => setState(() => _isSearchExpanded = !_isSearchExpanded),
+            onSubmit: _onSearchSubmit,
+          ),
+          const SizedBox(width: 16),
+          // Environment Badge
+          _EnvironmentBadge(
+            environment: currentEnv,
+            onChanged: (env) {
+              ref.read(currentEnvironmentProvider.notifier).setEnvironment(env);
+            },
+          ),
+          const SizedBox(width: 16),
+          // Tenant Selector
+          _TenantSelector(
+            currentApp: currentApp,
+            onChanged: (tenant) {
+              ref.read(currentAppProvider.notifier).setApp(tenant);
+            },
+          ),
+          const SizedBox(width: 16),
+          // Notification Bell
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            color: AdminColors.textSecondary,
+            onPressed: () {},
+            tooltip: 'Notifications',
+          ),
+          const SizedBox(width: 8),
+          // Settings
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            color: AdminColors.textSecondary,
+            onPressed: () {},
+            tooltip: 'Settings',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Global search field with expandable UI
+class _GlobalSearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final Function(String) onSubmit;
+
+  const _GlobalSearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: isExpanded ? 280 : 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: isExpanded ? AdminColors.slateMedium : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: isExpanded ? Border.all(color: AdminColors.borderDefault) : null,
+      ),
+      child: isExpanded
+          ? Row(
+              children: [
+                const SizedBox(width: 12),
+                const Icon(Icons.search, color: AdminColors.textMuted, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Search Order ID, Agent ID...',
+                      hintStyle: TextStyle(color: AdminColors.textMuted, fontSize: 14),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onSubmitted: onSubmit,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: AdminColors.textMuted,
+                  onPressed: () {
+                    controller.clear();
+                    onToggle();
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ],
+            )
+          : IconButton(
+              icon: const Icon(Icons.search),
+              color: AdminColors.textSecondary,
+              onPressed: () {
+                onToggle();
+                focusNode.requestFocus();
+              },
+              tooltip: 'Global Search',
+            ),
+    );
+  }
+}
+
+/// Environment badge with dropdown
+class _EnvironmentBadge extends StatelessWidget {
+  final AppEnvironment environment;
+  final Function(AppEnvironment) onChanged;
+
+  const _EnvironmentBadge({
+    required this.environment,
+    required this.onChanged,
+  });
+
+  Color get badgeColor {
+    switch (environment) {
+      case AppEnvironment.prod:
+        return AdminColors.emeraldGreen;
+      case AppEnvironment.staging:
+        return AdminColors.statusWarning;
+      case AppEnvironment.dev:
+        return AdminColors.statusInfo;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<AppEnvironment>(
+      initialValue: environment,
+      onSelected: onChanged,
+      tooltip: 'Environment',
+      offset: const Offset(0, 48),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: badgeColor.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: badgeColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              environment.label,
+              style: TextStyle(
+                color: badgeColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down, color: badgeColor, size: 16),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => AppEnvironment.values.map((env) {
+        final isSelected = env == environment;
+        final color = switch (env) {
+          AppEnvironment.prod => AdminColors.emeraldGreen,
+          AppEnvironment.staging => AdminColors.statusWarning,
+          AppEnvironment.dev => AdminColors.statusInfo,
+        };
+        return PopupMenuItem<AppEnvironment>(
+          value: env,
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                env.displayName,
+                style: TextStyle(
+                  color: isSelected ? color : AdminColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+              const Spacer(),
+              if (isSelected) Icon(Icons.check, color: color, size: 18),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Dropdown/Segmented button for tenant selection
+class _TenantSelector extends StatelessWidget {
+  final AppTenant currentApp;
+  final Function(AppTenant) onChanged;
+
+  const _TenantSelector({
+    required this.currentApp,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AdminColors.slateMedium,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: SegmentedButton<AppTenant>(
+        segments: AppTenant.values.map((tenant) {
+          return ButtonSegment<AppTenant>(
+            value: tenant,
+            label: Text(tenant.displayName),
+            icon: Icon(
+              tenant == AppTenant.kaskflow
+                  ? Icons.water_drop_rounded
+                  : Icons.nightlight_round,
+              size: 16,
+            ),
+          );
+        }).toList(),
+        selected: {currentApp},
+        onSelectionChanged: (Set<AppTenant> selection) {
+          if (selection.isNotEmpty) {
+            onChanged(selection.first);
+          }
+        },
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AdminColors.emeraldGreen.withValues(alpha: 0.2);
+            }
+            return Colors.transparent;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return AdminColors.emeraldGreen;
+            }
+            return AdminColors.textSecondary;
+          }),
+          side: WidgetStateProperty.all(BorderSide.none),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          padding: WidgetStateProperty.all(
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+        ),
+        showSelectedIcon: false,
+      ),
+    );
+  }
+}
+
+/// Search results dialog
+class _SearchResultsDialog extends StatelessWidget {
+  final String query;
+
+  const _SearchResultsDialog({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    // Mock search results
+    final results = <Map<String, dynamic>>[
+      if (query.toUpperCase().contains('ORD') || query.contains('99'))
+        {'type': 'Order', 'id': 'ORD_9912', 'status': 'Pending Verification'},
+      if (query.toUpperCase().contains('TXN') || query.contains('78'))
+        {'type': 'Transaction', 'id': 'TXN_78234', 'status': 'Awaiting Approval'},
+      if (query.toUpperCase().contains('ORCH') || query.toLowerCase().contains('finance'))
+        {'type': 'Agent', 'id': 'orch_finance', 'status': 'Online'},
+    ];
+
+    return Dialog(
+      backgroundColor: AdminColors.slateMedium,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AdminColors.borderDefault),
+      ),
+      child: Container(
+        width: 480,
+        constraints: const BoxConstraints(maxHeight: 400),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.search, color: AdminColors.emeraldGreen),
+                const SizedBox(width: 12),
+                Text(
+                  'Search Results for "$query"',
+                  style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  color: AdminColors.textMuted,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: AdminColors.borderDefault),
+            const SizedBox(height: 16),
+            if (results.isEmpty)
+              const Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.search_off, color: AdminColors.textMuted, size: 48),
+                    SizedBox(height: 12),
+                    Text(
+                      'No results found',
+                      style: TextStyle(color: AdminColors.textMuted),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...results.map((result) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AdminColors.slateDark,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AdminColors.borderDefault),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            result['type'] as String,
+                            style: const TextStyle(
+                              color: AdminColors.emeraldGreen,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                result['id'] as String,
+                                style: const TextStyle(
+                                  color: AdminColors.textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                result['status'] as String,
+                                style: const TextStyle(
+                                  color: AdminColors.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: AdminColors.textMuted,
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/main.dart
+```dart:main.dart:lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/nav.dart';
+
+/// Main entry point for the Local2Local Super Admin Hub
+///
+/// This sets up:
+/// - Riverpod state management
+/// - go_router navigation
+/// - Slate/Dark theme with Emerald Green and Ruby Red accents
+void main() {
+  runApp(const ProviderScope(child: MyApp()));
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: 'Local2Local Super Admin',
+      debugShowCheckedModeBanner: false,
+      // Use the admin dark theme
+      theme: adminDarkTheme,
+      darkTheme: adminDarkTheme,
+      themeMode: ThemeMode.dark,
+      // Router configuration
+      routerConfig: AppRouter.router,
+    );
+  }
+}
+
+```eof
+
+### FILE: lib/nav.dart
+```dart:nav.dart:lib/nav.dart
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:local2local/features/triage_hub/pages/admin_hub_page.dart';
+
+/// GoRouter configuration for app navigation
+///
+/// This uses go_router for declarative routing, which provides:
+/// - Type-safe navigation
+/// - Deep linking support (web URLs, app links)
+/// - Easy route parameters
+/// - Navigation guards and redirects
+class AppRouter {
+  static final GoRouter router = GoRouter(
+    initialLocation: AppRoutes.adminHub,
+    routes: [
+      GoRoute(
+        path: AppRoutes.adminHub,
+        name: 'admin-hub',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: AdminHubPage(),
+        ),
+      ),
+    ],
+  );
+}
+
+/// Route path constants
+/// Use these instead of hard-coding route strings
+class AppRoutes {
+  static const String adminHub = '/';
+}
+
+```eof
+
+### FILE: lib/theme.dart
+```dart:theme.dart:lib/theme.dart
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+class AppSpacing {
+  // Spacing values
+  static const double xs = 4.0;
+  static const double sm = 8.0;
+  static const double md = 16.0;
+  static const double lg = 24.0;
+  static const double xl = 32.0;
+  static const double xxl = 48.0;
+
+  // Edge insets shortcuts
+  static const EdgeInsets paddingXs = EdgeInsets.all(xs);
+  static const EdgeInsets paddingSm = EdgeInsets.all(sm);
+  static const EdgeInsets paddingMd = EdgeInsets.all(md);
+  static const EdgeInsets paddingLg = EdgeInsets.all(lg);
+  static const EdgeInsets paddingXl = EdgeInsets.all(xl);
+
+  // Horizontal padding
+  static const EdgeInsets horizontalXs = EdgeInsets.symmetric(horizontal: xs);
+  static const EdgeInsets horizontalSm = EdgeInsets.symmetric(horizontal: sm);
+  static const EdgeInsets horizontalMd = EdgeInsets.symmetric(horizontal: md);
+  static const EdgeInsets horizontalLg = EdgeInsets.symmetric(horizontal: lg);
+  static const EdgeInsets horizontalXl = EdgeInsets.symmetric(horizontal: xl);
+
+  // Vertical padding
+  static const EdgeInsets verticalXs = EdgeInsets.symmetric(vertical: xs);
+  static const EdgeInsets verticalSm = EdgeInsets.symmetric(vertical: sm);
+  static const EdgeInsets verticalMd = EdgeInsets.symmetric(vertical: md);
+  static const EdgeInsets verticalLg = EdgeInsets.symmetric(vertical: lg);
+  static const EdgeInsets verticalXl = EdgeInsets.symmetric(vertical: xl);
+}
+
+/// Border radius constants for consistent rounded corners
+class AppRadius {
+  static const double sm = 8.0;
+  static const double md = 12.0;
+  static const double lg = 16.0;
+  static const double xl = 24.0;
+}
+
+// =============================================================================
+// TEXT STYLE EXTENSIONS
+// =============================================================================
+
+/// Extension to add text style utilities to BuildContext
+/// Access via context.textStyles
+extension TextStyleContext on BuildContext {
+  TextTheme get textStyles => Theme.of(this).textTheme;
+}
+
+/// Helper methods for common text style modifications
+extension TextStyleExtensions on TextStyle {
+  /// Make text bold
+  TextStyle get bold => copyWith(fontWeight: FontWeight.bold);
+
+  /// Make text semi-bold
+  TextStyle get semiBold => copyWith(fontWeight: FontWeight.w600);
+
+  /// Make text medium weight
+  TextStyle get medium => copyWith(fontWeight: FontWeight.w500);
+
+  /// Make text normal weight
+  TextStyle get normal => copyWith(fontWeight: FontWeight.w400);
+
+  /// Make text light
+  TextStyle get light => copyWith(fontWeight: FontWeight.w300);
+
+  /// Add custom color
+  TextStyle withColor(Color color) => copyWith(color: color);
+
+  /// Add custom size
+  TextStyle withSize(double size) => copyWith(fontSize: size);
+}
+
+// =============================================================================
+// COLORS
+// =============================================================================
+
+/// Modern, neutral color palette for light mode
+/// Uses soft grays and blues instead of purple for a contemporary look
+class LightModeColors {
+  // Primary: Soft blue-gray for a modern, professional look
+  static const lightPrimary = Color(0xFF5B7C99);
+  static const lightOnPrimary = Color(0xFFFFFFFF);
+  static const lightPrimaryContainer = Color(0xFFD8E6F3);
+  static const lightOnPrimaryContainer = Color(0xFF1A3A52);
+
+  // Secondary: Complementary gray-blue
+  static const lightSecondary = Color(0xFF5C6B7A);
+  static const lightOnSecondary = Color(0xFFFFFFFF);
+
+  // Tertiary: Subtle accent color
+  static const lightTertiary = Color(0xFF6B7C8C);
+  static const lightOnTertiary = Color(0xFFFFFFFF);
+
+  // Error colors
+  static const lightError = Color(0xFFBA1A1A);
+  static const lightOnError = Color(0xFFFFFFFF);
+  static const lightErrorContainer = Color(0xFFFFDAD6);
+  static const lightOnErrorContainer = Color(0xFF410002);
+
+  // Surface and background: High contrast for readability
+  static const lightSurface = Color(0xFFFBFCFD);
+  static const lightOnSurface = Color(0xFF1A1C1E);
+  static const lightBackground = Color(0xFFF7F9FA);
+  static const lightSurfaceVariant = Color(0xFFE2E8F0);
+  static const lightOnSurfaceVariant = Color(0xFF44474E);
+
+  // Outline and shadow
+  static const lightOutline = Color(0xFF74777F);
+  static const lightShadow = Color(0xFF000000);
+  static const lightInversePrimary = Color(0xFFACC7E3);
+}
+
+/// Dark mode colors with good contrast
+class DarkModeColors {
+  // Primary: Lighter blue for dark background
+  static const darkPrimary = Color(0xFFACC7E3);
+  static const darkOnPrimary = Color(0xFF1A3A52);
+  static const darkPrimaryContainer = Color(0xFF3D5A73);
+  static const darkOnPrimaryContainer = Color(0xFFD8E6F3);
+
+  // Secondary
+  static const darkSecondary = Color(0xFFBCC7D6);
+  static const darkOnSecondary = Color(0xFF2E3842);
+
+  // Tertiary
+  static const darkTertiary = Color(0xFFB8C8D8);
+  static const darkOnTertiary = Color(0xFF344451);
+
+  // Error colors
+  static const darkError = Color(0xFFFFB4AB);
+  static const darkOnError = Color(0xFF690005);
+  static const darkErrorContainer = Color(0xFF93000A);
+  static const darkOnErrorContainer = Color(0xFFFFDAD6);
+
+  // Surface and background: True dark mode
+  static const darkSurface = Color(0xFF1A1C1E);
+  static const darkOnSurface = Color(0xFFE2E8F0);
+  static const darkSurfaceVariant = Color(0xFF44474E);
+  static const darkOnSurfaceVariant = Color(0xFFC4C7CF);
+
+  // Outline and shadow
+  static const darkOutline = Color(0xFF8E9099);
+  static const darkShadow = Color(0xFF000000);
+  static const darkInversePrimary = Color(0xFF5B7C99);
+}
+
+/// Font size constants
+class FontSizes {
+  static const double displayLarge = 57.0;
+  static const double displayMedium = 45.0;
+  static const double displaySmall = 36.0;
+  static const double headlineLarge = 32.0;
+  static const double headlineMedium = 28.0;
+  static const double headlineSmall = 24.0;
+  static const double titleLarge = 22.0;
+  static const double titleMedium = 16.0;
+  static const double titleSmall = 14.0;
+  static const double labelLarge = 14.0;
+  static const double labelMedium = 12.0;
+  static const double labelSmall = 11.0;
+  static const double bodyLarge = 16.0;
+  static const double bodyMedium = 14.0;
+  static const double bodySmall = 12.0;
+}
+
+// =============================================================================
+// THEMES
+// =============================================================================
+
+/// Light theme with modern, neutral aesthetic
+ThemeData get lightTheme => ThemeData(
+  useMaterial3: true,
+  colorScheme: ColorScheme.light(
+    primary: LightModeColors.lightPrimary,
+    onPrimary: LightModeColors.lightOnPrimary,
+    primaryContainer: LightModeColors.lightPrimaryContainer,
+    onPrimaryContainer: LightModeColors.lightOnPrimaryContainer,
+    secondary: LightModeColors.lightSecondary,
+    onSecondary: LightModeColors.lightOnSecondary,
+    tertiary: LightModeColors.lightTertiary,
+    onTertiary: LightModeColors.lightOnTertiary,
+    error: LightModeColors.lightError,
+    onError: LightModeColors.lightOnError,
+    errorContainer: LightModeColors.lightErrorContainer,
+    onErrorContainer: LightModeColors.lightOnErrorContainer,
+    surface: LightModeColors.lightSurface,
+    onSurface: LightModeColors.lightOnSurface,
+    surfaceContainerHighest: LightModeColors.lightSurfaceVariant,
+    onSurfaceVariant: LightModeColors.lightOnSurfaceVariant,
+    outline: LightModeColors.lightOutline,
+    shadow: LightModeColors.lightShadow,
+    inversePrimary: LightModeColors.lightInversePrimary,
+  ),
+  brightness: Brightness.light,
+  scaffoldBackgroundColor: LightModeColors.lightBackground,
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.transparent,
+    foregroundColor: LightModeColors.lightOnSurface,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+  ),
+  cardTheme: CardThemeData(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: LightModeColors.lightOutline.withOpacity(0.2),
+        width: 1,
+      ),
+    ),
+  ),
+  textTheme: _buildTextTheme(Brightness.light),
+);
+
+/// Dark theme with good contrast and readability
+ThemeData get darkTheme => ThemeData(
+  useMaterial3: true,
+  colorScheme: ColorScheme.dark(
+    primary: DarkModeColors.darkPrimary,
+    onPrimary: DarkModeColors.darkOnPrimary,
+    primaryContainer: DarkModeColors.darkPrimaryContainer,
+    onPrimaryContainer: DarkModeColors.darkOnPrimaryContainer,
+    secondary: DarkModeColors.darkSecondary,
+    onSecondary: DarkModeColors.darkOnSecondary,
+    tertiary: DarkModeColors.darkTertiary,
+    onTertiary: DarkModeColors.darkOnTertiary,
+    error: DarkModeColors.darkError,
+    onError: DarkModeColors.darkOnError,
+    errorContainer: DarkModeColors.darkErrorContainer,
+    onErrorContainer: DarkModeColors.darkOnErrorContainer,
+    surface: DarkModeColors.darkSurface,
+    onSurface: DarkModeColors.darkOnSurface,
+    surfaceContainerHighest: DarkModeColors.darkSurfaceVariant,
+    onSurfaceVariant: DarkModeColors.darkOnSurfaceVariant,
+    outline: DarkModeColors.darkOutline,
+    shadow: DarkModeColors.darkShadow,
+    inversePrimary: DarkModeColors.darkInversePrimary,
+  ),
+  brightness: Brightness.dark,
+  scaffoldBackgroundColor: DarkModeColors.darkSurface,
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.transparent,
+    foregroundColor: DarkModeColors.darkOnSurface,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+  ),
+  cardTheme: CardThemeData(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: DarkModeColors.darkOutline.withOpacity(0.2),
+        width: 1,
+      ),
+    ),
+  ),
+  textTheme: _buildTextTheme(Brightness.dark),
+);
+
+/// Build text theme using Inter font family
+TextTheme _buildTextTheme(Brightness brightness) {
+  return TextTheme(
+    displayLarge: GoogleFonts.inter(
+      fontSize: FontSizes.displayLarge,
+      fontWeight: FontWeight.w400,
+      letterSpacing: -0.25,
+    ),
+    displayMedium: GoogleFonts.inter(
+      fontSize: FontSizes.displayMedium,
+      fontWeight: FontWeight.w400,
+    ),
+    displaySmall: GoogleFonts.inter(
+      fontSize: FontSizes.displaySmall,
+      fontWeight: FontWeight.w400,
+    ),
+    headlineLarge: GoogleFonts.inter(
+      fontSize: FontSizes.headlineLarge,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -0.5,
+    ),
+    headlineMedium: GoogleFonts.inter(
+      fontSize: FontSizes.headlineMedium,
+      fontWeight: FontWeight.w600,
+    ),
+    headlineSmall: GoogleFonts.inter(
+      fontSize: FontSizes.headlineSmall,
+      fontWeight: FontWeight.w600,
+    ),
+    titleLarge: GoogleFonts.inter(
+      fontSize: FontSizes.titleLarge,
+      fontWeight: FontWeight.w600,
+    ),
+    titleMedium: GoogleFonts.inter(
+      fontSize: FontSizes.titleMedium,
+      fontWeight: FontWeight.w500,
+    ),
+    titleSmall: GoogleFonts.inter(
+      fontSize: FontSizes.titleSmall,
+      fontWeight: FontWeight.w500,
+    ),
+    labelLarge: GoogleFonts.inter(
+      fontSize: FontSizes.labelLarge,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.1,
+    ),
+    labelMedium: GoogleFonts.inter(
+      fontSize: FontSizes.labelMedium,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.5,
+    ),
+    labelSmall: GoogleFonts.inter(
+      fontSize: FontSizes.labelSmall,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.5,
+    ),
+    bodyLarge: GoogleFonts.inter(
+      fontSize: FontSizes.bodyLarge,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0.15,
+    ),
+    bodyMedium: GoogleFonts.inter(
+      fontSize: FontSizes.bodyMedium,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0.25,
+    ),
+    bodySmall: GoogleFonts.inter(
+      fontSize: FontSizes.bodySmall,
+      fontWeight: FontWeight.w400,
+      letterSpacing: 0.4,
+    ),
+  );
+}
+
+```eof
+
+### FILE: ./architecture.md
+```markdown:architecture.md:./architecture.md
+# Local2Local App Architecture
+
+This document summarizes the application layers and environment setup used in Dreamflow.
+See also LL2LAAF flutter-first architecture.md ...
+
+# Environments
+- Dreamflow currently runs one environment at a time. We use lib/core/utils/environment_config.dart to hardcode DEV, STAGING, or PROD.
+- To switch, edit currentEnvironment in environment_config.dart and fully stop and restart the preview.
+
+# Layers
+- Features (lib/features/...): Screens, widgets, and presentation logic.
+- Core (lib/core/...): Repositories, services, shared utilities, and errors.
+- Models (lib/models/...): Immutable data models with Firestore (de)serialization.
+- Firestore Schema Reference (lib/firestore/firestore_data_schema.dart): Constants and inline schema reference.
+
+# Data Access
+- Repositories encapsulate reads/writes to Firestore and Storage and enforce a snake_case field naming convention in persisted documents.
+- Models expose camelCase fields in Dart and convert to snake_case in toFirestore.
+
+# Authentication and Authorization
+- Firebase Authentication is expected. Admins are identified via a custom claim token.admin = true.
+- Firestore and Storage rules enforce per-user access and admin override (see firestore_schema.md for details).
+
+# Storage Structure
+- Public assets live under public/.
+- Per-user assets live under users/{uid}/..., aligning with Storage rules.
+
+# Routing
+- GoRouter is used with role-based guards. See lib/app/navigation/app_router.dart.
+```eof
+
+### FILE: ./pubspec.yaml
+```yaml:pubspec.yaml:./pubspec.yaml
+name: local2local
+description: "A new Flutter project."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+dependencies:
+  url_launcher: ^6.0.0
+  flutter_riverpod: ^3.0.0
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.1.0
+  go_router: ^16.2.0
+  provider: ^6.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/dreamflow_icon.jpg
+  remove_alpha_ios: true
+
+```eof
+
 --- END OF AUDIT BUNDLE ---

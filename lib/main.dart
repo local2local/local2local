@@ -1,90 +1,51 @@
 import 'package:flutter/material.dart';
-import 'theme.dart';
-import 'nav.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:local2local/core/app.dart';
+import 'package:local2local/firebase_options.dart';
 
-/// Main entry point for the application
-///
-/// This sets up:
-/// - go_router navigation
-/// - Material 3 theming with light/dark modes
-void main() {
-  runApp(const MyApp());
-}
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  bool coreReady = false;
+  String? bootError;
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    // As you extend the app, use MultiProvider to wrap the app
-    // and provide state to all widgets
-    // Example:
-    // return MultiProvider(
-    //   providers: [
-    //     ChangeNotifierProvider(create: (_) => ExampleProvider()),
-    //   ],
-    //   child: MaterialApp.router(
-    //     title: 'Dreamflow Starter',
-    //     debugShowCheckedModeBanner: false,
-    //     routerConfig: AppRouter.router,
-    //   ),
-    // );
-    return MaterialApp.router(
-      title: 'Dreamflow Starter',
-      debugShowCheckedModeBanner: false,
-
-      // Theme configuration
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.system,
-
-      // Router configuration
-      routerConfig: AppRouter.router,
+  try {
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.92.36...");
+    
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
     );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+    
+    coreReady = true;
+    debugPrint("L2LAAF_BOOT: Firebase Core Ready.");
+  } catch (e) {
+    bootError = e.toString();
+    debugPrint("L2LAAF_BOOT_FATAL: $e");
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppBarTheme.of(context).backgroundColor,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
+  runApp(
+    ProviderScope(
+      overrides: [
+        firebaseReadyProvider.overrideWith((ref) => coreReady),
+        initErrorProvider.overrideWith((ref) => bootError),
+      ],
+      child: const L2LAAFApp(),
+    ),
+  );
 }
+
+final firebaseReadyProvider = Provider<bool>((ref) => false);
+final initErrorProvider = Provider<String?>((ref) => null);
+
+final authStateProvider = StreamProvider<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
+
+final isAdminProvider = FutureProvider<bool>((ref) async {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return false;
+  final idToken = await user.getIdTokenResult(true); 
+  return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
+});
