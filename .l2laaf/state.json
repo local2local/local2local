@@ -1,6 +1,6 @@
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.2.8",
+  "current_phase": "40.2.9",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -8,13 +8,20 @@
     "verification_status": "IDLE"
   },
   "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
+    "pending": true,
+    "timeout_at": "2026-04-15T03:16:10.901Z",
     "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "status": "AWAITING_APPROVAL",
+    "payload": {
+      "branch": "develop",
+      "event": "DEPLOYMENT_COMPLETE",
+      "buildId": "24427544469",
+      "previous_phase": "40.2.9"
+    }
   },
   "reconciliation": {
     "last_sync_timestamp": null,
     "conflict_detected": false
-  }
+  },
+  "previous_phase": "40.2.9"
 }
