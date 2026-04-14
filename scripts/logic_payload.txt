@@ -1,21 +1,22 @@
 /**
- * L2LAAF Phase 40.2.5: Protocol Hardening & Wiring Fix
+ * L2LAAF Phase 40.2.6: Recovery & Diagnostic Hardening
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.2.5.
- * 2. FIX: Ensured evolutionProposalFinalizerV2 handles buildId correctly for shadow run cleanup.
- * 3. SYNC: Corrected deploy.yml to reflect final versioning and semantic alerts.
+ * 1. BUMP: Phase 40.2.6.
+ * 2. FIX: Updated deploy.yml to use file-based webhook payloads (eliminates curl string breaks).
+ * 3. DIAGNOSTICS: Added webhook response logging to GitHub Actions.
+ * 4. SYNC: Maintained clean 14-function stack and Node 22 runtime.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): harden archival gating and fix alert wiring v11.40.2.5
+fix(orchestration): implement file-based webhook payloads and fix n8n wiring v11.40.2.6
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.2.5",
+  "current_phase": "40.2.6",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,11 +87,36 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.2.5"
+          PHASE="40.2.6"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
+          
+          # HARDENING: Use a file-based payload to avoid shell interpolation errors
+          cat <<EOF > n8n_payload.json
+          {
+            "incoming_phase": "$PHASE",
+            "build_id": "${{ github.run_id }}",
+            "summary": "$SUMMARY",
+            "event": "DEPLOYMENT_COMPLETE",
+            "env": "$ENV_NAME"
+          }
+          EOF
+          
+          echo "📡 Notifying n8n with Phase $PHASE..."
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
-          -d "{\"incoming_phase\": \"$PHASE\", \"build_id\": \"${{ github.run_id }}\", \"summary\": \"$SUMMARY\", \"event\": \"DEPLOYMENT_COMPLETE\", \"env\": \"${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}\"}"
+          -d @n8n_payload.json)
+          
+          HTTP_CODE=${RESPONSE: -3}
+          BODY=${RESPONSE:0:${#RESPONSE}-3}
+          
+          echo "n8n Response Code: $HTTP_CODE"
+          if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+            echo "✅ n8n trigger successful."
+          else
+            echo "❌ n8n trigger failed: $BODY"
+            exit 1
+          fi
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -107,7 +133,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.2.5", 
+      incoming_phase: "40.2.6", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
