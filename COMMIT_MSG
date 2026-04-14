@@ -1,1 +1,1 @@
-fix(orchestration): implement rigorous archival gating and bump to v11.40.2.9
+fix(orchestration): stabilize semantic alerts and harden archival gating v11.40.3.0
