@@ -1,1 +1,1 @@
-chore(evolution): implement safe multiline notifications and bump to v11.40.2.3
+fix(orchestration): harden archival gating and fix alert wiring v11.40.2.5

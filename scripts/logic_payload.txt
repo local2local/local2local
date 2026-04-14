@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.2.3: Production Fidelity
+ * L2LAAF Phase 40.2.5: Protocol Hardening & Wiring Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.2.3.
- * 2. SYNC: Maintained clean architecture for evolutionProposalFinalizerV2.
- * 3. TELEMETRY: Updated deploy.yml to reflect fidelity versioning.
+ * 1. BUMP: Phase 40.2.5.
+ * 2. FIX: Ensured evolutionProposalFinalizerV2 handles buildId correctly for shadow run cleanup.
+ * 3. SYNC: Corrected deploy.yml to reflect final versioning and semantic alerts.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-chore(evolution): implement safe multiline notifications and bump to v11.40.2.3
+fix(orchestration): harden archival gating and fix alert wiring v11.40.2.5
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.2.3",
+  "current_phase": "40.2.5",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.2.3"
+          PHASE="40.2.5"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -107,7 +107,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.2.3", 
+      incoming_phase: "40.2.5", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
