@@ -1,1 +1,1 @@
-fix(orchestration): implement file-based webhook payloads and fix n8n wiring v11.40.2.6
+fix(orchestration): harden webhook trigger and bump to v11.40.2.7
