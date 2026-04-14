@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.2.7: Production Activation & Handshake
+ * L2LAAF Phase 40.2.8: High-Fidelity Handshake
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.2.7.
- * 2. HARDENING: Re-syncing deploy.yml with file-based webhook trigger.
- * 3. STABILIZE: Maintained 14-function stack and clean evolution logic.
+ * 1. BUMP: Phase 40.2.8.
+ * 2. SYNC: Corrected deploy.yml to use file-based webhook trigger (stable JSON).
+ * 3. STABILIZE: Maintained clean 14-function stack and registry pathing.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): harden webhook trigger and bump to v11.40.2.7
+fix(orchestration): implement high-fidelity handshake and bump to v11.40.2.8
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.2.7",
+  "current_phase": "40.2.8",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,11 +86,11 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.2.7"
+          PHASE="40.2.8"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           
-          # HARDENING: File-based payload bypasses shell interpretation issues
+          # Use file-based payload to avoid shell interpolation breaks
           cat <<EOF > n8n_payload.json
           {
             "incoming_phase": "$PHASE",
@@ -132,7 +132,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.2.7", 
+      incoming_phase: "40.2.8", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 

@@ -1,1 +1,1 @@
-fix(orchestration): harden webhook trigger and bump to v11.40.2.7
+fix(orchestration): implement high-fidelity handshake and bump to v11.40.2.8

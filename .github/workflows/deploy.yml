@@ -49,11 +49,11 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.2.7"
+          PHASE="40.2.8"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           
-          # HARDENING: File-based payload bypasses shell interpretation issues
+          # Use file-based payload to avoid shell interpolation breaks
           cat <<EOF > n8n_payload.json
           {
             "incoming_phase": "$PHASE",
