@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.1.8: Stateless Promotion
+ * L2LAAF Phase 40.1.9: Production Polish
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.1.8.
- * 2. FIX: Ensured hbrId is present in signalOrchestrator for URL injection.
- * 3. SYNC: Maintained full function stack and Node 22 runtime.
+ * 1. BUMP: Phase 40.1.9.
+ * 2. CLEAN: Removed debug diagnostics from evolution logic.
+ * 3. SYNC: Corrected deploy.yml to reflect final polished phase.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement stateless hbrId propagation and bump to v11.40.1.8
+chore(evolution): remove diagnostics and finalize v11.40.1.9
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.1.8",
+  "current_phase": "40.1.9",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.1.8"
+          PHASE="40.1.9"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -107,7 +107,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.8", 
+      incoming_phase: "40.1.9", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -172,10 +172,6 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   if (buildId) {
     await db.doc(`artifacts/${appId}/public/data/shadow_runs/${buildId}`).delete();
   }
-  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
-    ...data, 
-    archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    debug_tag: "v40.1.8"
-  });
+  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
 L2LAAF_BLOCK_END
