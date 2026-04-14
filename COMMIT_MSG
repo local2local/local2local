@@ -1,1 +1,1 @@
-fix(orchestration): harden hbrId propagation and bump to v11.40.1.7
+fix(orchestration): implement stateless hbrId propagation and bump to v11.40.1.8

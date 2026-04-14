@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.1.7: Atomic Debug & Propagation
+ * L2LAAF Phase 40.1.8: Stateless Promotion
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.1.7.
- * 2. SYNC: Corrected deploy.yml to fix Phase versioning in Chat.
- * 3. FIX: Enhanced propagation logic in evolution.ts to prevent empty hbrId.
+ * 1. BUMP: Phase 40.1.8.
+ * 2. FIX: Ensured hbrId is present in signalOrchestrator for URL injection.
+ * 3. SYNC: Maintained full function stack and Node 22 runtime.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): harden hbrId propagation and bump to v11.40.1.7
+fix(orchestration): implement stateless hbrId propagation and bump to v11.40.1.8
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.1.7",
+  "current_phase": "40.1.8",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.1.7"
+          PHASE="40.1.8"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
@@ -107,7 +107,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.7", 
+      incoming_phase: "40.1.8", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -164,15 +164,18 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   if (!data || data.status !== "PROMOTED") return;
   const { appId } = event.params;
   const hbrId = data.hbrId;
+  const buildId = data.buildId || null;
   if (hbrId) {
     await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
     await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
+  if (buildId) {
+    await db.doc(`artifacts/${appId}/public/data/shadow_runs/${buildId}`).delete();
+  }
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    debug_tag: "v40.1.7",
-    debug_hbr_found: !!hbrId 
+    debug_tag: "v40.1.8"
   });
 });
 L2LAAF_BLOCK_END

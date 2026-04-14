@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.1.7", 
+      incoming_phase: "40.1.8", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -68,14 +68,17 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   if (!data || data.status !== "PROMOTED") return;
   const { appId } = event.params;
   const hbrId = data.hbrId;
+  const buildId = data.buildId || null;
   if (hbrId) {
     await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
     await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
+  if (buildId) {
+    await db.doc(`artifacts/${appId}/public/data/shadow_runs/${buildId}`).delete();
+  }
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    debug_tag: "v40.1.7",
-    debug_hbr_found: !!hbrId 
+    debug_tag: "v40.1.8"
   });
 });
