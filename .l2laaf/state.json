@@ -8,10 +8,18 @@
     "verification_status": "IDLE"
   },
   "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
+    "pending": true,
+    "timeout_at": "2026-04-16T01:56:56.599Z",
     "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "status": "AWAITING_APPROVAL",
+    "payload": {
+      "filePath": "functions/src/logic/evolution.ts",
+      "fileContent": null,
+      "branch": "develop",
+      "event": "PROPOSAL_SUBMITTED",
+      "hbrId": "hbr_semantic_loop",
+      "previous_phase": "40.6.0"
+    }
   },
   "reconciliation": {
     "last_sync_timestamp": null,
