@@ -49,7 +49,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.5.3"
+          PHASE="40.5.7"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -64,4 +64,4 @@ jobs:
           RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d @n8n_payload.json)
-          echo "n8n Response Code: \${RESPONSE: -3}"
+          echo "n8n Response Code: ${RESPONSE: -3}"
