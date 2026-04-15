@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.4.8", 
+      incoming_phase: "40.5.0", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -70,7 +70,6 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const hbrId = data.hbrId;
   const buildId = data.buildId || null;
 
-  // HARD GATE v40.4.8: Layer 3 protection against logic bleed
   if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
     console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Archival suppressed.`);
     return;
@@ -85,6 +84,6 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.4.8" }
+    diagnostic_dump: { trace_id: "v40.5.0" }
   });
 });

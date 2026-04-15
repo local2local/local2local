@@ -1,1 +1,1 @@
-fix(orchestration): restore workflow circuit flow and fix alert protocol v11.40.4.8
+fix(orchestration): resolve circular ts error and finalize circuit wiring v11.40.5.0
