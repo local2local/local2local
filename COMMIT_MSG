@@ -1,1 +1,1 @@
-fix(orchestration): stabilize n8n handshake and fix ts return types v11.40.6.1
+fix(orchestration): harden state retrieval and bump to phase v11.40.6.2
