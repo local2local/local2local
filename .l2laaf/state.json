@@ -1,6 +1,6 @@
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.5.3",
+  "current_phase": "40.5.7",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -8,10 +8,14 @@
     "verification_status": "IDLE"
   },
   "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
+    "pending": true,
+    "timeout_at": "2026-04-16T01:36:07.352Z",
     "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "status": "AWAITING_APPROVAL",
+    "payload": {
+      "branch": "develop",
+      "event": "DEPLOYMENT_COMPLETE"
+    }
   },
   "reconciliation": {
     "last_sync_timestamp": null,
