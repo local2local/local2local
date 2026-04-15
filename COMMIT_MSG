@@ -1,1 +1,1 @@
-fix(orchestration): resolve workflow dead-end and stabilize alert protocol v11.40.4.7
+fix(orchestration): restore workflow circuit flow and fix alert protocol v11.40.4.8

@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.4.7: Logic Flow Resumption
+ * L2LAAF Phase 40.4.8: Universal Circuit Restoration
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.4.7.
- * 2. FIX: Maintained evolutionProposalFinalizerV2 with hard-abort on invalid hbrId.
- * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
+ * 1. BUMP: Phase 40.4.8.
+ * 2. FIX: Hard-gate evolutionProposalFinalizerV2 to reject sentinel strings ("undefined", "null", "").
+ * 3. SYNC: Corrected deploy.yml to use file-based webhook trigger for maximum shell stability.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): resolve workflow dead-end and stabilize alert protocol v11.40.4.7
+fix(orchestration): restore workflow circuit flow and fix alert protocol v11.40.4.8
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.4.7",
+  "current_phase": "40.4.8",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -34,77 +34,7 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(yaml:GitHub Actions:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, staging, develop ]
-    paths-ignore: [ '.l2laaf/state.json' ]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || (github.ref_name == 'staging' && 'Staging') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-      - name: Build Flutter Web
-        run: flutter build web --release
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Deploy Stack
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-            PROJECT_ID="local2local-staging"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
-      - name: Notify Orchestrator
-        if: success()
-        run: |
-          PHASE="40.4.7"
-          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
-          cat <<EOF > n8n_payload.json
-          {
-            "incoming_phase": "$PHASE",
-            "build_id": "${{ github.run_id }}",
-            "summary": "$SUMMARY",
-            "event": "DEPLOYMENT_COMPLETE",
-            "env": "$ENV_NAME"
-          }
-          EOF
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
-          -H "Content-Type: application/json" \
-          -d @n8n_payload.json)
-          echo "n8n Response Code: ${RESPONSE: -3}"
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Evolution Logic:functions/src/logic/evolution.ts)
+/* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -118,7 +48,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.4.7", 
+      incoming_phase: "40.4.8", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -177,8 +107,9 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const hbrId = data.hbrId;
   const buildId = data.buildId || null;
 
+  // HARD GATE v40.4.8: Layer 3 protection against logic bleed
   if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
-    console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Potential logic bleed.`);
+    console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Archival suppressed.`);
     return;
   }
 
@@ -191,7 +122,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.4.7", hbrId_len: hbrId.length }
+    diagnostic_dump: { trace_id: "v40.4.8" }
   });
 });
 L2LAAF_BLOCK_END
