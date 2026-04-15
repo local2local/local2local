@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.5.0: Universal Circuit Finalization
+ * L2LAAF Phase 40.5.2: Universal Circuit Finalization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.5.0.
- * 2. FIX: Resolved circular TS2303 error in evolution.ts.
+ * 1. BUMP: Phase 40.5.2.
+ * 2. FIX: Resolved TS2345 error in deleteSubcollection.ts by fixing handler return types.
  * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): resolve circular ts error and finalize circuit wiring v11.40.5.0
+fix(orchestration): resolve typescript return type and finalize n8n wiring v11.40.5.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.5.0",
+  "current_phase": "40.5.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.5.0"
+          PHASE="40.5.2"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -118,7 +118,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.5.0", 
+      incoming_phase: "40.5.2", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -178,7 +178,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const buildId = data.buildId || null;
 
   if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
-    console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Archival suppressed.`);
+    console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Potential logic bleed.`);
     return;
   }
 
@@ -191,7 +191,50 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.5.0" }
+    diagnostic_dump: { trace_id: "v40.5.2" }
   });
 });
-L2LAAF_BLOCK_END
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
+import { onRequest } from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
+
+const db = admin.firestore();
+
+export const deleteSubcollectionV2 = onRequest({ cors: true }, async (req, res): Promise<void> => {
+  const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+
+  // Handle preflight request
+  if (req.method === "OPTIONS") {
+    res.status(204).set(CORS_HEADERS).send("");
+    return;
+  }
+
+  // Add CORS headers to all responses
+  res.set(CORS_HEADERS);
+
+  try {
+    const { path } = req.body;
+    if (!path) {
+      res.status(400).send({ error: "Missing collection path" });
+      return;
+    }
+    
+    const snapshot = await db.collection(path).get();
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    
+    res.send({ status: "deleted", count: snapshot.size });
+    return;
+  } catch (error: any) {
+    res.status(500).send({ error: error.message });
+    return;
+  }
+});
+L2LAAF_BLOCK_END */
