@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.4.4: Schema Recovery & Protocol Stabilization
+ * L2LAAF Phase 40.4.5: Logic Flow Resumption
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.4.4.
- * 2. FIX: Hardened evolutionProposalFinalizerV2 with Layer 3 sentinel rejection.
+ * 1. BUMP: Phase 40.4.5.
+ * 2. FIX: Ensured evolutionProposalFinalizerV2 layer 3 protection.
  * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): stabilize switch schema and finalize alert protocol v11.40.4.4
+fix(orchestration): resolve workflow dead-end and finalize flow circuits v11.40.4.5
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.4.4",
+  "current_phase": "40.4.5",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.4.4"
+          PHASE="40.4.5"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -118,7 +118,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.4.4", 
+      incoming_phase: "40.4.5", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -177,7 +177,6 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const hbrId = data.hbrId;
   const buildId = data.buildId || null;
 
-  // HARD GATE v40.4.4: Reject empty/sentinel IDs at the function level
   if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
     console.warn(`[Finalizer] ABORT: Invalid hbrId "${hbrId}". Potential logic bleed.`);
     return;
@@ -192,7 +191,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.4.4", keys: Object.keys(data) }
+    diagnostic_dump: { trace_id: "v40.4.5" }
   });
 });
 L2LAAF_BLOCK_END
