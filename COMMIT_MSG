@@ -1,1 +1,1 @@
-fix(orchestration): bypass trigger conflict and finalize circuit wiring v11.40.5.3
+fix(orchestration): synchronize v2 suffixes across implementing files and finalize circuit v11.40.5.6

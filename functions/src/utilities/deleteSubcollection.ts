@@ -3,20 +3,18 @@ import * as admin from "firebase-admin";
 
 const db = admin.firestore();
 
-export const deleteSubcollectionV3 = onRequest({ cors: true }, async (req, res): Promise<void> => {
+export const deleteSubcollectionV2 = onRequest({ cors: true }, async (req, res): Promise<void> => {
   const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
-  // Handle preflight request
   if (req.method === "OPTIONS") {
     res.status(204).set(CORS_HEADERS).send("");
     return;
   }
 
-  // Add CORS headers to all responses
   res.set(CORS_HEADERS);
 
   try {
