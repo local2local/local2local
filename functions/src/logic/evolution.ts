@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "40.4.2",
+      incoming_phase: "40.4.3",
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
@@ -63,7 +63,7 @@ export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId
   });
 });
 
-// ── evolutionProposalFinalizerV2 v40.4.2 ──────────────────────────────────────
+// ── evolutionProposalFinalizerV2 v40.4.3 ──────────────────────────────────────
 // FIX: Hard-abort on null/empty/sentinel hbrId BEFORE any Firestore write.
 // This is Layer 3 defense-in-depth — the primary gates are in n8n (Layers 1+2),
 // but this function must never trust upstream data without its own validation.
@@ -90,7 +90,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
       proposalId: event.params.proposalId,
       payload_keys: Object.keys(data),
       quarantined_at: admin.firestore.FieldValue.serverTimestamp(),
-      diagnostic_dump: { trace_id: "v40.4.2", buildId }
+      diagnostic_dump: { trace_id: "v40.4.3", buildId }
     });
     return; // terminate — no lock delete, no registry update, no lessons_learned write
   }
@@ -110,7 +110,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
     ...data,
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
     diagnostic_dump: {
-      trace_id: "v40.4.2",
+      trace_id: "v40.4.3",
       ts: new Date().toISOString(),
       hbr_found: true, // guaranteed by hard gate above
       payload_keys: Object.keys(data)

@@ -1,5 +1,5 @@
 /**
- * L2LAAF Phase 40.4.2: Orchestrator Stabilization — JSON Crash & Logic Bleed Fix
+ * L2LAAF Phase 40.4.3: Orchestrator Stabilization — JSON Crash & Logic Bleed Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * CHANGES FROM v40.4.1:
@@ -16,13 +16,13 @@
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): stabilize json crash and archival logic bleed v11.40.4.2
+fix(orchestration): stabilize json crash and archival logic bleed v11.40.4.3
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.4.2",
+  "current_phase": "40.4.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -93,7 +93,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.4.2"
+          PHASE="40.4.3"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -125,7 +125,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, {
-      incoming_phase: "40.4.2",
+      incoming_phase: "40.4.3",
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`,
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
       event: eventType,
@@ -177,7 +177,7 @@ export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId
   });
 });
 
-// ── evolutionProposalFinalizerV2 v40.4.2 ──────────────────────────────────────
+// ── evolutionProposalFinalizerV2 v40.4.3 ──────────────────────────────────────
 // FIX: Hard-abort on null/empty/sentinel hbrId BEFORE any Firestore write.
 // This is Layer 3 defense-in-depth — the primary gates are in n8n (Layers 1+2),
 // but this function must never trust upstream data without its own validation.
@@ -204,7 +204,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
       proposalId: event.params.proposalId,
       payload_keys: Object.keys(data),
       quarantined_at: admin.firestore.FieldValue.serverTimestamp(),
-      diagnostic_dump: { trace_id: "v40.4.2", buildId }
+      diagnostic_dump: { trace_id: "v40.4.3", buildId }
     });
     return; // terminate — no lock delete, no registry update, no lessons_learned write
   }
@@ -224,7 +224,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
     ...data,
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
     diagnostic_dump: {
-      trace_id: "v40.4.2",
+      trace_id: "v40.4.3",
       ts: new Date().toISOString(),
       hbr_found: true, // guaranteed by hard gate above
       payload_keys: Object.keys(data)
