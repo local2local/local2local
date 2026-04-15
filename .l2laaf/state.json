@@ -8,10 +8,14 @@
     "verification_status": "IDLE"
   },
   "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
+    "pending": true,
+    "timeout_at": "2026-04-16T01:08:07.905Z",
     "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
+    "status": "AWAITING_APPROVAL",
+    "payload": {
+      "branch": "develop",
+      "event": "DEPLOYMENT_COMPLETE"
+    }
   },
   "reconciliation": {
     "last_sync_timestamp": null,
