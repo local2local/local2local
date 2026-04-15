@@ -1,1 +1,1 @@
-fix(orchestration): isolate deploy circuits and stabilize alerts v11.40.4.0
+fix(orchestration): isolate deployment circuits and fix alert syntax v11.40.4.1

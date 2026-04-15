@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.4.0", 
+      incoming_phase: "40.4.1", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -80,9 +80,10 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
     diagnostic_dump: {
+      trace_id: "v40.4.1",
       ts: new Date().toISOString(),
-      source: "evolutionProposalFinalizerV2",
-      hbrId_resolved: hbrId || "NONE"
+      hbr_found: !!hbrId,
+      payload_keys: Object.keys(data)
     }
   });
 });
