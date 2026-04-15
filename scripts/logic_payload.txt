@@ -1,21 +1,22 @@
 /**
- * L2LAAF Phase 40.3.2: Stabilized High-Fidelity Handshake
+ * L2LAAF Phase 40.3.3: Production Protocol Finalized
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.3.2.
- * 2. DIAGNOSTICS: Maintained diagnostic_info block in lessons_learned.
- * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
+ * 1. BUMP: Phase 40.3.3.
+ * 2. SYNC: Corrected deploy.yml to use file-based webhook trigger for maximum stability.
+ * 3. DIAGNOSTICS: Enhanced evolutionProposalFinalizerV2 with diagnostic_dump for audit analysis.
+ * 4. STABILIZE: Maintained clean 14-function stack and strict registry pathing.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): stabilize semantic alerts and harden archival gating v11.40.3.2
+fix(orchestration): stabilize multiline alerts and harden archival logic v11.40.3.3
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.3.2",
+  "current_phase": "40.3.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +87,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.3.2"
+          PHASE="40.3.3"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -118,7 +119,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.3.2", 
+      incoming_phase: "40.3.3", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -187,10 +188,10 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
     diagnostic_dump: {
-      ts: new Date().toISOString(),
-      source: "evolutionProposalFinalizerV2",
-      keys: Object.keys(data),
-      hbrId_len: hbrId?.length || 0
+      timestamp: new Date().toISOString(),
+      agent_context: "evolutionProposalFinalizerV2",
+      incoming_keys: Object.keys(data),
+      hbrId_resolved: hbrId || "MISSING_IN_PAYLOAD"
     }
   });
 });
