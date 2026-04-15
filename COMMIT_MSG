@@ -1,1 +1,1 @@
-fix(orchestration): resolve typescript return type and finalize n8n wiring v11.40.5.2
+fix(orchestration): bypass trigger conflict and finalize circuit wiring v11.40.5.3
