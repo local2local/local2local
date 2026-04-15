@@ -1,21 +1,21 @@
 /**
- * L2LAAF Phase 40.3.1: Circuit Separation & Diagnostics
+ * L2LAAF Phase 40.3.2: Stabilized High-Fidelity Handshake
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
  * ACTIONS:
- * 1. BUMP: Phase 40.3.1.
- * 2. DIAGNOSTICS: Added diagnostic_info to evolutionProposalFinalizerV2.
- * 3. FIX: Maintained clean 14-function stack and deploy.yml webhook stability.
+ * 1. BUMP: Phase 40.3.2.
+ * 2. DIAGNOSTICS: Maintained diagnostic_info block in lessons_learned.
+ * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): separate deploy/promote circuits and add diagnostics v11.40.3.1
+fix(orchestration): stabilize semantic alerts and harden archival gating v11.40.3.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.3.1",
+  "current_phase": "40.3.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +86,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.3.1"
+          PHASE="40.3.2"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -101,8 +101,7 @@ jobs:
           RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d @n8n_payload.json)
-          HTTP_CODE=${RESPONSE: -3}
-          echo "n8n Response Code: $HTTP_CODE"
+          echo "n8n Response Code: ${RESPONSE: -3}"
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
@@ -119,7 +118,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.3.1", 
+      incoming_phase: "40.3.2", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -187,10 +186,11 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_info: {
-        received_hbrId: hbrId || "MISSING",
-        received_buildId: buildId || "MISSING",
-        full_payload_keys: Object.keys(data)
+    diagnostic_dump: {
+      ts: new Date().toISOString(),
+      source: "evolutionProposalFinalizerV2",
+      keys: Object.keys(data),
+      hbrId_len: hbrId?.length || 0
     }
   });
 });

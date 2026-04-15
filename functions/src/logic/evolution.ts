@@ -11,7 +11,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.3.1", 
+      incoming_phase: "40.3.2", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -79,10 +79,11 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_info: {
-        received_hbrId: hbrId || "MISSING",
-        received_buildId: buildId || "MISSING",
-        full_payload_keys: Object.keys(data)
+    diagnostic_dump: {
+      ts: new Date().toISOString(),
+      source: "evolutionProposalFinalizerV2",
+      keys: Object.keys(data),
+      hbrId_len: hbrId?.length || 0
     }
   });
 });
