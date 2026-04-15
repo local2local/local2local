@@ -1,21 +1,28 @@
 /**
- * L2LAAF Phase 40.4.1: Logic Isolation & Protocol Fix
+ * L2LAAF Phase 40.4.2: Orchestrator Stabilization — JSON Crash & Logic Bleed Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  *
- * ACTIONS:
- * 1. BUMP: Phase 40.4.1.
- * 2. DIAGNOSTICS: Maintained diagnostic_dump for audit analysis.
- * 3. STABILIZE: Maintained clean 14-function stack and deploy.yml stability.
+ * CHANGES FROM v40.4.1:
+ * 1. FIX(orchestrator): Pre-serialize chatPayload in Automated Testing Suite so
+ *    JSON.stringify escapes newlines before they reach the Final Alert jsonBody.
+ * 2. FIX(gate): Strip sentinel strings ("undefined","null","") from hbrId at
+ *    source — collapses the truthy bypass that kept the notEmpty check alive.
+ * 3. FIX(switch): Set fallbackOutput:"none" on Payload Filter and Proposal
+ *    Closure Check — eliminates the implicit output[0] fallthrough in n8n cloud.
+ * 4. FIX(gate): Explicit combinator:"and" on Proposal Closure Check conditions.
+ * 5. FIX(url): Null-safe ?? '' on hbrId in Google Chat Card URL construction.
+ * 6. FIX(cloud): evolutionProposalFinalizerV2 — hard-abort on null/empty hbrId
+ *    before any Firestore write (defense-in-depth for Layer 3).
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): isolate deployment circuits and fix alert syntax v11.40.4.1
+fix(orchestration): stabilize json crash and archival logic bleed v11.40.4.2
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.4.1",
+  "current_phase": "40.4.2",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -86,7 +93,7 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE="40.4.1"
+          PHASE="40.4.2"
           SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || (github.ref_name == 'staging' && 'staging') || 'dev' }}"
           cat <<EOF > n8n_payload.json
@@ -117,15 +124,15 @@ type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { ap
 async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId?: string, buildId?: string }) {
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
-    await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.4.1", 
-      build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
-      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
-      event: eventType, 
+    await axios.post(N8N_WEBHOOK_URL, {
+      incoming_phase: "40.4.2",
+      build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`,
+      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.",
+      event: eventType,
       hbrId: meta.hbrId || null,
-      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
-      fileContent: payload.manifest?.proposedLogic || null, 
-      branch: "develop" 
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest?.proposedLogic || null,
+      branch: "develop"
     });
   } catch (error) { console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); }
 }
@@ -170,28 +177,58 @@ export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId
   });
 });
 
+// ── evolutionProposalFinalizerV2 v40.4.2 ──────────────────────────────────────
+// FIX: Hard-abort on null/empty/sentinel hbrId BEFORE any Firestore write.
+// This is Layer 3 defense-in-depth — the primary gates are in n8n (Layers 1+2),
+// but this function must never trust upstream data without its own validation.
 export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
   const data = event.data?.after.data();
   if (!data || data.status !== "PROMOTED") return;
+
   const { appId } = event.params;
-  const hbrId = data.hbrId;
-  const buildId = data.buildId || null;
-  if (hbrId) {
-    await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
-    await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  const hbrId: string | null = data.hbrId ?? null;
+  const buildId: string | null = data.buildId ?? null;
+
+  // ── HARD GATE: reject sentinel values that bypassed n8n gates ──────────────
+  const INVALID_HBRID_SENTINELS = ["", "undefined", "null"];
+  if (!hbrId || INVALID_HBRID_SENTINELS.includes(hbrId)) {
+    console.error(
+      `[evolutionProposalFinalizer] ABORT: Invalid hbrId "${hbrId}" on proposal ` +
+      `${event.params.proposalId}. Firestore write suppressed. ` +
+      `This indicates a logic-bleed from a non-proposal deployment path.`
+    );
+    // Write a diagnostic doc to a quarantine collection for post-mortem analysis.
+    await db.collection(`artifacts/${appId}/public/data/finalizer_quarantine`).add({
+      reason: "INVALID_HBRID",
+      hbrId_received: hbrId,
+      proposalId: event.params.proposalId,
+      payload_keys: Object.keys(data),
+      quarantined_at: admin.firestore.FieldValue.serverTimestamp(),
+      diagnostic_dump: { trace_id: "v40.4.2", buildId }
+    });
+    return; // terminate — no lock delete, no registry update, no lessons_learned write
   }
+
+  // ── Proceed only with a validated hbrId ────────────────────────────────────
+  await db.doc(`artifacts/${appId}/public/data/logic_locks/${hbrId}`).delete();
+  await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set(
+    { lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+
   if (buildId) {
     await db.doc(`artifacts/${appId}/public/data/shadow_runs/${buildId}`).delete();
   }
-  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
-    ...data, 
+
+  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({
+    ...data,
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
     diagnostic_dump: {
-      trace_id: "v40.4.1",
+      trace_id: "v40.4.2",
       ts: new Date().toISOString(),
-      hbr_found: !!hbrId,
+      hbr_found: true, // guaranteed by hard gate above
       payload_keys: Object.keys(data)
     }
   });
 });
-L2LAAF_BLOCK_END
+L2LAAF_BLOCK_END */

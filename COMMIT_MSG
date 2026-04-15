@@ -1,1 +1,1 @@
-fix(orchestration): isolate deployment circuits and fix alert syntax v11.40.4.1
+fix(orchestration): stabilize json crash and archival logic bleed v11.40.4.2
