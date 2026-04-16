@@ -1,1 +1,1 @@
-fix(orchestration): harden state retrieval and bump to phase v11.40.6.2
+fix(orchestration): resolve binary buffer mismatch in state manager v11.40.6.3
