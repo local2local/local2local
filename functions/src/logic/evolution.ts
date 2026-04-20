@@ -11,9 +11,9 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.6.9", 
+      incoming_phase: "40.7.1", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
-      summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
+      summary: payload.manifest?.reason || payload.summary || "Phase 40.7.1 stabilization.", 
       event: eventType, 
       hbrId: meta.hbrId || null,
       filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
@@ -72,28 +72,32 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const hbrId = data.hbrId;
   const buildId = data.buildId || null;
 
-  if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
-    console.warn(`⚠️ FINALIZER: Missing hbrId for appId ${appId}. Skipping cleanup.`);
-    return;
+  if (!hbrId || ["", "undefined", "null"].includes(hbrId)) return;
+
+  try {
+    // Purge Lock
+    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
+    console.log(`🧹 FINALIZER: Purging lock: ${lockPath}`);
+    await db.doc(lockPath).delete();
+    
+    await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ 
+      lock_status: "UNLOCKED", 
+      last_modified: admin.firestore.FieldValue.serverTimestamp() 
+    }, { merge: true });
+
+    // Purge Shadow Run
+    if (buildId) {
+      const shadowPath = `artifacts/${appId}/public/data/shadow_runs/${buildId}`;
+      console.log(`🧹 FINALIZER: Purging shadow run: ${shadowPath}`);
+      await db.doc(shadowPath).delete();
+    }
+
+    await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
+      ...data, 
+      archived_at: admin.firestore.FieldValue.serverTimestamp(),
+      diagnostic_dump: { trace_id: "v40.7.1" }
+    });
+  } catch (err: any) {
+    console.error(`❌ FINALIZER ERROR: ${err.message}`);
   }
-
-  // Purge Lock
-  const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
-  console.log(`🧹 FINALIZER: Purging lock: ${lockPath}`);
-  await db.doc(lockPath).delete();
-  
-  await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ lock_status: "UNLOCKED", last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-
-  // Purge Shadow Run
-  if (buildId) {
-    const shadowPath = `artifacts/${appId}/public/data/shadow_runs/${buildId}`;
-    console.log(`🧹 FINALIZER: Purging shadow run: ${shadowPath}`);
-    await db.doc(shadowPath).delete();
-  }
-
-  await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
-    ...data, 
-    archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.6.9" }
-  });
 });
