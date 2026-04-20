@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 40.6.8: Orchestration Context Hardening
+ * L2LAAF Phase 40.6.9: Orchestration Routing Stabilization
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): ensure context retention for proposal closure v11.40.6.8
+fix(orchestration): stabilize switch node routing for proposal closure v11.40.6.9
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.6.8",
+  "current_phase": "40.6.9",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -57,7 +57,7 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.6.8", 
+      incoming_phase: "40.6.9", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
       summary: payload.manifest?.reason || payload.summary || "Autonomous logic update.", 
       event: eventType, 
@@ -140,43 +140,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
     ...data, 
     archived_at: admin.firestore.FieldValue.serverTimestamp(),
-    diagnostic_dump: { trace_id: "v40.6.8" }
+    diagnostic_dump: { trace_id: "v40.6.9" }
   });
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
-import { onRequest } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-
-const db = admin.firestore();
-
-export const deleteSubcollectionV2 = onRequest({ cors: true }, async (req, res): Promise<void> => {
-  const CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-  if (req.method === "OPTIONS") {
-    res.status(204).set(CORS_HEADERS).send("");
-    return;
-  }
-  res.set(CORS_HEADERS);
-  try {
-    const { path } = req.body;
-    if (!path) {
-      res.status(400).send({ error: "Missing collection path" });
-      return;
-    }
-    const snapshot = await db.collection(path).get();
-    const batch = db.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.send({ status: "deleted", count: snapshot.size });
-    return;
-  } catch (error: any) {
-    res.status(500).send({ error: error.message });
-    return;
-  }
 });
 L2LAAF_BLOCK_END */
