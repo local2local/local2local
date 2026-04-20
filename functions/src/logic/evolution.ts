@@ -11,9 +11,9 @@ async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.7.1", 
+      incoming_phase: "40.7.2", 
       build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
-      summary: payload.manifest?.reason || payload.summary || "Phase 40.7.1 stabilization.", 
+      summary: payload.manifest?.reason || payload.summary || "Wholistic circuit repair.", 
       event: eventType, 
       hbrId: meta.hbrId || null,
       filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts", 
@@ -72,10 +72,12 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
   const hbrId = data.hbrId;
   const buildId = data.buildId || null;
 
-  if (!hbrId || ["", "undefined", "null"].includes(hbrId)) return;
+  if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
+    console.warn(`⚠️ FINALIZER: Missing hbrId. appId: ${appId}`);
+    return;
+  }
 
   try {
-    // Purge Lock
     const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
     console.log(`🧹 FINALIZER: Purging lock: ${lockPath}`);
     await db.doc(lockPath).delete();
@@ -85,7 +87,6 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
       last_modified: admin.firestore.FieldValue.serverTimestamp() 
     }, { merge: true });
 
-    // Purge Shadow Run
     if (buildId) {
       const shadowPath = `artifacts/${appId}/public/data/shadow_runs/${buildId}`;
       console.log(`🧹 FINALIZER: Purging shadow run: ${shadowPath}`);
@@ -95,7 +96,7 @@ export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artif
     await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
       ...data, 
       archived_at: admin.firestore.FieldValue.serverTimestamp(),
-      diagnostic_dump: { trace_id: "v40.7.1" }
+      diagnostic_dump: { trace_id: "v40.7.2" }
     });
   } catch (err: any) {
     console.error(`❌ FINALIZER ERROR: ${err.message}`);
