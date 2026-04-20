@@ -1,1 +1,1 @@
-fix(orchestration): resolve n8n syntax errors and port mismatch v11.40.7.3
+fix(orchestration): resolve expression syntax collision in n8n closure v11.40.7.4

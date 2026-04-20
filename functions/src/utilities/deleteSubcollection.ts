@@ -17,7 +17,7 @@ export const deleteSubcollectionV2 = onRequest({ cors: true }, async (req, res):
   try {
     const { path } = req.body;
     if (!path) {
-      res.status(400).send({ error: "Missing collection path" });
+      res.status(400).send({ error: "Missing path" });
       return;
     }
     const snapshot = await db.collection(path).get();
