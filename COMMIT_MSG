@@ -1,1 +1,1 @@
-fix(orchestration): resolve switch port mismatch and context loss v11.40.7.2
+fix(orchestration): resolve n8n syntax errors and port mismatch v11.40.7.3
