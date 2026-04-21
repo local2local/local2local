@@ -1,1 +1,1 @@
-fix(orchestration): universal json object parser to fix implicit base64 cast crash v11.40.7.17
+fix(orchestration): implement async iife for robust n8n filesystem parsing v11.40.7.18
