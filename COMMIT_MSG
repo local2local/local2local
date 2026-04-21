@@ -1,1 +1,1 @@
-fix(orchestration): robust JSON/Base64 decoding try/catch block v11.40.7.16
+fix(orchestration): universal json object parser to fix implicit base64 cast crash v11.40.7.17
