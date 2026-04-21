@@ -1,1 +1,1 @@
-fix(orchestration): resolve expression syntax collision in n8n closure v11.40.7.4
+fix(orchestration): wholistic repair of n8n syntax and canvas compatibility v11.40.7.12
