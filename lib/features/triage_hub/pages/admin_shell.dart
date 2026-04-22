@@ -70,7 +70,6 @@ class AdminShell extends ConsumerWidget {
                 ),
                 label: const Text('Triage'),
               ),
-              // FIX: Removed unnecessary const keywords as per lint warnings
               NavigationRailDestination(
                 icon: const Icon(Icons.grid_view_rounded),
                 label: const Text('Health'),
@@ -82,6 +81,10 @@ class AdminShell extends ConsumerWidget {
               NavigationRailDestination(
                 icon: const Icon(Icons.history_edu_rounded),
                 label: const Text('Evolution'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.troubleshoot_rounded),
+                label: const Text('Diagnostics'),
               ),
             ],
           ),

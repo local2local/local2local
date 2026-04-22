@@ -1,1 +1,1 @@
-feat(telemetry): wire up flutter error catchers to ingestWebError endpoint v11.41.0.1
+feat(frontend): generate missing diagnostics screen file v11.41.0.4

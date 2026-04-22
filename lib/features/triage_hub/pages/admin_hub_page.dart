@@ -5,9 +5,10 @@ import 'package:local2local/features/triage_hub/pages/admin_shell.dart';
 import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
 import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
 import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
-import 'package:local2local/features/triage_hub/pages/health_grid_page.dart'; // NEW IMPORT
+import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/screens/diagnostics_screen.dart';
 
 class AdminHubPage extends ConsumerWidget {
   const AdminHubPage({super.key});
@@ -45,11 +46,13 @@ class AdminHubPage extends ConsumerWidget {
       case 0:
         return const TriageQueuePage();
       case 1:
-        return const HealthGridPage(); // UPDATED FROM PLACEHOLDER
+        return const HealthGridPage(); 
       case 2:
         return const FleetMapPage();
       case 3:
         return const EvolutionTimelinePage();
+      case 4:
+        return const DiagnosticsScreen();
       default:
         return const TriageQueuePage();
     }
