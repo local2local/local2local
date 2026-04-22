@@ -1,1 +1,1 @@
-fix(orchestration): correct n8n URL string interpolation logic v11.40.7.15
+fix(orchestration): implement graceful degradation for 404 firestore fetches v11.40.7.16
