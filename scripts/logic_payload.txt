@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 41.0.4: Telemetry Engine Bootstrapping
+ * L2LAAF Phase 41.0.5: Telemetry Engine Bootstrapping
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(frontend): generate missing diagnostics screen file v11.41.0.4
+feat(frontend): wire diagnostics screen routing and resolve linter warnings v11.41.0.5
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "41.0.4",
+  "current_phase": "41.0.5",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -87,7 +87,7 @@ class DiagnosticsScreen extends StatelessWidget {
                     icon: const Icon(Icons.warning_amber_rounded),
                     label: const Text('TRIGGER TEST CRASH'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent.withOpacity(0.2),
+                      backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
                       foregroundColor: Colors.redAccent,
                       side: const BorderSide(color: Colors.redAccent),
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -101,6 +101,170 @@ class DiagnosticsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(dart:Admin Shell:lib/features/triage_hub/pages/admin_shell.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/auth/providers/auth_provider.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/widgets/admin_appbar.dart';
+
+class AdminShell extends ConsumerWidget {
+  final Widget child;
+  const AdminShell({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedIndex = ref.watch(selectedNavIndexProvider);
+    final activeInterventionsAsync = ref.watch(activeInterventionCountProvider);
+
+    return Scaffold(
+      backgroundColor: AdminColors.slateDarkest,
+      appBar: const AdminAppBar(title: 'L2LAAF Cockpit'),
+      body: Row(
+        children: [
+          // Sidebar Navigation
+          NavigationRail(
+            backgroundColor: AdminColors.slateDark,
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) =>
+                ref.read(selectedNavIndexProvider.notifier).setIndex(index),
+            labelType: NavigationRailLabelType.all,
+            unselectedLabelTextStyle:
+                const TextStyle(color: AdminColors.textSecondary, fontSize: 11),
+            selectedLabelTextStyle: const TextStyle(
+                color: AdminColors.emeraldGreen,
+                fontSize: 11,
+                fontWeight: FontWeight.bold),
+            leading: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child:
+                  Icon(Icons.radar, color: AdminColors.emeraldGreen, size: 32),
+            ),
+            // LOWER LEFT ACTIONS (Trailing)
+            trailing: Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // This is the logout button you see in the lower left
+                  IconButton(
+                    tooltip: 'Sign Out',
+                    icon: const Icon(Icons.exit_to_app_rounded,
+                        color: AdminColors.rubyRed),
+                    onPressed: () async {
+                      // Handshake with Firebase Auth
+                      await ref.read(authActionProvider.notifier).logout();
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+            destinations: [
+              NavigationRailDestination(
+                icon: Badge(
+                  label: activeInterventionsAsync.when(
+                    data: (count) => Text(count.toString()),
+                    loading: () => const Text('...'),
+                    error: (_, __) => const Text('!'),
+                  ),
+                  backgroundColor: AdminColors.rubyRed,
+                  isLabelVisible: activeInterventionsAsync.asData?.value != 0,
+                  child: const Icon(Icons.list_alt_rounded),
+                ),
+                label: const Text('Triage'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.grid_view_rounded),
+                label: const Text('Health'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.map_rounded),
+                label: const Text('Fleet'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.history_edu_rounded),
+                label: const Text('Evolution'),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.troubleshoot_rounded),
+                label: const Text('Diagnostics'),
+              ),
+            ],
+          ),
+          // Main Content Area
+          const VerticalDivider(width: 1, color: AdminColors.borderDefault),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(dart:Admin Hub Page:lib/features/triage_hub/pages/admin_hub_page.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/auth/providers/auth_provider.dart';
+import 'package:local2local/features/triage_hub/pages/admin_shell.dart';
+import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
+import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
+import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
+import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/screens/diagnostics_screen.dart';
+
+class AdminHubPage extends ConsumerWidget {
+  const AdminHubPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdminAsync = ref.watch(isAdminProvider);
+
+    return isAdminAsync.when(
+      data: (isAdmin) {
+        if (!isAdmin) {
+          return const Scaffold(backgroundColor: AdminColors.slateDarkest);
+        }
+
+        return AdminShell(
+          child: _buildCurrentPage(ref.watch(selectedNavIndexProvider)),
+        );
+      },
+      loading: () => const Scaffold(
+        backgroundColor: AdminColors.slateDarkest,
+        body: Center(
+            child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+      ),
+      error: (e, _) => Scaffold(
+        backgroundColor: AdminColors.slateDarkest,
+        body: Center(
+            child: Text('Auth Error: $e',
+                style: const TextStyle(color: AdminColors.rubyRed))),
+      ),
+    );
+  }
+
+  Widget _buildCurrentPage(int index) {
+    switch (index) {
+      case 0:
+        return const TriageQueuePage();
+      case 1:
+        return const HealthGridPage(); 
+      case 2:
+        return const FleetMapPage();
+      case 3:
+        return const EvolutionTimelinePage();
+      case 4:
+        return const DiagnosticsScreen();
+      default:
+        return const TriageQueuePage();
+    }
   }
 }
 L2LAAF_BLOCK_END */

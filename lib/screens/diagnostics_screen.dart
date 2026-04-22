@@ -55,7 +55,7 @@ class DiagnosticsScreen extends StatelessWidget {
                     icon: const Icon(Icons.warning_amber_rounded),
                     label: const Text('TRIGGER TEST CRASH'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent.withOpacity(0.2),
+                      backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
                       foregroundColor: Colors.redAccent,
                       side: const BorderSide(color: Colors.redAccent),
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
