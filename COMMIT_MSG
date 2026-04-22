@@ -1,1 +1,1 @@
-fix(orchestration): correct firestore runQuery endpoint for nested subcollection v11.40.7.20
+fix(orchestration): support n8n unwrapped arrays for firestore runQuery extraction v11.40.7.21
