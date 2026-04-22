@@ -1,5 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { onMessagePublished } from "firebase-functions/v2/pubsub";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 
 const db = admin.firestore();
@@ -97,5 +98,62 @@ export const ingestGCPErrors = onMessagePublished({
     console.log("Successfully ingested GCP error to Agent Bus.");
   } catch (err: any) {
     console.error("Failed to ingest GCP error:", err);
+  }
+});
+
+export const telemetryAggregatorV2 = onSchedule({
+  schedule: "every 1 minutes",
+  memory: "256MiB"
+}, async (event) => {
+  const appId = "local2local-kaskflow";
+  const now = new Date();
+  // Look back over the last 5 minutes
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000).toISOString();
+
+  try {
+    // 1. Query recent errors from agent_bus
+    const recentErrorsSnap = await db.collection(`artifacts/${appId}/public/data/agent_bus`)
+      .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
+      .where("telemetry.processed_at", ">=", fiveMinutesAgo)
+      .get();
+
+    let fatalCount = 0;
+    let warningCount = 0;
+
+    recentErrorsSnap.forEach(doc => {
+      const data = doc.data();
+      if (data.payload?.manifest?.severity === "critical") {
+        fatalCount++;
+      } else {
+        warningCount++;
+      }
+    });
+
+    // 2. Evaluate Service Level Status (SLS)
+    let status = "GREEN";
+    if (fatalCount > 0) {
+      status = "RED";
+    } else if (warningCount > 5) {
+      status = "YELLOW";
+    }
+
+    // 3. Write to the central system_status document
+    await db.doc(`artifacts/${appId}/public/data/system_status/current`).set({
+      status: status,
+      metrics: {
+        critical_errors_5m: fatalCount,
+        warnings_5m: warningCount,
+        last_evaluated_at: now.toISOString()
+      },
+      thresholds: {
+        red: "fatal > 0",
+        yellow: "warnings > 5"
+      },
+      is_overridden: false
+    }, { merge: true });
+
+    console.log(`[SLS UPDATED] System Status is now ${status}.`);
+  } catch (error) {
+    console.error("Failed to aggregate telemetry:", error);
   }
 });

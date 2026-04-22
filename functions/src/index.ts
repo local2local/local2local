@@ -7,6 +7,6 @@ export { financeAgentV2, taxWorkerV2, stripeOnboardingWorker } from "./logic/fin
 export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
 export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
 export { unifiedActivityWorkerV2 } from "./logic/orchestration";
-export { ingestWebError, ingestGCPErrors } from "./logic/telemetry";
+export { ingestWebError, ingestGCPErrors, telemetryAggregatorV2 } from "./logic/telemetry";
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
