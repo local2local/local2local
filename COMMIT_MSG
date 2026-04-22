@@ -1,1 +1,1 @@
-feat(frontend): migrate diagnostics screen to triage hub and wire into cockpit shell v11.41.0.6
+fix(telemetry): align ingestWebError payload to strict agent_bus schema v11.41.0.7
