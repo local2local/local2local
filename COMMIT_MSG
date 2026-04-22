@@ -1,1 +1,1 @@
-fix(orchestration): support n8n unwrapped arrays for firestore runQuery extraction v11.40.7.21
+fix(orchestration): correct nested payload path for accurate google chat card reasoning v11.40.7.22
