@@ -1,1 +1,1 @@
-fix(telemetry): align ingestWebError payload to strict agent_bus schema v11.41.0.7
+feat(telemetry): implement ingestGCPErrors pub/sub webhook for backend crash logs v11.41.0.8
