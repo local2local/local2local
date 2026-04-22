@@ -1,1 +1,1 @@
-fix(orchestration): implement graceful degradation for 404 firestore fetches v11.40.7.17
+fix(orchestration): implement fault tolerance for github missing file SHA errors v11.40.7.18
