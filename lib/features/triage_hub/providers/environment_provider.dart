@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum L2LEnvironment { dev, staging, prod }
+enum L2LEnvironment { dev, prod }
 
 class EnvironmentState {
   final L2LEnvironment environment;
@@ -28,16 +28,14 @@ class EnvironmentState {
 
   static String _getProjectId(L2LEnvironment env) {
     switch (env) {
-      case L2LEnvironment.staging: return 'local2local-staging';
       case L2LEnvironment.prod: return 'local2local-prod';
-      default: return 'local2local-kaskflow'; 
+      default: return 'local2local-dev'; 
     }
   }
 
   static Color _getHeaderColor(L2LEnvironment env) {
     switch (env) {
       case L2LEnvironment.prod: return const Color(0xFFFF1744);
-      case L2LEnvironment.staging: return const Color(0xFFFF9100);
       default: return const Color(0xFF1E1E2C);
     }
   }
@@ -48,7 +46,7 @@ class EnvironmentNotifier extends Notifier<EnvironmentState> {
   EnvironmentState build() {
     return EnvironmentState(
       environment: L2LEnvironment.dev,
-      projectId: 'local2local-kaskflow',
+      projectId: 'local2local-dev',
       headerColor: const Color(0xFF1E1E2C),
       version: 'v11.92.36',
     );

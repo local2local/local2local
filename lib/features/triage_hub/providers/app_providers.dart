@@ -17,7 +17,6 @@ enum AppTenant {
 
 enum AppEnvironment {
   dev('Development'),
-  staging('Staging'),
   prod('Production');
 
   const AppEnvironment(this.displayName);

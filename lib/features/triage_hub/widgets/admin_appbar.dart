@@ -83,8 +83,7 @@ class _EnvironmentBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color badgeColor = switch (environment) {
-      AppEnvironment.prod => AdminColors.emeraldGreen,
-      AppEnvironment.staging => AdminColors.statusWarning,
+      AppEnvironment.prod => AdminColors.rubyRed,
       AppEnvironment.dev => AdminColors.statusInfo,
     };
 

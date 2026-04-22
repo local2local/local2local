@@ -2,7 +2,6 @@
   "projects": {
     "default": "local2local-dev",
     "develop": "local2local-dev",
-    "staging": "local2local-staging",
     "production": "local2local-prod"
   },
   "targets": {
@@ -10,13 +9,6 @@
       "hosting": {
         "command-center": [
           "local2local-dev"
-        ]
-      }
-    },
-    "local2local-staging": {
-      "hosting": {
-        "command-center": [
-          "local2local-staging"
         ]
       }
     },

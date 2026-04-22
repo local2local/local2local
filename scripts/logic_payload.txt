@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 41.0.8: Telemetry Engine Bootstrapping
+ * L2LAAF Phase 41.0.9: Telemetry Engine Bootstrapping
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(telemetry): implement ingestGCPErrors pub/sub webhook for backend crash logs v11.41.0.8
+chore(infrastructure): remove staging environment and streamline deploy pipeline v11.41.0.9
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "41.0.8",
+  "current_phase": "41.0.9",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,121 +29,520 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
-import * as admin from "firebase-admin";
-if (admin.apps.length === 0) admin.initializeApp();
-
-export { evolutionOrchestratorV2, ombudsmanValidatorV2, autonomousFixerV2, evolutionProposalFinalizerV2 } from "./logic/evolution";
-export { complianceAgentV2 } from "./logic/compliance";
-export { financeAgentV2, taxWorkerV2, stripeOnboardingWorker } from "./logic/finance";
-export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
-export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
-export { unifiedActivityWorkerV2 } from "./logic/orchestration";
-export { ingestWebError, ingestGCPErrors } from "./logic/telemetry";
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";
+/* L2LAAF_BLOCK_START(json:Firebase RC:.firebaserc)
+{
+  "projects": {
+    "default": "local2local-dev",
+    "develop": "local2local-dev",
+    "production": "local2local-prod"
+  },
+  "targets": {
+    "local2local-dev": {
+      "hosting": {
+        "command-center": [
+          "local2local-dev"
+        ]
+      }
+    },
+    "local2local-prod": {
+      "hosting": {
+        "command-center": [
+          "local2local-prod"
+        ]
+      }
+    }
+  }
+}
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Telemetry Engine:functions/src/logic/telemetry.ts)
-import { onRequest } from "firebase-functions/v2/https";
-import { onMessagePublished } from "firebase-functions/v2/pubsub";
-import * as admin from "firebase-admin";
+/* L2LAAF_BLOCK_START(yaml:GitHub Deploy Action:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore: [ '.l2laaf/state.json' ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+      - name: Build Flutter Web
+        run: flutter build web --release
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Deploy Stack
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+      - name: Notify Orchestrator
+        if: success()
+        run: |
+          PHASE="41.0.9"
+          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
+          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
+          cat <<EOF > n8n_payload.json
+          {
+            "incoming_phase": "$PHASE",
+            "build_id": "${{ github.run_id }}",
+            "summary": "$SUMMARY",
+            "event": "DEPLOYMENT_COMPLETE",
+            "env": "$ENV_NAME"
+          }
+          EOF
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d @n8n_payload.json)
+          echo "n8n Response Code: ${RESPONSE: -3}"
+L2LAAF_BLOCK_END */
 
-const db = admin.firestore();
+/* L2LAAF_BLOCK_START(dart:App Providers:lib/features/triage_hub/providers/app_providers.dart)
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/models/intervention_model.dart';
+import 'package:local2local/features/triage_hub/models/orchestrator_model.dart';
+import 'package:local2local/features/triage_hub/models/logistics_job_model.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
 
-export const ingestWebError = onRequest({ cors: true }, async (req, res): Promise<void> => {
-  if (req.method !== "POST") {
-    res.status(405).send({ error: "Method Not Allowed" });
-    return;
-  }
+// --- TENANT STATE ---
 
-  try {
-    const errorData = req.body;
-    
-    // Package the error for the Agent Bus matching the strict schema
-    const payload = {
-      correlation_id: `ERR-WEB-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
-      },
-      status: "dispatched",
-      provenance: {
-        sender_id: "FLUTTER_CLIENT",
-        receiver_id: "AUTONOMOUS_FIXER"
-      },
-      control: {
-        priority: errorData.isFatal ? "critical" : "high",
-        type: "REQUEST"
-      },
-      payload: {
-        manifest: {
-          intent: "LOG_RUNTIME_ERROR",
-          context: "RUNTIME_CRASH",
-          severity: errorData.isFatal ? "critical" : "high",
-          details: errorData.error || "Unknown Error",
-          stackTrace: errorData.stackTrace || "No stack trace provided",
-          platform: errorData.platform || "web",
-          client_timestamp: errorData.timestamp || new Date().toISOString()
-        }
-      }
-    };
+enum AppTenant {
+  kaskflow('local2local-kaskflow', 'Kaskflow'),
+  moonlitely('local2local-moonlitely', 'Moonlitely');
 
-    const appId = errorData.appId || "local2local-kaskflow";
-    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
-    res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
-  } catch (err: any) {
-    console.error("Failed to ingest web error:", err);
-    res.status(500).send({ error: "Internal Server Error" });
-  }
+  const AppTenant(this.id, this.displayName);
+  final String id, displayName;
+}
+
+enum AppEnvironment {
+  dev('Development'),
+  prod('Production');
+
+  const AppEnvironment(this.displayName);
+  final String displayName;
+  String get label => name.toUpperCase();
+}
+
+class CurrentAppNotifier extends Notifier<AppTenant> {
+  @override
+  AppTenant build() => AppTenant.kaskflow;
+  void setApp(AppTenant app) => state = app;
+}
+
+class CurrentEnvNotifier extends Notifier<AppEnvironment> {
+  @override
+  AppEnvironment build() => AppEnvironment.dev;
+  void setEnvironment(AppEnvironment env) => state = env;
+}
+
+final currentAppProvider =
+    NotifierProvider<CurrentAppNotifier, AppTenant>(CurrentAppNotifier.new);
+final currentEnvironmentProvider =
+    NotifierProvider<CurrentEnvNotifier, AppEnvironment>(
+        CurrentEnvNotifier.new);
+
+// --- NAVIGATION STATE ---
+
+class NavIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void setIndex(int index) => state = index;
+}
+
+final selectedNavIndexProvider =
+    NotifierProvider<NavIndexNotifier, int>(NavIndexNotifier.new);
+
+// --- DATA STREAMS ---
+
+final interventionsProvider = StreamProvider<List<InterventionModel>>((ref) {
+  final app = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts/${app.id}/public/data/interventions')
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => InterventionModel.fromFirestore(doc))
+          .toList());
 });
 
-export const ingestGCPErrors = onMessagePublished({
-  topic: "l2laaf-gcp-errors",
-  memory: "256MiB"
-}, async (event) => {
-  try {
-    const pubSubPayload = event.data.message.json;
-    
-    // GCP Log Router payloads contain textPayload or jsonPayload
-    const details = pubSubPayload.textPayload || pubSubPayload.jsonPayload?.message || "Unknown GCP Error";
-    const severity = pubSubPayload.severity || "ERROR";
-    
-    const payload = {
-      correlation_id: `ERR-GCP-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
+final orchestratorsProvider = StreamProvider<List<OrchestratorModel>>((ref) {
+  final app = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts/${app.id}/public/data/agent_registry')
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => OrchestratorModel.fromFirestore(doc))
+          .toList());
+});
+
+final fleetProvider = StreamProvider<List<LogisticsJobModel>>((ref) {
+  final app = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts/${app.id}/public/data/logistics_jobs')
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => LogisticsJobModel.fromFirestore(doc))
+          .toList());
+});
+
+final evolutionTimelineProvider =
+    StreamProvider<List<EvolutionEventModel>>((ref) {
+  final app = ref.watch(currentAppProvider);
+  return FirebaseFirestore.instance
+      .collection('artifacts/${app.id}/public/data/evolution_timeline')
+      .orderBy('timestamp', descending: true)
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((doc) => EvolutionEventModel.fromFirestore(doc))
+          .toList());
+});
+
+final activeInterventionCountProvider = Provider<AsyncValue<int>>((ref) {
+  return ref
+      .watch(interventionsProvider)
+      .whenData((list) => list.where((i) => i.isActive).length);
+});
+
+// --- UI SELECTION STATE ---
+
+class SelectedInterventionNotifier extends Notifier<InterventionModel?> {
+  @override
+  InterventionModel? build() => null;
+  void setSelected(InterventionModel? item) => state = item;
+}
+
+final selectedInterventionProvider =
+    NotifierProvider<SelectedInterventionNotifier, InterventionModel?>(
+        SelectedInterventionNotifier.new);
+
+// --- SERVICE LAYER (RESOLUTION LOGIC) ---
+
+class InterventionService {
+  static Future<void> resolveIntervention(
+      String appId, String interventionId, String macroId) async {
+    final batch = FirebaseFirestore.instance.batch();
+
+    // 1. Mark Intervention as Resolved
+    final interventionRef = FirebaseFirestore.instance
+        .doc('artifacts/$appId/public/data/interventions/$interventionId');
+    batch.update(interventionRef, {
+      'status': 'resolved',
+      'resolvedAt': FieldValue.serverTimestamp(),
+      'resolution': macroId,
+    });
+
+    // 2. Write Human Response to Agent Bus
+    final busRef = FirebaseFirestore.instance
+        .collection('artifacts/$appId/public/data/agent_bus')
+        .doc();
+    batch.set(busRef, {
+      'correlation_id': 'resolution-$interventionId',
+      'status': 'pending',
+      'control': {'type': 'RESPONSE', 'priority': 'high'},
+      'provenance': {
+        'sender_id': 'SUPER_ADMIN_HUB',
+        'receiver_id': 'EVOLUTION_WORKER',
       },
-      status: "dispatched",
-      provenance: {
-        sender_id: "GCP_LOG_ROUTER",
-        receiver_id: "AUTONOMOUS_FIXER"
-      },
-      control: {
-        priority: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
-        type: "REQUEST"
-      },
-      payload: {
-        manifest: {
-          intent: "LOG_RUNTIME_ERROR",
-          context: "BACKEND_CRASH",
-          severity: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
-          details: details,
-          stackTrace: pubSubPayload.textPayload ? pubSubPayload.textPayload : JSON.stringify(pubSubPayload.jsonPayload),
-          platform: "gcp_backend",
-          client_timestamp: pubSubPayload.timestamp || new Date().toISOString(),
-          resource: pubSubPayload.resource?.type || "unknown_resource"
+      'payload': {
+        'result': {
+          'action': 'HUMAN_COMMIT',
+          'intervention_id': interventionId,
+          'macro_applied': macroId,
+          'timestamp': DateTime.now().toIso8601String(),
         }
       }
+    });
+
+    await batch.commit();
+  }
+}
+
+class OrchestratorService {
+  static Future<void> pauseOrchestrator(String appId, String agentId) async {
+    await FirebaseFirestore.instance
+        .doc('artifacts/$appId/public/data/agent_registry/$agentId')
+        .update({'status.mode': 'paused'});
+  }
+
+  static Future<void> resumeOrchestrator(String appId, String agentId) async {
+    await FirebaseFirestore.instance
+        .doc('artifacts/$appId/public/data/agent_registry/$agentId')
+        .update({'status.mode': 'live'});
+  }
+
+  static Future<void> rollbackOrchestrator(String appId, String agentId) async {
+    await FirebaseFirestore.instance
+        .collection('artifacts/$appId/public/data/agent_bus')
+        .add({
+      'status': 'pending',
+      'control': {'type': 'REQUEST', 'priority': 'urgent'},
+      'provenance': {
+        'sender_id': 'SUPER_ADMIN_HUB',
+        'receiver_id': 'EVOLUTION_WORKER'
+      },
+      'payload': {
+        'manifest': {
+          'intent': 'ROLLBACK_AGENT',
+          'targetAgentId': agentId,
+        }
+      }
+    });
+  }
+}
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(dart:Environment Provider:lib/features/triage_hub/providers/environment_provider.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum L2LEnvironment { dev, prod }
+
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
+  final String version;
+
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+    required this.version,
+  });
+
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+      version: 'v11.92.36',
+    );
+  }
+
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return 'local2local-prod';
+      default: return 'local2local-dev'; 
+    }
+  }
+
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return const Color(0xFFFF1744);
+      default: return const Color(0xFF1E1E2C);
+    }
+  }
+}
+
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-dev',
+      headerColor: const Color(0xFF1E1E2C),
+      version: 'v11.92.36',
+    );
+  }
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
+          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
+  return EnvironmentNotifier();
+});
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(dart:Admin Appbar:lib/features/triage_hub/widgets/admin_appbar.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/app_providers.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+class AdminAppBar extends ConsumerStatefulWidget
+    implements PreferredSizeWidget {
+  final String title;
+  const AdminAppBar({super.key, required this.title});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
+
+  @override
+  ConsumerState<AdminAppBar> createState() => _AdminAppBarState();
+}
+
+class _AdminAppBarState extends ConsumerState<AdminAppBar> {
+  @override
+  Widget build(BuildContext context) {
+    final currentApp = ref.watch(currentAppProvider);
+    final currentEnv = ref.watch(currentEnvironmentProvider);
+
+    return Container(
+      height: 64,
+      decoration: const BoxDecoration(
+        color: AdminColors.slateDark,
+        border: Border(
+            bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
+      ),
+      padding: const EdgeInsets.only(
+          left: 16,
+          right: 8), // Adjusted padding for better right-justification
+      child: Row(
+        children: [
+          // 1. App Title
+          Text(
+            widget.title,
+            style: const TextStyle(
+                color: AdminColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 20),
+
+          // 2. Environment Selector
+          _EnvironmentBadge(
+            environment: currentEnv,
+            onChanged: (env) => ref
+                .read(currentEnvironmentProvider.notifier)
+                .setEnvironment(env),
+          ),
+          const SizedBox(width: 12),
+
+          // 3. Tenant Selector
+          _TenantSelector(
+            currentApp: currentApp,
+            onChanged: (tenant) =>
+                ref.read(currentAppProvider.notifier).setApp(tenant),
+          ),
+
+          // 4. Elastic Space to push content to the right
+          const Spacer(),
+
+          // 5. Right-Justified Notifications
+          IconButton(
+            tooltip: 'Notifications',
+            icon: const Icon(Icons.notifications_outlined,
+                size: 22, color: AdminColors.textSecondary),
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EnvironmentBadge extends StatelessWidget {
+  final AppEnvironment environment;
+  final Function(AppEnvironment) onChanged;
+  const _EnvironmentBadge({required this.environment, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color badgeColor = switch (environment) {
+      AppEnvironment.prod => AdminColors.rubyRed,
+      AppEnvironment.dev => AdminColors.statusInfo,
     };
 
-    // We assume local2local-kaskflow as the primary orchestration bus
-    const appId = "local2local-kaskflow";
-    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
-    console.log("Successfully ingested GCP error to Agent Bus.");
-  } catch (err: any) {
-    console.error("Failed to ingest GCP error:", err);
+    return PopupMenuButton<AppEnvironment>(
+      initialValue: environment,
+      onSelected: onChanged,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: badgeColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(environment.label,
+                style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down, size: 16, color: badgeColor),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => AppEnvironment.values
+          .map((env) => PopupMenuItem(value: env, child: Text(env.displayName)))
+          .toList(),
+    );
   }
-});
+}
+
+class _TenantSelector extends StatelessWidget {
+  final AppTenant currentApp;
+  final Function(AppTenant) onChanged;
+  const _TenantSelector({required this.currentApp, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<AppTenant>(
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+      segments: AppTenant.values
+          .map((t) => ButtonSegment(
+                value: t,
+                label: Text(t.displayName.toUpperCase()),
+              ))
+          .toList(),
+      selected: {currentApp},
+      onSelectionChanged: (set) => onChanged(set.first),
+    );
+  }
+}
 L2LAAF_BLOCK_END */
