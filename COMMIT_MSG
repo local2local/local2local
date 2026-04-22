@@ -1,1 +1,1 @@
-feat(telemetry): implement ingestWebError cloud function for flutter web crashes v11.41.0.0
+feat(telemetry): wire up flutter error catchers to ingestWebError endpoint v11.41.0.1

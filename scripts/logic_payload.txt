@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 41.0.0: Telemetry Engine Bootstrapping
+ * L2LAAF Phase 41.0.1: Telemetry Engine Bootstrapping
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(telemetry): implement ingestWebError cloud function for flutter web crashes v11.41.0.0
+feat(telemetry): wire up flutter error catchers to ingestWebError endpoint v11.41.0.1
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "41.0.0",
+  "current_phase": "41.0.1",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,62 +29,100 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
-import * as admin from "firebase-admin";
-if (admin.apps.length === 0) admin.initializeApp();
+/* L2LAAF_BLOCK_START(dart:Main Entry Point:lib/main.dart)
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:local2local/core/app.dart';
+import 'package:local2local/firebase_options.dart';
 
-export { evolutionOrchestratorV2, ombudsmanValidatorV2, autonomousFixerV2, evolutionProposalFinalizerV2 } from "./logic/evolution";
-export { complianceAgentV2 } from "./logic/compliance";
-export { financeAgentV2, taxWorkerV2, stripeOnboardingWorker } from "./logic/finance";
-export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
-export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
-export { unifiedActivityWorkerV2 } from "./logic/orchestration";
-export { ingestWebError } from "./logic/telemetry";
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";
-L2LAAF_BLOCK_END */
+// --- L2LAAF TELEMETRY CONFIGURATION ---
+// Cloud Function endpoint for local2local-dev
+const String telemetryEndpoint = 'https://us-central1-local2local-dev.cloudfunctions.net/ingestWebError';
 
-/* L2LAAF_BLOCK_START(typescript:Telemetry Engine:functions/src/logic/telemetry.ts)
-import { onRequest } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-
-const db = admin.firestore();
-
-export const ingestWebError = onRequest({ cors: true }, async (req, res): Promise<void> => {
-  if (req.method !== "POST") {
-    res.status(405).send({ error: "Method Not Allowed" });
-    return;
+Future<void> sendErrorToAgentBus(String error, String stackTrace, bool isFatal) async {
+  try {
+    await http.post(
+      Uri.parse(telemetryEndpoint),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'error': error,
+        'stackTrace': stackTrace,
+        'isFatal': isFatal,
+        'timestamp': DateTime.now().toIso8601String(),
+        'platform': kIsWeb ? 'web' : 'native',
+        'appId': 'local2local-kaskflow' 
+      }),
+    );
+  } catch (e) {
+    debugPrint('L2LAAF_TELEMETRY_FAIL: Failed to send error to bus: $e');
   }
+}
+// --------------------------------------
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // --- L2LAAF GLOBAL ERROR CATCHERS ---
+  // Catch synchronous Flutter framework errors
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    sendErrorToAgentBus(details.exceptionAsString(), details.stack.toString(), true);
+  };
+
+  // Catch asynchronous Dart errors
+  PlatformDispatcher.instance.onError = (error, stack) {
+    sendErrorToAgentBus(error.toString(), stack.toString(), true);
+    return true;
+  };
+  // ------------------------------------
+  
+  bool coreReady = false;
+  String? bootError;
 
   try {
-    const errorData = req.body;
+    debugPrint("L2LAAF_BOOT: Initializing Credential Engine v11.92.36...");
     
-    // Package the error for the Agent Bus
-    const payload = {
-      status: "dispatched",
-      correlation_id: `ERR-WEB-${Date.now()}`,
-      provenance: {
-        sender_id: "FLUTTER_WEB_CLIENT",
-        receiver_id: "AUTONOMOUS_FIXER"
-      },
-      payload: {
-        intent: "REQUEST_REASONING",
-        context: "RUNTIME_CRASH",
-        details: errorData.error || "Unknown Error",
-        stackTrace: errorData.stackTrace || "No stack trace provided",
-        isFatal: errorData.isFatal || false,
-        platform: errorData.platform || "web",
-        timestamp: errorData.timestamp || new Date().toISOString()
-      }
-    };
-
-    const appId = errorData.appId || "local2local-kaskflow";
-    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     
-    res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
-  } catch (err: any) {
-    console.error("Failed to ingest web error:", err);
-    res.status(500).send({ error: "Internal Server Error" });
+    coreReady = true;
+    debugPrint("L2LAAF_BOOT: Firebase Core Ready.");
+  } catch (e, stack) {
+    bootError = e.toString();
+    debugPrint("L2LAAF_BOOT_FATAL: $e");
+    
+    // Explicitly catch boot failures and send to the Autonomous Orchestrator
+    sendErrorToAgentBus("Firebase Init Failed: ${e.toString()}", stack.toString(), true);
   }
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        firebaseReadyProvider.overrideWith((ref) => coreReady),
+        initErrorProvider.overrideWith((ref) => bootError),
+      ],
+      child: const L2LAAFApp(),
+    ),
+  );
+}
+
+final firebaseReadyProvider = Provider<bool>((ref) => false);
+final initErrorProvider = Provider<String?>((ref) => null);
+
+final authStateProvider = StreamProvider<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
+
+final isAdminProvider = FutureProvider<bool>((ref) async {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return false;
+  final idToken = await user.getIdTokenResult(true); 
+  return idToken.claims?['admin'] == true || idToken.claims?['operator'] == true;
 });
 L2LAAF_BLOCK_END */
