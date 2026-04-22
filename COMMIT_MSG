@@ -1,1 +1,1 @@
-fix(orchestration): convert firestore lookup to runQuery to solve document ID mismatch v11.40.7.19
+fix(orchestration): correct firestore runQuery endpoint for nested subcollection v11.40.7.20
