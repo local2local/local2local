@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 40.7.22: Wholistic Circuit & Syntax Stabilization
+ * L2LAAF Phase 41.0.0: Telemetry Engine Bootstrapping
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): correct nested payload path for accurate google chat card reasoning v11.40.7.22
+feat(telemetry): implement ingestWebError cloud function for flutter web crashes v11.41.0.0
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "40.7.22",
+  "current_phase": "41.0.0",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -39,149 +39,52 @@ export { financeAgentV2, taxWorkerV2, stripeOnboardingWorker } from "./logic/fin
 export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
 export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
 export { unifiedActivityWorkerV2 } from "./logic/orchestration";
+export { ingestWebError } from "./logic/telemetry";
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Evolution:functions/src/logic/evolution.ts)
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
-import * as admin from "firebase-admin";
-import axios from "axios";
-import { v4 as uuidv4 } from "uuid";
-
-const db = admin.firestore();
-type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { appId: string; [key: string]: string }>;
-
-async function signalOrchestrator(payload: any, eventType: string, meta: { hbrId?: string, buildId?: string }) {
-  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
-  try {
-    await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "40.7.22", 
-      build_id: meta.buildId || payload.correlation_id || `EVO-${Date.now()}`, 
-      summary: payload.payload?.manifest?.reason || payload.summary || "Circuit stabilization update.", 
-      event: eventType, 
-      hbrId: meta.hbrId || null,
-      filePath: payload.payload?.manifest?.targetPath || "functions/src/logic/evolution.ts", 
-      fileContent: payload.payload?.manifest?.proposedLogic || null, 
-      branch: "develop" 
-    });
-  } catch (error) { 
-    console.error(`❌ ORCHESTRATOR: Failed to signal [${eventType}]`); 
-  }
-}
-
-export const evolutionOrchestratorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "dispatched" || data.payload?.manifest?.intent !== "PROPOSE_LOGIC_CHANGE") return;
-  const { appId } = event.params;
-  const manifest = data.payload.manifest;
-  const correlationId = data.correlation_id || event.params.messageId;
-  const lockRef = db.collection(`artifacts/${appId}/public/data/logic_locks`).doc(manifest.hbrId);
-  try {
-    await db.runTransaction(async (transaction) => {
-      const lockSnap = await transaction.get(lockRef);
-      if (lockSnap.exists) throw new Error(`COLLISION: HBR ${manifest.hbrId} locked.`);
-      transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
-      const registryRef = db.doc(`artifacts/${appId}/public/data/hbr_registry/${manifest.hbrId}`);
-      transaction.set(registryRef, { lock_status: "LOCKED", locked_by: manifest.agentId, last_modified: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    });
-    const shadowRef = db.collection(`artifacts/${appId}/public/data/shadow_runs`).doc(correlationId);
-    await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId, agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
-    await signalOrchestrator(data, "PROPOSAL_SUBMITTED", { hbrId: manifest.hbrId, buildId: correlationId });
-  } catch (e) { throw e; }
-});
-
-export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "VALIDATED") return;
-  const hbrId = data.proposal_id || null;
-  await signalOrchestrator({ summary: `⚖️ Ombudsman validated shadow run: ${event.params.runId}.` }, "SHADOW_VALIDATED", { buildId: event.params.runId, hbrId });
-});
-
-export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
-  const state = event.data?.after.data();
-  if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
-  const { appId } = event.params;
-  await db.collection(`artifacts/${appId}/public/data/agent_bus`).doc(uuidv4()).set({
-    status: "dispatched",
-    correlation_id: `FIX-${Date.now()}`,
-    provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
-    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", details: "Self-healing protocol initiated." }
-  });
-});
-
-export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
-  const data = event.data?.after.data();
-  if (!data || data.status !== "PROMOTED") return;
-  const { appId } = event.params;
-  const hbrId = data.hbrId;
-  const buildId = data.buildId || null;
-
-  if (!hbrId || ["", "undefined", "null"].includes(hbrId)) {
-    console.warn(`⚠️ FINALIZER: Missing hbrId. appId: ${appId}`);
-    return;
-  }
-
-  try {
-    const lockPath = `artifacts/${appId}/public/data/logic_locks/${hbrId}`;
-    console.log(`🧹 FINALIZER: Purging lock: ${lockPath}`);
-    await db.doc(lockPath).delete();
-    
-    await db.doc(`artifacts/${appId}/public/data/hbr_registry/${hbrId}`).set({ 
-      lock_status: "UNLOCKED", 
-      last_modified: admin.firestore.FieldValue.serverTimestamp() 
-    }, { merge: true });
-
-    if (buildId) {
-      const shadowPath = `artifacts/${appId}/public/data/shadow_runs/${buildId}`;
-      console.log(`🧹 FINALIZER: Purging shadow run: ${shadowPath}`);
-      await db.doc(shadowPath).delete();
-    }
-
-    await db.collection(`artifacts/${appId}/public/data/lessons_learned`).add({ 
-      ...data, 
-      archived_at: admin.firestore.FieldValue.serverTimestamp(),
-      diagnostic_dump: { trace_id: "v40.7.22" }
-    });
-  } catch (err: any) {
-    console.error(`❌ FINALIZER ERROR: ${err.message}`);
-  }
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Delete Utility:functions/src/utilities/deleteSubcollection.ts)
+/* L2LAAF_BLOCK_START(typescript:Telemetry Engine:functions/src/logic/telemetry.ts)
 import { onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 const db = admin.firestore();
 
-export const deleteSubcollectionV2 = onRequest({ cors: true }, async (req, res): Promise<void> => {
-  const CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-  if (req.method === "OPTIONS") {
-    res.status(204).set(CORS_HEADERS).send("");
+export const ingestWebError = onRequest({ cors: true }, async (req, res): Promise<void> => {
+  if (req.method !== "POST") {
+    res.status(405).send({ error: "Method Not Allowed" });
     return;
   }
-  res.set(CORS_HEADERS);
+
   try {
-    const { path } = req.body;
-    if (!path) {
-      res.status(400).send({ error: "Missing path" });
-      return;
-    }
-    const snapshot = await db.collection(path).get();
-    const batch = db.batch();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    res.send({ status: "deleted", count: snapshot.size });
-    return;
-  } catch (error: any) {
-    res.status(500).send({ error: error.message });
-    return;
+    const errorData = req.body;
+    
+    // Package the error for the Agent Bus
+    const payload = {
+      status: "dispatched",
+      correlation_id: `ERR-WEB-${Date.now()}`,
+      provenance: {
+        sender_id: "FLUTTER_WEB_CLIENT",
+        receiver_id: "AUTONOMOUS_FIXER"
+      },
+      payload: {
+        intent: "REQUEST_REASONING",
+        context: "RUNTIME_CRASH",
+        details: errorData.error || "Unknown Error",
+        stackTrace: errorData.stackTrace || "No stack trace provided",
+        isFatal: errorData.isFatal || false,
+        platform: errorData.platform || "web",
+        timestamp: errorData.timestamp || new Date().toISOString()
+      }
+    };
+
+    const appId = errorData.appId || "local2local-kaskflow";
+    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
+    
+    res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
+  } catch (err: any) {
+    console.error("Failed to ingest web error:", err);
+    res.status(500).send({ error: "Internal Server Error" });
   }
 });
 L2LAAF_BLOCK_END */

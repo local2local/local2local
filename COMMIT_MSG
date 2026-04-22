@@ -1,1 +1,1 @@
-fix(orchestration): correct nested payload path for accurate google chat card reasoning v11.40.7.22
+feat(telemetry): implement ingestWebError cloud function for flutter web crashes v11.41.0.0
