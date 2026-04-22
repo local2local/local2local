@@ -6,6 +6,7 @@ import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_hea
 import 'package:local2local/features/triage_hub/presentation/widgets/hbr_lock_indicator.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
 import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
@@ -62,6 +63,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                     _buildNavItem(1, Icons.grid_view, 'Health'),
                     _buildNavItem(2, Icons.directions_car, 'Fleet'),
                     _buildNavItem(3, Icons.psychology, 'Evolution'),
+                    _buildNavItem(4, Icons.troubleshoot, 'Diagnostics'),
                     const Spacer(),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24),
@@ -218,6 +220,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       case 1: return _buildFirestoreList(projectId, 'system_health', 'System Health', Icons.grid_view);
       case 2: return _buildFirestoreList(projectId, 'fleet_status', 'Fleet Logistics', Icons.directions_car);
       case 3: return _buildEvolutionTimeline(projectId);
+      case 4: return const DiagnosticsScreen();
       default: return const SizedBox.shrink();
     }
   }

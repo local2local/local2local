@@ -8,7 +8,7 @@ import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.da
 import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/screens/diagnostics_screen.dart';
+import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
 
 class AdminHubPage extends ConsumerWidget {
   const AdminHubPage({super.key});

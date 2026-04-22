@@ -1,1 +1,1 @@
-feat(frontend): wire diagnostics screen routing and resolve linter warnings v11.41.0.5
+feat(frontend): migrate diagnostics screen to triage hub and wire into cockpit shell v11.41.0.6
