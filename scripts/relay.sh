@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v5.2 (Phase 42.0.14 Force Tracking Upgrade) ---
+# --- L2LAAF RELAY v5.3 (Phase 42.1.1 Smart Purge Upgrade) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
 
@@ -10,13 +10,17 @@ if [ ! -f "$PAYLOAD_FILE" ]; then
     exit 1
 fi
 
-echo "--- L2LAAF RELAY v5.2 ---"
+echo "--- L2LAAF RELAY v5.3 ---"
 echo "📂 Project Root: $(pwd)"
 echo "📡 Using Payload: $PAYLOAD_FILE"
 
-# 0. CLEANUP OLD ARTIFACTS
-echo "🧹 Purging legacy n8n workflows..."
-rm -f n8n_workflows/*.json
+# 0. SMART CLEANUP OLD ARTIFACTS
+if grep -q "n8n_workflows/" "$PAYLOAD_FILE"; then
+    echo "🧹 New n8n workflow detected in payload. Purging legacy workflows..."
+    rm -f n8n_workflows/*.json
+else
+    echo "⏭️ No n8n workflow update in payload. Preserving current workflow JSON."
+fi
 
 # 1. RUN PATCHER
 node ./scripts/patcher.js < "$PAYLOAD_FILE"

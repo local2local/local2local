@@ -1,1 +1,1 @@
-fix(cicd): update gitignore to explicitly whitelist n8n workflows v11.42.0.16
+fix(cicd): restore n8n workflow via smart-purge relay engine v11.42.1.2
