@@ -1,1 +1,1 @@
-feat(cicd): automate n8n workflow api deployment and add pre-flight json validation v11.42.0.2
+fix(orchestration): add graceful degradation to system status fetch in n8n v11.42.0.3
