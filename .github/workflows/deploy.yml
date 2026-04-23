@@ -47,23 +47,32 @@ jobs:
           
       - name: Deploy n8n Workflow
         if: success()
+        env:
+          N8N_KEY: ${{ secrets.N8N_API_KEY }}
+          N8N_ID: ${{ secrets.N8N_WORKFLOW_ID }}
         run: |
           if [ -d "n8n_workflows" ]; then
             WORKFLOW_FILE=$(ls -t n8n_workflows/*.json 2>/dev/null | head -n 1)
             if [ -n "$WORKFLOW_FILE" ]; then
               echo "Deploying $WORKFLOW_FILE to n8n Cloud..."
-              RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/${{ secrets.N8N_WORKFLOW_ID }}" \
-                -H "X-N8N-API-KEY: ${{ secrets.N8N_API_KEY }}" \
-                -H "Content-Type: application/json" \
-                -d @"$WORKFLOW_FILE")
-              
-              HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-              
-              if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-                echo "🟢 Successfully deployed workflow to n8n!"
+              if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
+                echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
               else
-                echo "❌ Failed to deploy to n8n. HTTP Code: $HTTP_CODE"
-                exit 1
+                RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
+                  -H "X-N8N-API-KEY: $N8N_KEY" \
+                  -H "Content-Type: application/json" \
+                  -d @"$WORKFLOW_FILE")
+                
+                HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+                BODY=$(echo "$RESPONSE" | sed '$d')
+                
+                if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+                  echo "🟢 Successfully deployed workflow to n8n!"
+                else
+                  echo "❌ Failed to deploy to n8n. HTTP Code: $HTTP_CODE"
+                  echo "Response body: $BODY"
+                  exit 1
+                fi
               fi
             fi
           fi

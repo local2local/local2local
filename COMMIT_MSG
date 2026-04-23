@@ -1,1 +1,1 @@
-fix(orchestration): align telemetry to global system_status tenant and bypass 404s via collection queries v11.42.0.7
+fix(cicd): bind n8n secrets to step env vars to resolve bash masking issues v11.42.0.8
