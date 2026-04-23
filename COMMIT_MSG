@@ -1,1 +1,1 @@
-fix(cicd): restore n8n workflow via smart-purge relay engine v11.42.1.2
+chore(orchestration): restore n8n workflow to repository source-of-truth v11.42.1.4
