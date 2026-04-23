@@ -1,1 +1,1 @@
-fix(orchestration): convert firestore get to collection list to definitively bypass 404s v11.42.0.6
+fix(orchestration): align telemetry to global system_status tenant and bypass 404s via collection queries v11.42.0.7

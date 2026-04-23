@@ -91,7 +91,7 @@ export const ingestGCPErrors = onMessagePublished({
       }
     };
 
-    // We assume local2local-kaskflow as the primary orchestration bus
+    // Assuming local2local-kaskflow as the primary orchestration bus for backend crashes
     const appId = "local2local-kaskflow";
     await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
     
@@ -105,14 +105,18 @@ export const telemetryAggregatorV2 = onSchedule({
   schedule: "every 1 minutes",
   memory: "256MiB"
 }, async (event) => {
-  const appId = "local2local-kaskflow";
   const now = new Date();
   // Look back over the last 5 minutes
   const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000).toISOString();
 
   try {
-    // 1. Query recent errors from agent_bus
-    const recentErrorsSnap = await db.collection(`artifacts/${appId}/public/data/agent_bus`)
+    // 1. Query recent errors from both marketplace agent_buses
+    const kaskflowErrors = await db.collection(`artifacts/local2local-kaskflow/public/data/agent_bus`)
+      .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
+      .where("telemetry.processed_at", ">=", fiveMinutesAgo)
+      .get();
+      
+    const moonlitelyErrors = await db.collection(`artifacts/local2local-moonlitely/public/data/agent_bus`)
       .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
       .where("telemetry.processed_at", ">=", fiveMinutesAgo)
       .get();
@@ -120,13 +124,15 @@ export const telemetryAggregatorV2 = onSchedule({
     let fatalCount = 0;
     let warningCount = 0;
 
-    recentErrorsSnap.forEach(doc => {
-      const data = doc.data();
-      if (data.payload?.manifest?.severity === "critical") {
-        fatalCount++;
-      } else {
-        warningCount++;
-      }
+    [kaskflowErrors, moonlitelyErrors].forEach(snap => {
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (data.payload?.manifest?.severity === "critical") {
+          fatalCount++;
+        } else {
+          warningCount++;
+        }
+      });
     });
 
     // 2. Evaluate Service Level Status (SLS)
@@ -137,8 +143,8 @@ export const telemetryAggregatorV2 = onSchedule({
       status = "YELLOW";
     }
 
-    // 3. Write to the central system_status document
-    await db.doc(`artifacts/${appId}/public/data/system_status/current`).set({
+    // 3. Write to the clean global system_status tenant
+    await db.doc(`artifacts/system_status/public/data/telemetry/current`).set({
       status: status,
       metrics: {
         critical_errors_5m: fatalCount,
