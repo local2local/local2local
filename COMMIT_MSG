@@ -1,1 +1,1 @@
-fix(orchestration): apply robust string interpolation to n8n url and add curl timeouts v11.42.0.11
+fix(orchestration): convert n8n http url to strict template literal expression v11.42.0.12
