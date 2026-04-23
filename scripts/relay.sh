@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v5.0 (Phase 42.0.2 Automated Pipeline Upgrade) ---
+# --- L2LAAF RELAY v5.1 (Phase 42.0.10 Automated Pipeline Upgrade) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
 
@@ -10,9 +10,13 @@ if [ ! -f "$PAYLOAD_FILE" ]; then
     exit 1
 fi
 
-echo "--- L2LAAF RELAY v5.0 ---"
+echo "--- L2LAAF RELAY v5.1 ---"
 echo "📂 Project Root: $(pwd)"
 echo "📡 Using Payload: $PAYLOAD_FILE"
+
+# 0. CLEANUP OLD ARTIFACTS
+echo "🧹 Purging legacy n8n workflows..."
+rm -f n8n_workflows/*.json
 
 # 1. RUN PATCHER
 node ./scripts/patcher.js < "$PAYLOAD_FILE"

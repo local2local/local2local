@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.0.9: Service Level Throttling & n8n Automation
+ * L2LAAF Phase 42.0.10: Service Level Throttling & n8n Automation
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): resolve expression syntax error in n8n fetch system status node v11.42.0.9
+fix(cicd): auto-purge legacy workflows in relay and finalize n8n API deploy v11.42.0.10
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.0.9",
+  "current_phase": "42.0.10",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,110 +29,111 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(yaml:GitHub Deploy Action:.github/workflows/deploy.yml)
-name: L2LAAF Multi-Project Deployment
-on:
-  push:
-    branches: [ main, develop ]
-    paths-ignore: [ '.l2laaf/state.json' ]
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          flutter-version: '3.38.5'
-      - name: Install Dependencies
-        run: |
-          cd functions && npm install
-          cd ..
-          flutter pub get
-      - name: Build Flutter Web
-        run: flutter build web --release
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - name: Deploy Stack
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            PROJECT_ID="local2local-prod"
-          else
-            PROJECT_ID="local2local-dev"
-          fi
-          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
-          
-      - name: Deploy n8n Workflow
-        if: success()
-        env:
-          N8N_KEY: ${{ secrets.N8N_API_KEY }}
-          N8N_ID: ${{ secrets.N8N_WORKFLOW_ID }}
-        run: |
-          if [ -d "n8n_workflows" ]; then
-            WORKFLOW_FILE=$(ls -t n8n_workflows/*.json 2>/dev/null | head -n 1)
-            if [ -n "$WORKFLOW_FILE" ]; then
-              echo "Deploying $WORKFLOW_FILE to n8n Cloud..."
-              if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
-                echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
-              else
-                RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
-                  -H "X-N8N-API-KEY: $N8N_KEY" \
-                  -H "Content-Type: application/json" \
-                  -d @"$WORKFLOW_FILE")
-                
-                HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-                BODY=$(echo "$RESPONSE" | sed '$d')
-                
-                if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-                  echo "🟢 Successfully deployed workflow to n8n!"
-                else
-                  echo "❌ Failed to deploy to n8n. HTTP Code: $HTTP_CODE"
-                  echo "Response body: $BODY"
-                  exit 1
-                fi
-              fi
-            fi
-          fi
+/* L2LAAF_BLOCK_START(text:Relay Engine:scripts/relay.sh)
+#!/bin/bash
+# --- L2LAAF RELAY v5.1 (Phase 42.0.10 Automated Pipeline Upgrade) ---
+# Target: logic_payload.txt
+# Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
 
-      - name: Notify Orchestrator
-        if: success()
-        run: |
-          PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
-          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
-          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
-          cat <<EOF > n8n_payload.json
-          {
-            "incoming_phase": "$PHASE",
-            "build_id": "${{ github.run_id }}",
-            "summary": "$SUMMARY",
-            "event": "DEPLOYMENT_COMPLETE",
-            "env": "$ENV_NAME"
-          }
-          EOF
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
-          -H "Content-Type: application/json" \
-          -d @n8n_payload.json)
-          echo "n8n Response Code: ${RESPONSE: -3}"
+PAYLOAD_FILE="./scripts/logic_payload.txt"
+
+if [ ! -f "$PAYLOAD_FILE" ]; then
+    echo "❌ FATAL: Payload file not found at $PAYLOAD_FILE"
+    exit 1
+fi
+
+echo "--- L2LAAF RELAY v5.1 ---"
+echo "📂 Project Root: $(pwd)"
+echo "📡 Using Payload: $PAYLOAD_FILE"
+
+# 0. CLEANUP OLD ARTIFACTS
+echo "🧹 Purging legacy n8n workflows..."
+rm -f n8n_workflows/*.json
+
+# 1. RUN PATCHER
+node ./scripts/patcher.js < "$PAYLOAD_FILE"
+
+if [ $? -eq 0 ]; then
+    # 2. RUN TSC VALIDATION (Cloud Functions)
+    echo "🔍 Pre-flight check [1/3]: Validating Cloud Functions..."
+    cd functions && npm run build
+    if [ $? -ne 0 ]; then
+        echo "❌ FATAL: TypeScript validation failed. Bad code will not be pushed."
+        exit 1
+    fi
+    cd ..
+    echo "🟢 SUCCESS: Cloud Functions Validated."
+
+    # 3. RUN FLUTTER ANALYSIS (Web App)
+    echo "🔍 Pre-flight check [2/3]: Analyzing Flutter Code..."
+    flutter analyze > problems_list.txt 2>&1
+    
+    if grep -q "error •" problems_list.txt; then
+        echo "❌ FATAL: Flutter Lint/Analysis found errors. See problems_list.txt."
+        exit 1
+    else
+        echo "🟢 SUCCESS: Flutter Analysis Passed."
+        [ -f problems_list.txt ] && rm problems_list.txt
+    fi
+
+    # 4. RUN N8N JSON VALIDATION
+    echo "🔍 Pre-flight check [3/3]: Validating n8n Workflow JSON..."
+    if [ -d "n8n_workflows" ]; then
+        node -e "
+        const fs = require('fs');
+        const path = require('path');
+        const files = fs.readdirSync('n8n_workflows').filter(f => f.endsWith('.json'));
+        let hasError = false;
+        for (const f of files) {
+            try {
+                const data = JSON.parse(fs.readFileSync(path.join('n8n_workflows', f), 'utf8'));
+                if (!data.nodes) throw new Error('Missing \"nodes\" array in workflow definition.');
+            } catch (e) {
+                console.error('❌ Invalid n8n JSON in ' + f + ': ' + e.message);
+                hasError = true;
+            }
+        }
+        if (hasError) process.exit(1);
+        "
+        if [ $? -ne 0 ]; then
+            echo "❌ FATAL: n8n Workflow JSON validation failed. Fix syntax before deploying."
+            exit 1
+        fi
+        echo "🟢 SUCCESS: n8n Workflows Validated."
+    else
+        echo "⚠️  n8n_workflows directory not found. Skipping."
+    fi
+
+    # 5. GITHUB DEPLOYMENT SEQUENCE
+    echo "🚀 Initializing Deployment to GitHub..."
+    if [ -f "COMMIT_MSG" ]; then
+        MSG=$(cat COMMIT_MSG)
+        git add .
+        git commit -m "$MSG"
+        
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        echo "📡 Pushing to origin/$CURRENT_BRANCH..."
+        git push origin "$CURRENT_BRANCH"
+        
+        if [ $? -eq 0 ]; then
+            echo "🎉 DEPLOYMENT COMPLETE: Stack stabilized and pushed."
+            rm COMMIT_MSG
+        else
+            echo "❌ FATAL: Push failed."
+            exit 1
+        fi
+    else
+        echo "⚠️  WARNING: COMMIT_MSG file not found. Skipping git push."
+    fi
+else
+    echo "❌ FATAL: Patching failed."
+    exit 1
+fi
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.9):n8n_workflows/n8n_workflow_v42.0.9.json)
+/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.10):n8n_workflows/n8n_workflow_v42.0.10.json)
 {
-  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.9)",
+  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.10)",
   "nodes": [
     {
       "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger", "options": {} },
@@ -144,7 +145,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.9\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.10\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "State Manager", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300]
     },
@@ -244,3 +245,4 @@ L2LAAF_BLOCK_END */
   "settings": { "executionOrder": "v1" },
   "meta": { "instanceId": "local2local-instance" }
 }
+L2LAAF_BLOCK_END */
