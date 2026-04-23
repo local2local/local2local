@@ -58,8 +58,9 @@ jobs:
               if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
                 echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
               else
-                RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
+                RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
                   -H "X-N8N-API-KEY: $N8N_KEY" \
+                  -H "Accept: application/json" \
                   -H "Content-Type: application/json" \
                   -d @"$WORKFLOW_FILE")
                 
@@ -92,7 +93,7 @@ jobs:
             "env": "$ENV_NAME"
           }
           EOF
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          RESPONSE=$(curl -s --max-time 15 -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d @n8n_payload.json)
           echo "n8n Response Code: ${RESPONSE: -3}"

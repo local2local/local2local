@@ -1,1 +1,1 @@
-fix(cicd): auto-purge legacy workflows in relay and finalize n8n API deploy v11.42.0.10
+fix(orchestration): apply robust string interpolation to n8n url and add curl timeouts v11.42.0.11
