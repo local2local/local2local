@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.0.8: Service Level Throttling & n8n Automation
+ * L2LAAF Phase 42.0.9: Service Level Throttling & n8n Automation
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(cicd): bind n8n secrets to step env vars to resolve bash masking issues v11.42.0.8
+fix(orchestration): resolve expression syntax error in n8n fetch system status node v11.42.0.9
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.0.8",
+  "current_phase": "42.0.9",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -130,9 +130,9 @@ jobs:
           echo "n8n Response Code: ${RESPONSE: -3}"
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.8):n8n_workflows/n8n_workflow_v42.0.8.json)
+/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.9):n8n_workflows/n8n_workflow_v42.0.9.json)
 {
-  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.8)",
+  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.9)",
   "nodes": [
     {
       "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger", "options": {} },
@@ -144,14 +144,14 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.8\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.9\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "State Manager", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=\"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === \"prod\" ? \"local2local-prod\" : \"local2local-dev\") + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\"",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === \"prod\" ? \"local2local-prod\" : \"local2local-dev\") + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
         "sendBody": false,
         "options": {}
       },

@@ -1,1 +1,1 @@
-fix(cicd): bind n8n secrets to step env vars to resolve bash masking issues v11.42.0.8
+fix(orchestration): resolve expression syntax error in n8n fetch system status node v11.42.0.9
