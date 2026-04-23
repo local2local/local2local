@@ -14,7 +14,7 @@
 **Goal:** Dynamically control deployment velocity based on live production health.
 
 - [x] **Autonomous:** Define the Firestore schema and deploy the "Telemetry Aggregator" Cloud Function to continuously evaluate SLIs and update the `system_status` document.
-- [ ] **Autonomous:** Update the n8n Orchestrator workflow to check `system_status` before processing `FUNCTIONALITY` intents (rate-limiting or blocking based on status).
+- [x] **Autonomous:** Update the n8n Orchestrator workflow to check `system_status` before processing `FUNCTIONALITY` intents (rate-limiting or blocking based on status).
 - [ ] **Autonomous:** Scaffold the Flutter Superadmin Dashboard UI components to read and manually override the `system_status` document.
 
 ## Phase 43: Autonomous Generation & Dev Deployment

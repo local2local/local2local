@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.0.0: Service Level Throttling
+ * L2LAAF Phase 42.0.1: Service Level Throttling
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(telemetry): implement scheduled telemetry aggregator for real-time service level status v11.42.0.0
+feat(orchestration): implement SLS throttling gate in n8n workflow v11.42.0.1
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.0.0",
+  "current_phase": "42.0.1",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,181 +29,120 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(typescript:Entry Point:functions/src/index.ts)
-import * as admin from "firebase-admin";
-if (admin.apps.length === 0) admin.initializeApp();
-
-export { evolutionOrchestratorV2, ombudsmanValidatorV2, autonomousFixerV2, evolutionProposalFinalizerV2 } from "./logic/evolution";
-export { complianceAgentV2 } from "./logic/compliance";
-export { financeAgentV2, taxWorkerV2, stripeOnboardingWorker } from "./logic/finance";
-export { gpsTelemetryWorkerV2, carrierBoardWorkerV2 } from "./logic/fulfillment";
-export { facilityMatchingWorkerV2 } from "./logic/infrastructure";
-export { unifiedActivityWorkerV2 } from "./logic/orchestration";
-export { ingestWebError, ingestGCPErrors, telemetryAggregatorV2 } from "./logic/telemetry";
-export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
-export { listSubcollectionsV2 } from "./utilities/listSubcollections";
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(typescript:Telemetry Engine:functions/src/logic/telemetry.ts)
-import { onRequest } from "firebase-functions/v2/https";
-import { onMessagePublished } from "firebase-functions/v2/pubsub";
-import { onSchedule } from "firebase-functions/v2/scheduler";
-import * as admin from "firebase-admin";
-
-const db = admin.firestore();
-
-export const ingestWebError = onRequest({ cors: true }, async (req, res): Promise<void> => {
-  if (req.method !== "POST") {
-    res.status(405).send({ error: "Method Not Allowed" });
-    return;
-  }
-
-  try {
-    const errorData = req.body;
-    
-    // Package the error for the Agent Bus matching the strict schema
-    const payload = {
-      correlation_id: `ERR-WEB-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
+/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.1):n8n_workflows/n8n_workflow_v42.0.1.json)
+{
+  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.1)",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger", "options": {} },
+      "id": "MCP Code Payload", "name": "MCP Code Payload", "type": "n8n-nodes-base.webhook", "typeVersion": 1, "position": [100, 300]
+    },
+    {
+      "parameters": { "resource": "file", "operation": "get", "owner": "local2local", "repository": "local2local", "filePath": ".l2laaf/state.json", "reference": "develop" },
+      "id": "Fetch Main State", "name": "Fetch Main State", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [300, 300], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.1\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
-      status: "dispatched",
-      provenance: {
-        sender_id: "FLUTTER_CLIENT",
-        receiver_id: "AUTONOMOUS_FIXER"
+      "id": "State Manager", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/system_status/current",
+        "sendBody": false,
+        "options": { "ignoreResponseCode": true }
       },
-      control: {
-        priority: errorData.isFatal ? "critical" : "high",
-        type: "REQUEST"
+      "id": "Fetch System Status", "name": "Fetch System Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nconst currentStatus = systemStatusData.fields?.status?.stringValue || \"GREEN\";\n\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\n\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\n\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\n\nreturn [{ json: { \n  ...stateManager,\n  throttle_decision: throttleDecision,\n  throttle_message: throttleMessage,\n  system_status: currentStatus,\n  intent: intent\n} }];"
       },
-      payload: {
-        manifest: {
-          intent: "LOG_RUNTIME_ERROR",
-          context: "RUNTIME_CRASH",
-          severity: errorData.isFatal ? "critical" : "high",
-          details: errorData.error || "Unknown Error",
-          stackTrace: errorData.stackTrace || "No stack trace provided",
-          platform: errorData.platform || "web",
-          client_timestamp: errorData.timestamp || new Date().toISOString()
+      "id": "Throttling Evaluator", "name": "Throttling Evaluator", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "PROCEED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "PROCEED" },
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "DELAYED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "DELAYED" },
+            { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "BLOCKED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "BLOCKED" }
+          ]
         }
-      }
-    };
-
-    const appId = errorData.appId || "local2local-kaskflow";
-    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
-    res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
-  } catch (err: any) {
-    console.error("Failed to ingest web error:", err);
-    res.status(500).send({ error: "Internal Server Error" });
-  }
-});
-
-export const ingestGCPErrors = onMessagePublished({
-  topic: "l2laaf-gcp-errors",
-  memory: "256MiB"
-}, async (event) => {
-  try {
-    const pubSubPayload = event.data.message.json;
-    
-    // GCP Log Router payloads contain textPayload or jsonPayload
-    const details = pubSubPayload.textPayload || pubSubPayload.jsonPayload?.message || "Unknown GCP Error";
-    const severity = pubSubPayload.severity || "ERROR";
-    
-    const payload = {
-      correlation_id: `ERR-GCP-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
       },
-      status: "dispatched",
-      provenance: {
-        sender_id: "GCP_LOG_ROUTER",
-        receiver_id: "AUTONOMOUS_FIXER"
+      "id": "Throttle Switch", "name": "Throttle Switch", "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [1100, 300]
+    },
+    {
+      "parameters": { "amount": 1, "unit": "minutes" },
+      "id": "Throttle Wait", "name": "Throttle Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1, "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED\", \"subtitle\": \"Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }] }] } } ] } }}",
+        "options": {}
       },
-      control: {
-        priority: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
-        type: "REQUEST"
+      "id": "Blocked Chat Card", "name": "Blocked Chat Card", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1300, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase, \"subtitle\": \"Status: \" + $json.system_status + \" | Intent: \" + $json.intent }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
+        "options": {}
       },
-      payload: {
-        manifest: {
-          intent: "LOG_RUNTIME_ERROR",
-          context: "BACKEND_CRASH",
-          severity: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
-          details: details,
-          stackTrace: pubSubPayload.textPayload ? pubSubPayload.textPayload : JSON.stringify(pubSubPayload.jsonPayload),
-          platform: "gcp_backend",
-          client_timestamp: pubSubPayload.timestamp || new Date().toISOString(),
-          resource: pubSubPayload.resource?.type || "unknown_resource"
-        }
-      }
-    };
-
-    // We assume local2local-kaskflow as the primary orchestration bus
-    const appId = "local2local-kaskflow";
-    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
-    console.log("Successfully ingested GCP error to Agent Bus.");
-  } catch (err: any) {
-    console.error("Failed to ingest GCP error:", err);
-  }
-});
-
-export const telemetryAggregatorV2 = onSchedule({
-  schedule: "every 1 minutes",
-  memory: "256MiB"
-}, async (event) => {
-  const appId = "local2local-kaskflow";
-  const now = new Date();
-  // Look back over the last 5 minutes
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000).toISOString();
-
-  try {
-    // 1. Query recent errors from agent_bus
-    const recentErrorsSnap = await db.collection(`artifacts/${appId}/public/data/agent_bus`)
-      .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
-      .where("telemetry.processed_at", ">=", fiveMinutesAgo)
-      .get();
-
-    let fatalCount = 0;
-    let warningCount = 0;
-
-    recentErrorsSnap.forEach(doc => {
-      const data = doc.data();
-      if (data.payload?.manifest?.severity === "critical") {
-        fatalCount++;
-      } else {
-        warningCount++;
-      }
-    });
-
-    // 2. Evaluate Service Level Status (SLS)
-    let status = "GREEN";
-    if (fatalCount > 0) {
-      status = "RED";
-    } else if (warningCount > 5) {
-      status = "YELLOW";
-    }
-
-    // 3. Write to the central system_status document
-    await db.doc(`artifacts/${appId}/public/data/system_status/current`).set({
-      status: status,
-      metrics: {
-        critical_errors_5m: fatalCount,
-        warnings_5m: warningCount,
-        last_evaluated_at: now.toISOString()
-      },
-      thresholds: {
-        red: "fatal > 0",
-        yellow: "warnings > 5"
-      },
-      is_overridden: false
-    }, { merge: true });
-
-    console.log(`[SLS UPDATED] System Status is now ${status}.`);
-  } catch (error) {
-    console.error("Failed to aggregate telemetry:", error);
-  }
-});
+      "id": "Google Chat Card", "name": "Google Chat Card", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [1550, 150]
+    },
+    { "parameters": { "path": "approve-promotion", "responseMode": "responseNode", "options": {} }, "id": "Approval Listener", "name": "Approval Listener", "type": "n8n-nodes-base.webhook", "typeVersion": 1, "position": [100, 900] },
+    { "parameters": { "respondWith": "text", "responseBody": "<html><body style=\"background:#0f172a;color:white;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;padding:2rem;background:#1e293b;border-radius:1rem;border:1px solid #334155;\"><h1>MISSION REGISTERED</h1><p>Audit complete. Decisions saved.</p><script>setTimeout(()=>window.close(), 1000);</script></div></body></html>", "options": {} }, "id": "Respond to Webhook", "name": "Respond to Webhook", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [300, 800] },
+    { "parameters": { "method": "POST", "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}", "options": { "ignoreResponseCode": true } }, "id": "Fetch Proposal Data", "name": "Fetch Proposal Data", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [300, 950], "continueOnFail": true },
+    { "parameters": { "method": "POST", "url": "https://logging.googleapis.com/v2/entries:list", "authentication": "predefinedCredentialType", "nodeCredentialType": "googleApi", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"resourceNames\": [ \"projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') ], \"filter\": \"textPayload:\\\"Null check operator used on a null value\\\"\", \"pageSize\": 10 } }}", "options": {} }, "id": "Log Scraper", "name": "Log Scraper", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [500, 1000], "credentials": { "googleApi": { "id": "NlT4tfnPyrdMF8jv", "name": "GCP Orchestrator Admin" } } },
+    { "parameters": { "resource": "file", "operation": "get", "owner": "local2local", "repository": "local2local", "filePath": ".l2laaf/state.json", "reference": "develop" }, "id": "Fetch Latest State", "name": "Fetch Latest State", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [700, 1000], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } } },
+    { "parameters": { "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? `🛑 Phase ${updatedState.current_phase} DECLINED.` : (auditPassed ? `✅ Phase ${updatedState.current_phase} PROMOTED from ${state.current_phase}.` : `❌ Phase ${updatedState.current_phase} FAILED AUDIT.`);\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  let finalFilePath = originalMeta.filePath || filePath;\n  if (!finalFilePath || finalFilePath === 'null') { finalFilePath = ''; } else { finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); }\n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  return [{ json: {\n    audit_passed: auditPassed, updated_state: updatedState, notification_text: notificationText,\n    is_proposal: isProposal, hbrId: rawHbrId || '', buildId: buildId,\n    filePath: finalFilePath, fileContent: finalFileContent\n  } }];\n})();" }, "id": "Automated Testing Suite", "name": "Automated Testing Suite", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [900, 1000] },
+    { "parameters": { "rules": { "values": [ { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [ { "leftValue": "={{ $json.filePath }}", "operator": { "type": "string", "operation": "notEmpty" } } ] } }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [ { "leftValue": "={{ $json.filePath }}", "operator": { "type": "string", "operation": "isEmpty" } } ] } } ] } }, "id": "Payload Filter", "name": "Payload Filter", "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [1150, 900] },
+    { "parameters": { "resource": "file", "operation": "edit", "owner": "local2local", "repository": "local2local", "filePath": "={{ $json.filePath }}", "fileContent": "={{ $json.fileContent }}", "commitMessage": "=feat(evolution): autonomous code mutation for phase {{ $json.updated_state.current_phase }}", "options": { "branch": "develop" } }, "id": "GitHub: Mutate Logic", "name": "GitHub: Mutate Logic", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [1350, 800], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } }, "continueOnFail": true },
+    { "parameters": { "amount": 2, "unit": "seconds" }, "id": "Sync Wait", "name": "Sync Wait", "type": "n8n-nodes-base.wait", "typeVersion": 1, "position": [1550, 800] },
+    { "parameters": { "resource": "file", "operation": "edit", "owner": "local2local", "repository": "local2local", "filePath": ".l2laaf/state.json", "fileContent": "={{ JSON.stringify($json.updated_state || $('Automated Testing Suite').first().json.updated_state, null, 2) }}", "commitMessage": "=chore(orchestration): promote phase {{ $('Automated Testing Suite').first().json.updated_state.current_phase }} to STABLE", "options": { "branch": "develop" } }, "id": "GitHub: Update State", "name": "GitHub: Update State", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [1750, 900], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } } },
+    { "parameters": { "rules": { "values": [ { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [ { "leftValue": "={{ $('Automated Testing Suite').first().json.is_proposal }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } } ] } }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [ { "leftValue": "={{ $('Automated Testing Suite').first().json.is_proposal }}", "rightValue": false, "operator": { "type": "boolean", "operation": "equals" } } ] } } ] } }, "id": "Proposal Closure Check", "name": "Proposal Closure Check", "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [2000, 900] },
+    { "parameters": { "method": "POST", "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"fields\": { \"status\": { \"stringValue\": \"PROMOTED\" }, \"hbrId\": { \"stringValue\": $('Automated Testing Suite').first().json.hbrId || \"\" }, \"buildId\": { \"stringValue\": $('Automated Testing Suite').first().json.buildId || \"\" }, \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" } } } }}", "options": {} }, "id": "Trigger Firestore Closure", "name": "Trigger Firestore Closure", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [2200, 800] },
+    { "parameters": { "method": "POST", "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\nlocal2local-dev (develop) ⮕ local2local-prod (main)\" } }}", "options": {} }, "id": "Final Alert", "name": "Final Alert", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [2400, 900] }
+  ],
+  "connections": {
+    "MCP Code Payload": { "main": [[{ "node": "Fetch Main State", "type": "main", "index": 0 }]] },
+    "Fetch Main State": { "main": [[{ "node": "State Manager", "type": "main", "index": 0 }]] },
+    "State Manager": { "main": [[{ "node": "Fetch System Status", "type": "main", "index": 0 }]] },
+    "Fetch System Status": { "main": [[{ "node": "Throttling Evaluator", "type": "main", "index": 0 }]] },
+    "Throttling Evaluator": { "main": [[{ "node": "Throttle Switch", "type": "main", "index": 0 }]] },
+    "Throttle Switch": {
+      "main": [
+        [{ "node": "Google Chat Card", "type": "main", "index": 0 }],
+        [{ "node": "Throttle Wait", "type": "main", "index": 0 }],
+        [{ "node": "Blocked Chat Card", "type": "main", "index": 0 }]
+      ]
+    },
+    "Throttle Wait": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] },
+    "Approval Listener": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }, { "node": "Fetch Proposal Data", "type": "main", "index": 0 }]] },
+    "Fetch Proposal Data": { "main": [[{ "node": "Log Scraper", "type": "main", "index": 0 }]] },
+    "Log Scraper": { "main": [[{ "node": "Fetch Latest State", "type": "main", "index": 0 }]] },
+    "Fetch Latest State": { "main": [[{ "node": "Automated Testing Suite", "type": "main", "index": 0 }]] },
+    "Automated Testing Suite": { "main": [[{ "node": "Payload Filter", "type": "main", "index": 0 }]] },
+    "Payload Filter": { "main": [ [{ "node": "GitHub: Mutate Logic", "type": "main", "index": 0 }], [{ "node": "GitHub: Update State", "type": "main", "index": 0 }] ] },
+    "GitHub: Mutate Logic": { "main": [[{ "node": "Sync Wait", "type": "main", "index": 0 }]] },
+    "Sync Wait": { "main": [[{ "node": "GitHub: Update State", "type": "main", "index": 0 }]] },
+    "GitHub: Update State": { "main": [[{ "node": "Proposal Closure Check", "type": "main", "index": 0 }]] },
+    "Proposal Closure Check": { "main": [ [{ "node": "Trigger Firestore Closure", "type": "main", "index": 0 }], [{ "node": "Final Alert", "type": "main", "index": 0 }] ] },
+    "Trigger Firestore Closure": { "main": [[{ "node": "Final Alert", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "instanceId": "local2local-instance" }
+}
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(markdown:Implementation Checklist:cicd_master_checklist.md)
@@ -223,7 +162,7 @@ L2LAAF_BLOCK_END */
 **Goal:** Dynamically control deployment velocity based on live production health.
 
 - [x] **Autonomous:** Define the Firestore schema and deploy the "Telemetry Aggregator" Cloud Function to continuously evaluate SLIs and update the `system_status` document.
-- [ ] **Autonomous:** Update the n8n Orchestrator workflow to check `system_status` before processing `FUNCTIONALITY` intents (rate-limiting or blocking based on status).
+- [x] **Autonomous:** Update the n8n Orchestrator workflow to check `system_status` before processing `FUNCTIONALITY` intents (rate-limiting or blocking based on status).
 - [ ] **Autonomous:** Scaffold the Flutter Superadmin Dashboard UI components to read and manually override the `system_status` document.
 
 ## Phase 43: Autonomous Generation & Dev Deployment

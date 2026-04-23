@@ -1,1 +1,1 @@
-feat(telemetry): implement scheduled telemetry aggregator for real-time service level status v11.42.0.0
+feat(orchestration): implement SLS throttling gate in n8n workflow v11.42.0.1
