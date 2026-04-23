@@ -1,1 +1,1 @@
-fix(orchestration): apply correct n8n v4 error handling to system status fetch v11.42.0.4
+fix(orchestration): apply ignoreResponseCode to http node to gracefully bypass 404s v11.42.0.5
