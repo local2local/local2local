@@ -51,7 +51,7 @@ jobs:
           else
             PROJECT_ID="local2local-dev"
           fi
-          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force --debug
+          firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
           
       - name: Deploy n8n Workflow
         if: success()
@@ -66,7 +66,8 @@ jobs:
               if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
                 echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
               else
-                jq 'del(.meta, .active, .id, .createdAt, .updatedAt)' "$WORKFLOW_FILE" > sanitized_workflow.json
+                # Sanitize payload AND explicitly force the workflow to be Active
+                jq 'del(.meta, .id, .createdAt, .updatedAt) | .active = true' "$WORKFLOW_FILE" > sanitized_workflow.json
                 
                 RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
                   -H "X-N8N-API-KEY: $N8N_KEY" \
@@ -92,18 +93,21 @@ jobs:
         if: success()
         run: |
           PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
-          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
-          cat <<EOF > n8n_payload.json
-          {
-            "incoming_phase": "$PHASE",
-            "build_id": "${{ github.run_id }}",
-            "summary": "$SUMMARY",
-            "event": "DEPLOYMENT_COMPLETE",
-            "env": "$ENV_NAME"
-          }
-          EOF
+          
+          # Safely build JSON payload using jq to prevent string interpolation breaks
+          jq -n \
+            --arg phase "$PHASE" \
+            --arg build "${{ github.run_id }}" \
+            --arg summary "$(git log -1 --pretty=%B | head -n 1)" \
+            --arg env "$ENV_NAME" \
+            '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env}' > n8n_payload.json
+            
+          echo "Firing Webhook with payload:"
+          cat n8n_payload.json
+          
           RESPONSE=$(curl -s --max-time 15 -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
           -H "Content-Type: application/json" \
           -d @n8n_payload.json)
+          
           echo "n8n Response Code: ${RESPONSE: -3}"
