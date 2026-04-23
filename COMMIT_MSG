@@ -1,1 +1,1 @@
-fix(orchestration): add graceful degradation to system status fetch in n8n v11.42.0.3
+fix(orchestration): apply correct n8n v4 error handling to system status fetch v11.42.0.4

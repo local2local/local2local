@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.0.3: Service Level Throttling & n8n Automation
+ * L2LAAF Phase 42.0.4: Service Level Throttling & n8n Automation
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): add graceful degradation to system status fetch in n8n v11.42.0.3
+fix(orchestration): apply correct n8n v4 error handling to system status fetch v11.42.0.4
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.0.3",
+  "current_phase": "42.0.4",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,9 +29,9 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.3):n8n_workflows/n8n_workflow_v42.0.3.json)
+/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.0.4):n8n_workflows/n8n_workflow_v42.0.4.json)
 {
-  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.3)",
+  "name": "L2LAAF: Autonomous Orchestrator (Phase 42.0.4)",
   "nodes": [
     {
       "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger", "options": {} },
@@ -43,7 +43,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.3\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.0.4\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "State Manager", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300]
     },
@@ -52,10 +52,10 @@ L2LAAF_BLOCK_END */
         "method": "GET",
         "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/system_status/current",
         "sendBody": false,
-        "options": { "ignoreResponseCode": true }
+        "options": {}
       },
       "id": "Fetch System Status", "name": "Fetch System Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [700, 300],
-      "continueOnFail": true
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -140,6 +140,51 @@ L2LAAF_BLOCK_END */
     "GitHub: Update State": { "main": [[{ "node": "Proposal Closure Check", "type": "main", "index": 0 }]] },
     "Proposal Closure Check": { "main": [ [{ "node": "Trigger Firestore Closure", "type": "main", "index": 0 }], [{ "node": "Final Alert", "type": "main", "index": 0 }] ] },
     "Trigger Firestore Closure": { "main": [[{ "node": "Final Alert", "type": "main", "index": 0 }]] }
-  }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "instanceId": "local2local-instance" }
 }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(markdown:Implementation Checklist:cicd_master_checklist.md)
+# Full-Stack Autonomous CI/CD Implementation Checklist
+
+## Phase 41: The Monorepo & Telemetry Engine (COMPLETED)
+**Goal:** Restructure the repository and funnel all environment errors into the `agent_bus`.
+
+- [x] **Manual Bootstrap:** Verify repository structure (Flutter at root, `functions/` alongside it). Create `/n8n_workflows`, `/buildship`, `/.github/workflows` as needed.
+- [x] **Manual Bootstrap:** Verify Cloud Functions code is correctly placed in `/functions`.
+- [x] **Autonomous (Option A):** Implement native Dart error catchers (`FlutterError.onError` and `PlatformDispatcher.instance.onError`) to make an HTTP POST to the new telemetry endpoint.
+- [x] **Autonomous (Option A):** Deploy the `ingestWebError` Firebase Cloud Function to receive web errors and write them directly to the `agent_bus`.
+- [x] **Autonomous:** Deploy the `ingestGCPErrors` Cloud Function to sink those into the `agent_bus`.
+- [x] **Manual Bootstrap:** Configure GCP Log Router to push Error Reporting events to the `l2laaf-gcp-errors` Pub/Sub topic.
+
+## Phase 42: Service Level Throttling & Superadmin Dashboard
+**Goal:** Dynamically control deployment velocity based on live production health.
+
+- [x] **Autonomous:** Define the Firestore schema and deploy the "Telemetry Aggregator" Cloud Function to continuously evaluate SLIs and update the `system_status` document.
+- [x] **Autonomous:** Update the n8n Orchestrator workflow to check `system_status` before processing `FUNCTIONALITY` intents (rate-limiting or blocking based on status).
+- [ ] **Autonomous:** Scaffold the Flutter Superadmin Dashboard UI components to read and manually override the `system_status` document.
+
+## Phase 43: Autonomous Generation & Dev Deployment
+**Goal:** Inform the team, write the code, and auto-deploy to the dev environment sandbox.
+
+- [ ] **Autonomous:** Update the n8n workflow to emit the "YELLOW" Informational Ping to Google Chat when a fix/feature is initiated.
+- [ ] **Manual Bootstrap:** Create the `.github/workflows/deploy-dev.yml` Action to detect changes in `develop` and auto-deploy to the respective `local2local-dev` environments.
+- [ ] **Manual Bootstrap:** Configure necessary GitHub Secrets (Firebase tokens, Buildship API keys, n8n API keys) for the Dev Action.
+
+## Phase 44: Shadow Testing & The HITL Gate
+**Goal:** Validate the deployment automatically and queue for human approval.
+
+- [ ] **Autonomous:** Deploy the `Ombudsman Validator` logic to pause and monitor telemetry for 5-10 minutes post-deployment.
+- [ ] **Autonomous:** Build the Success/Failure fork logic (Re-trigger Phase 43 on failure, or trigger Phase 45 on success).
+- [ ] **Autonomous:** Update the n8n workflow to emit the "GREEN" Actionable Ping to Google Chat upon shadow run success.
+
+## Phase 45: Production Promotion
+**Goal:** Merge the code and deploy to the live environment upon human approval.
+
+- [ ] **Manual Bootstrap:** Create a Personal Access Token (PAT) for GitHub to allow n8n to generate and merge Pull Requests.
+- [ ] **Autonomous:** Update the n8n Orchestrator to create a PR from `develop` to `main`, auto-merge it, and format the Google Chat confirmation.
+- [ ] **Manual Bootstrap:** Create the `.github/workflows/deploy-prod.yml` Action to detect merges to `main` and deploy to `local2local-prod`.
+- [ ] **Manual Bootstrap:** Configure necessary GitHub Secrets for the Prod Action.
 L2LAAF_BLOCK_END */
