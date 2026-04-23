@@ -1,1 +1,1 @@
-chore(orchestration): restore n8n workflow to repository source-of-truth v11.42.1.4
+fix(orchestration): implement static n8n workflow name with sticky note versioning v11.42.1.5
