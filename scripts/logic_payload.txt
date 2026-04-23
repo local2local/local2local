@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.1.5: Superadmin UI Scaffold & Relay Patch
+ * L2LAAF Phase 42.1.6: Superadmin UI Scaffold & Relay Patch
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(orchestration): implement static n8n workflow name with sticky note versioning v11.42.1.5
+fix(cicd): sanitize n8n payload to bypass additional properties strict validation v11.42.1.6
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.1.5",
+  "current_phase": "42.1.6",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -29,13 +29,117 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.1.5):n8n_workflows/n8n_workflow_v42.1.5.json)
+/* L2LAAF_BLOCK_START(yaml:GitHub Deploy Action:.github/workflows/deploy.yml)
+name: L2LAAF Multi-Project Deployment
+on:
+  push:
+    branches: [ main, develop ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.38.5'
+      - name: Install Dependencies
+        run: |
+          cd functions && npm install
+          cd ..
+          flutter pub get
+      - name: Build Flutter Web
+        run: flutter build web --release
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Deploy Stack
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            PROJECT_ID="local2local-prod"
+          else
+            PROJECT_ID="local2local-dev"
+          fi
+          npx firebase-tools deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
+          
+      - name: Deploy n8n Workflow
+        if: success()
+        env:
+          N8N_KEY: ${{ secrets.N8N_API_KEY }}
+          N8N_ID: ${{ secrets.N8N_WORKFLOW_ID }}
+        run: |
+          if [ -d "n8n_workflows" ]; then
+            WORKFLOW_FILE=$(ls -t n8n_workflows/*.json 2>/dev/null | head -n 1)
+            if [ -n "$WORKFLOW_FILE" ]; then
+              echo "Deploying $WORKFLOW_FILE to n8n Cloud..."
+              if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
+                echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
+              else
+                # Sanitize the JSON to bypass n8n API "additional properties" strict validation
+                jq 'del(.meta, .active, .id, .createdAt, .updatedAt)' "$WORKFLOW_FILE" > sanitized_workflow.json
+                
+                RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
+                  -H "X-N8N-API-KEY: $N8N_KEY" \
+                  -H "Accept: application/json" \
+                  -H "Content-Type: application/json" \
+                  -d @sanitized_workflow.json)
+                
+                HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+                BODY=$(echo "$RESPONSE" | sed '$d')
+                
+                if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+                  echo "🟢 Successfully deployed workflow to n8n!"
+                else
+                  echo "❌ Failed to deploy to n8n. HTTP Code: $HTTP_CODE"
+                  echo "Response body: $BODY"
+                  exit 1
+                fi
+              fi
+            fi
+          fi
+
+      - name: Notify Orchestrator
+        if: success()
+        run: |
+          PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
+          SUMMARY=$(git log -1 --pretty=%B | tr -d '\n' | tr '"' "'")
+          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
+          cat <<EOF > n8n_payload.json
+          {
+            "incoming_phase": "$PHASE",
+            "build_id": "${{ github.run_id }}",
+            "summary": "$SUMMARY",
+            "event": "DEPLOYMENT_COMPLETE",
+            "env": "$ENV_NAME"
+          }
+          EOF
+          RESPONSE=$(curl -s --max-time 15 -w "%{http_code}" -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d @n8n_payload.json)
+          echo "n8n Response Code: ${RESPONSE: -3}"
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:n8n Workflow (v42.1.6):n8n_workflows/n8n_workflow_v42.1.6.json)
 {
   "name": "L2LAAF: Autonomous Orchestrator",
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.5\n**Commit:** fix(orchestration): implement static n8n workflow name with sticky note versioning v11.42.1.5",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.6\n**Commit:** fix(cicd): sanitize n8n payload to bypass additional properties strict validation v11.42.1.6",
         "height": 150,
         "width": 350,
         "color": 6
@@ -48,7 +152,7 @@ L2LAAF_BLOCK_END */
     },
     { "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger" }, "id": "webhook-1", "name": "MCP Code Payload", "type": "n8n-nodes-base.webhook", "typeVersion": 1, "position": [100, 300] },
     { "parameters": { "resource": "file", "operation": "get", "owner": "local2local", "repository": "local2local", "filePath": ".l2laaf/state.json", "reference": "develop" }, "id": "github-1", "name": "Fetch Main State", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [300, 300], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } } },
-    { "parameters": { "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.5\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();" }, "id": "code-1", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300] },
+    { "parameters": { "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.6\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();" }, "id": "code-1", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300] },
     { "parameters": { "method": "GET", "url": "={{ `https://firestore.googleapis.com/v1/projects/${$json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/system_status/public/data/telemetry` }}", "sendBody": false, "options": {} }, "id": "Fetch System Status", "name": "Fetch System Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [700, 300] },
     { "parameters": { "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\n\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\n\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\n\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\n\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\n\nreturn [{ json: { \n  ...stateManager,\n  throttle_decision: throttleDecision,\n  throttle_message: throttleMessage,\n  system_status: currentStatus,\n  intent: intent\n} }];" }, "id": "Throttling Evaluator", "name": "Throttling Evaluator", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [900, 300] },
     { "parameters": { "rules": { "values": [ { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "PROCEED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "PROCEED" }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "DELAYED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "DELAYED" }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "BLOCKED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "BLOCKED" } ] } }, "id": "Throttle Switch", "name": "Throttle Switch", "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [1100, 300] },

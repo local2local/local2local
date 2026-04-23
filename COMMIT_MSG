@@ -1,1 +1,1 @@
-fix(orchestration): implement static n8n workflow name with sticky note versioning v11.42.1.5
+fix(cicd): sanitize n8n payload to bypass additional properties strict validation v11.42.1.6
