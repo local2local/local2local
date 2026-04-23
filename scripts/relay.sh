@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v5.1 (Phase 42.0.10 Automated Pipeline Upgrade) ---
+# --- L2LAAF RELAY v5.2 (Phase 42.0.14 Force Tracking Upgrade) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
 
@@ -10,7 +10,7 @@ if [ ! -f "$PAYLOAD_FILE" ]; then
     exit 1
 fi
 
-echo "--- L2LAAF RELAY v5.1 ---"
+echo "--- L2LAAF RELAY v5.2 ---"
 echo "📂 Project Root: $(pwd)"
 echo "📡 Using Payload: $PAYLOAD_FILE"
 
@@ -76,6 +76,11 @@ if [ $? -eq 0 ]; then
     echo "🚀 Initializing Deployment to GitHub..."
     if [ -f "COMMIT_MSG" ]; then
         MSG=$(cat COMMIT_MSG)
+        
+        # FORCE TRACK N8N FOLDER TO BYPASS .GITIGNORE
+        echo "📦 Force-tracking n8n_workflows..."
+        git add -f n8n_workflows/
+        
         git add .
         git commit -m "$MSG"
         
