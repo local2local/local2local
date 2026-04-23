@@ -1,1 +1,1 @@
-fix(cicd): deploy workflow with force tracking to bypass gitignore v11.42.0.15
+fix(cicd): update gitignore to explicitly whitelist n8n workflows v11.42.0.16
