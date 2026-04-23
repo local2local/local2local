@@ -1,1 +1,1 @@
-fix(cicd): resolve webhook race condition, enforce strict curl failures, and force execution logging v11.42.1.12
+fix(cicd): force n8n webhook unmount and remount sequence to prevent 404 routing zombies v11.42.1.13
