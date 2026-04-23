@@ -1,1 +1,1 @@
-fix(orchestration): apply ignoreResponseCode to http node to gracefully bypass 404s v11.42.0.5
+fix(orchestration): convert firestore get to collection list to definitively bypass 404s v11.42.0.6
