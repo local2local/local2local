@@ -1,1 +1,1 @@
-feat(orchestration): implement SLS throttling gate in n8n workflow v11.42.0.1
+feat(cicd): automate n8n workflow api deployment and add pre-flight json validation v11.42.0.2
