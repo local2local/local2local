@@ -5,11 +5,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:local2local/core/app.dart';
+
+// Import the new Superadmin Dashboard
+import 'package:local2local/features/triage_hub/screens/superadmin_dashboard.dart';
 import 'package:local2local/firebase_options.dart';
 
 // --- L2LAAF TELEMETRY CONFIGURATION ---
-// Cloud Function endpoint for local2local-dev
 const String telemetryEndpoint = 'https://us-central1-local2local-dev.cloudfunctions.net/ingestWebError';
 
 Future<void> sendErrorToAgentBus(String error, String stackTrace, bool isFatal) async {
@@ -36,13 +37,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // --- L2LAAF GLOBAL ERROR CATCHERS ---
-  // Catch synchronous Flutter framework errors
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
     sendErrorToAgentBus(details.exceptionAsString(), details.stack.toString(), true);
   };
 
-  // Catch asynchronous Dart errors
   PlatformDispatcher.instance.onError = (error, stack) {
     sendErrorToAgentBus(error.toString(), stack.toString(), true);
     return true;
@@ -64,8 +63,6 @@ void main() async {
   } catch (e, stack) {
     bootError = e.toString();
     debugPrint("L2LAAF_BOOT_FATAL: $e");
-    
-    // Explicitly catch boot failures and send to the Autonomous Orchestrator
     sendErrorToAgentBus("Firebase Init Failed: ${e.toString()}", stack.toString(), true);
   }
 
@@ -75,7 +72,12 @@ void main() async {
         firebaseReadyProvider.overrideWith((ref) => coreReady),
         initErrorProvider.overrideWith((ref) => bootError),
       ],
-      child: const L2LAAFApp(),
+      child: const MaterialApp(
+        title: 'L2LAAF Orchestrator',
+        debugShowCheckedModeBanner: false,
+        // Bypassing normal routing to directly view the Dashboard
+        home: SuperadminDashboard(),
+      ),
     ),
   );
 }
