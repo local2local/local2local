@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.1.18: POST Activation Fix
+ * L2LAAF Phase 42.1.19: Cloudflare Edge Routing Propagation Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(cicd): revert to POST activate endpoint to resolve 405 Method Not Allowed error v11.42.1.18
+fix(cicd): add 20s propagation delay and extended polling to handle n8n cloudflare edge routing v11.42.1.19
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.1.18",
+  "current_phase": "42.1.19",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -128,7 +128,11 @@ jobs:
                 ACT_BODY=$(echo "$ACT_RESPONSE" | sed '$d')
                 
                 if [[ "$ACT_CODE" -ge 200 && "$ACT_CODE" -lt 300 ]]; then
-                  echo "🟢 Successfully activated workflow! Running validation check..."
+                  echo "🟢 Successfully activated workflow!"
+                  echo "⏳ Waiting 20s for n8n Cloud webhook router (Cloudflare edge) to propagate..."
+                  sleep 20
+                  
+                  echo "Running validation check..."
                   
                   # STEP 4: Confirm the webhook path matches your secret
                   REGISTERED_PATH=$(curl -s -H "X-N8N-API-KEY: $N8N_KEY" \
@@ -176,14 +180,14 @@ jobs:
           WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
           echo "Firing Webhook with payload to $WEBHOOK_URL"
           
-          MAX_RETRIES=4
+          MAX_RETRIES=6
           RETRY_COUNT=0
           HTTP_CODE=404
           
           while [[ "$HTTP_CODE" -eq 404 && $RETRY_COUNT -lt $MAX_RETRIES ]]; do
             if [ $RETRY_COUNT -gt 0 ]; then
-              echo "⚠️ Webhook returned 404. Waiting 5s for n8n router reload..."
-              sleep 5
+              echo "⚠️ Webhook returned 404. n8n routing table is still mounting. Waiting 10s before retry..."
+              sleep 10
             fi
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
               -H "Content-Type: application/json" \
@@ -207,7 +211,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.18\n**Commit:** fix(cicd): revert to POST activate endpoint to resolve 405 Method Not Allowed error v11.42.1.18",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.19\n**Commit:** fix(cicd): add 20s propagation delay and extended polling to handle n8n cloudflare edge routing v11.42.1.19",
         "height": 150,
         "width": 350,
         "color": 6
@@ -220,7 +224,7 @@ L2LAAF_BLOCK_END */
     },
     { "parameters": { "httpMethod": "POST", "path": "l2laaf-payload-trigger", "options": {} }, "id": "f8a44b1c-9e62-4299-90b5-4db9d51e7c02", "name": "MCP Code Payload", "type": "n8n-nodes-base.webhook", "typeVersion": 1, "position": [100, 300] },
     { "parameters": { "resource": "file", "operation": "get", "owner": "local2local", "repository": "local2local", "filePath": ".l2laaf/state.json", "reference": "develop" }, "id": "c7e2b1fa-8a56-4f40-811a-6d0e9a7e6b03", "name": "Fetch Main State", "type": "n8n-nodes-base.github", "typeVersion": 1, "position": [300, 300], "credentials": { "githubApi": { "id": "6OSt2bN1T5JeIKvt", "name": "GitHub L2LAAF Admin" } } },
-    { "parameters": { "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  if (meta.commits || meta.pusher) return [];\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.18\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();" }, "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300] },
+    { "parameters": { "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  if (meta.commits || meta.pusher) return [];\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.19\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();" }, "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04", "name": "State Manager", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [500, 300] },
     { "parameters": { "method": "GET", "url": "={{ `https://firestore.googleapis.com/v1/projects/${$json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/system_status/public/data/telemetry` }}", "sendBody": false, "options": {} }, "id": "2bc59b88-1250-4824-b152-dc72de6f3d1b", "name": "Fetch System Status", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [700, 300] },
     { "parameters": { "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\nreturn [{ json: { ...stateManager, throttle_decision: throttleDecision, throttle_message: throttleMessage, system_status: currentStatus, intent: intent } }];" }, "id": "f512dbb9-6b5d-4f11-9ab0-9b4ef0f9ebc7", "name": "Throttling Evaluator", "type": "n8n-nodes-base.code", "typeVersion": 1, "position": [900, 300] },
     { "parameters": { "rules": { "values": [ { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "PROCEED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "PROCEED" }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "DELAYED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "DELAYED" }, { "conditions": { "options": { "caseSensitive": true, "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.throttle_decision }}", "rightValue": "BLOCKED", "operator": { "type": "string", "operation": "equals" } }] }, "renameOutput": true, "outputKey": "BLOCKED" } ] } }, "id": "42d3c909-543e-48a5-ab65-c3ccdf9e7d98", "name": "Throttle Switch", "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [1100, 300] },
@@ -275,4 +279,3 @@ L2LAAF_BLOCK_END */
     "saveManualExecutions": true
   }
 }
-L2LAAF_BLOCK_END */

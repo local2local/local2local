@@ -1,1 +1,1 @@
-fix(cicd): revert to POST activate endpoint to resolve 405 Method Not Allowed error v11.42.1.18
+fix(cicd): add 20s propagation delay and extended polling to handle n8n cloudflare edge routing v11.42.1.19

@@ -96,7 +96,11 @@ jobs:
                 ACT_BODY=$(echo "$ACT_RESPONSE" | sed '$d')
                 
                 if [[ "$ACT_CODE" -ge 200 && "$ACT_CODE" -lt 300 ]]; then
-                  echo "🟢 Successfully activated workflow! Running validation check..."
+                  echo "🟢 Successfully activated workflow!"
+                  echo "⏳ Waiting 20s for n8n Cloud webhook router (Cloudflare edge) to propagate..."
+                  sleep 20
+                  
+                  echo "Running validation check..."
                   
                   # STEP 4: Confirm the webhook path matches your secret
                   REGISTERED_PATH=$(curl -s -H "X-N8N-API-KEY: $N8N_KEY" \
@@ -144,14 +148,14 @@ jobs:
           WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
           echo "Firing Webhook with payload to $WEBHOOK_URL"
           
-          MAX_RETRIES=4
+          MAX_RETRIES=6
           RETRY_COUNT=0
           HTTP_CODE=404
           
           while [[ "$HTTP_CODE" -eq 404 && $RETRY_COUNT -lt $MAX_RETRIES ]]; do
             if [ $RETRY_COUNT -gt 0 ]; then
-              echo "⚠️ Webhook returned 404. Waiting 5s for n8n router reload..."
-              sleep 5
+              echo "⚠️ Webhook returned 404. n8n routing table is still mounting. Waiting 10s before retry..."
+              sleep 10
             fi
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
               -H "Content-Type: application/json" \
