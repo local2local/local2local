@@ -93,8 +93,7 @@ jobs:
                 ACT_CODE=$(echo "$ACT_RESPONSE" | tail -n1)
                 
                 if [[ "$ACT_CODE" -ge 200 && "$ACT_CODE" -lt 300 ]]; then
-                  echo "🟢 Successfully activated workflow! Waiting 10 seconds for n8n routing table to mount..."
-                  sleep 10
+                  echo "🟢 Successfully activated workflow! Proceeding to payload delivery."
                 else
                   echo "⚠️ Failed to activate workflow. HTTP Code: $ACT_CODE."
                 fi
@@ -113,6 +112,7 @@ jobs:
           PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
           
+          # Safely build JSON payload using jq to prevent string interpolation breaks
           jq -n \
             --arg phase "$PHASE" \
             --arg build "${{ github.run_id }}" \
@@ -120,18 +120,32 @@ jobs:
             --arg env "$ENV_NAME" \
             '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env}' > n8n_payload.json
             
-          echo "Firing Webhook with payload:"
+          WEBHOOK_URL="https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger"
+          echo "Firing Webhook with payload to $WEBHOOK_URL"
           cat n8n_payload.json
           
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d @n8n_payload.json)
+          MAX_RETRIES=6
+          RETRY_COUNT=0
+          HTTP_CODE=404
           
-          echo "n8n Webhook Response Code: $HTTP_CODE"
+          # Poll the webhook endpoint in case n8n's internal router is taking a long time to mount
+          while [[ "$HTTP_CODE" -eq 404 && $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+            if [ $RETRY_COUNT -gt 0 ]; then
+              echo "⚠️ Webhook returned 404. n8n routing table is still mounting. Waiting 5s before retry..."
+              sleep 5
+            fi
+            
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d @n8n_payload.json)
+              
+            echo "n8n Webhook Response Code: $HTTP_CODE"
+            RETRY_COUNT=$((RETRY_COUNT+1))
+          done
           
           if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-            echo "🟢 Webhook successfully received by n8n!"
+            echo "🟢 Webhook successfully received and processed by n8n!"
           else
-            echo "❌ Webhook failed! n8n returned $HTTP_CODE. The webhook may be inactive or offline."
+            echo "❌ Webhook failed! Final response code: $HTTP_CODE. The webhook may be inactive or offline."
             exit 1
           fi
