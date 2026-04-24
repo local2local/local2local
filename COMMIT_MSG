@@ -1,1 +1,1 @@
-fix(cicd): add 20s propagation delay and extended polling to handle n8n cloudflare edge routing v11.42.1.19
+fix(cicd): implement forced deactivate/activate sequence with health check probing for n8n edge routing v11.42.1.20

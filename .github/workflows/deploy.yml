@@ -65,13 +65,7 @@ jobs:
             if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
               echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
             else
-              # STEP 1: Explicitly deactivate workflow to flush n8n Express routing table
-              echo "Deactivating workflow $N8N_ID to clear routing table..."
-              curl -s --max-time 15 -X POST "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID/deactivate" \
-                -H "X-N8N-API-KEY: $N8N_KEY" \
-                -H "Accept: application/json" > /dev/null
-
-              # STEP 2: Upload new JSON
+              # STEP 1: Upload the modified JSON (keeping the static UUIDs intact)
               jq 'del(.meta, .active, .createdAt, .updatedAt)' "$WORKFLOW_FILE" > sanitized_workflow.json
               
               RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
@@ -84,10 +78,19 @@ jobs:
               BODY=$(echo "$RESPONSE" | sed '$d')
               
               if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-                echo "🟢 Successfully deployed workflow to n8n!"
+                echo "🟢 Successfully deployed workflow payload to n8n!"
                 
-                # STEP 3: Explicitly activate using the correct POST endpoint
-                echo "Activating workflow $N8N_ID..."
+                # STEP 2: Deactivate first to force clean webhook teardown on the edge network
+                echo "Deactivating workflow $N8N_ID to force webhook re-registration..."
+                curl -s -X POST "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID/deactivate" \
+                  -H "X-N8N-API-KEY: $N8N_KEY" \
+                  -H "Accept: application/json" > /dev/null
+                  
+                echo "⏳ Waiting 10s for deactivation to propagate..."
+                sleep 10
+                
+                # STEP 3: Reactivate to force fresh webhook mount
+                echo "Reactivating workflow $N8N_ID..."
                 ACT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID/activate" \
                   -H "X-N8N-API-KEY: $N8N_KEY" \
                   -H "Accept: application/json")
@@ -96,26 +99,9 @@ jobs:
                 ACT_BODY=$(echo "$ACT_RESPONSE" | sed '$d')
                 
                 if [[ "$ACT_CODE" -ge 200 && "$ACT_CODE" -lt 300 ]]; then
-                  echo "🟢 Successfully activated workflow!"
-                  echo "⏳ Waiting 20s for n8n Cloud webhook router (Cloudflare edge) to propagate..."
-                  sleep 20
-                  
-                  echo "Running validation check..."
-                  
-                  # STEP 4: Confirm the webhook path matches your secret
-                  REGISTERED_PATH=$(curl -s -H "X-N8N-API-KEY: $N8N_KEY" \
-                    "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" | \
-                    jq -r '.nodes[] | select(.type == "n8n-nodes-base.webhook" and .name == "MCP Code Payload") | .parameters.path')
-                    
-                  echo "Registered webhook path in n8n: $REGISTERED_PATH"
-                  echo "Expected in WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}"
-                  
-                  if [[ "${{ secrets.N8N_WEBHOOK_URL }}" != *"$REGISTERED_PATH"* ]]; then
-                    echo "❌ WEBHOOK_URL secret is stale or path is corrupted! Expected path: $REGISTERED_PATH"
-                    exit 1
-                  fi
-                  echo "✅ Workflow active and webhook path verified!"
-                  
+                  echo "🟢 Workflow reactivated!"
+                  echo "⏳ Waiting 30s for Cloudflare edge to fully mount the webhook route..."
+                  sleep 30
                 else
                   echo "⚠️ Failed to activate workflow. HTTP Code: $ACT_CODE"
                   echo "Response: $ACT_BODY"
@@ -137,7 +123,6 @@ jobs:
           PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
           
-          # Safely build JSON payload using jq to prevent string interpolation breaks
           jq -n \
             --arg phase "$PHASE" \
             --arg build "${{ github.run_id }}" \
@@ -146,27 +131,44 @@ jobs:
             '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env}' > n8n_payload.json
             
           WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
-          echo "Firing Webhook with payload to $WEBHOOK_URL"
           
-          MAX_RETRIES=6
-          RETRY_COUNT=0
-          HTTP_CODE=404
+          # STEP 4: Probe the webhook before firing the real payload
+          echo "🔍 Probing webhook availability at $WEBHOOK_URL"
+          PROBE_MAX=6
+          PROBE_COUNT=0
+          PROBE_CODE=404
           
-          while [[ "$HTTP_CODE" -eq 404 && $RETRY_COUNT -lt $MAX_RETRIES ]]; do
-            if [ $RETRY_COUNT -gt 0 ]; then
-              echo "⚠️ Webhook returned 404. n8n routing table is still mounting. Waiting 10s before retry..."
+          while [[ "$PROBE_CODE" -eq 404 && $PROBE_COUNT -lt $PROBE_MAX ]]; do
+            PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST \
+              "$WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"probe": true}')
+            
+            echo "Probe $((PROBE_COUNT+1)): HTTP $PROBE_CODE"
+            if [[ "$PROBE_CODE" -eq 404 ]]; then
+              echo "⚠️ Route not mounted yet. Waiting 10s..."
               sleep 10
             fi
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d @n8n_payload.json)
-            echo "n8n Webhook Response Code: $HTTP_CODE"
-            RETRY_COUNT=$((RETRY_COUNT+1))
+            PROBE_COUNT=$((PROBE_COUNT+1))
           done
+          
+          if [[ "$PROBE_CODE" -eq 404 ]]; then
+            echo "❌ Webhook never mounted after deactivate/reactivate cycle."
+            exit 1
+          fi
+          
+          echo "✅ Webhook is live! Firing real payload..."
+          cat n8n_payload.json
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d @n8n_payload.json)
+            
+          echo "n8n Webhook Response Code: $HTTP_CODE"
           
           if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
             echo "🟢 Webhook successfully received and processed by n8n!"
           else
-            echo "❌ Webhook failed! Final response code: $HTTP_CODE. The webhook may be inactive or offline."
+            echo "❌ Webhook failed! Final response code: $HTTP_CODE."
             exit 1
           fi
