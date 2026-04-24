@@ -35,7 +35,7 @@ class AdminShell extends ConsumerWidget {
             leading: const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child:
-                  Icon(Icons.radar, color: AdminColors.emeraldGreen, size: 32),
+                  Icon(Icons.blur_on, color: AdminColors.emeraldGreen, size: 32),
             ),
             // LOWER LEFT ACTIONS (Trailing)
             trailing: Expanded(

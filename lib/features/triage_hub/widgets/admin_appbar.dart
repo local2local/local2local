@@ -1,144 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-class AdminAppBar extends ConsumerStatefulWidget
-    implements PreferredSizeWidget {
+class AdminAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String title;
   const AdminAppBar({super.key, required this.title});
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
-
-  @override
-  ConsumerState<AdminAppBar> createState() => _AdminAppBarState();
-}
-
-class _AdminAppBarState extends ConsumerState<AdminAppBar> {
-  @override
-  Widget build(BuildContext context) {
-    final currentApp = ref.watch(currentAppProvider);
-    final currentEnv = ref.watch(currentEnvironmentProvider);
-
-    return Container(
-      height: 64,
-      decoration: const BoxDecoration(
-        color: AdminColors.slateDark,
-        border: Border(
-            bottom: BorderSide(color: AdminColors.borderDefault, width: 1)),
-      ),
-      padding: const EdgeInsets.only(
-          left: 16,
-          right: 8), // Adjusted padding for better right-justification
-      child: Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AppBar(
+      backgroundColor: AdminColors.slateDarkest,
+      elevation: 1,
+      shadowColor: Colors.black,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. App Title
-          Text(
-            widget.title,
-            style: const TextStyle(
-                color: AdminColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 20),
-
-          // 2. Environment Selector
-          _EnvironmentBadge(
-            environment: currentEnv,
-            onChanged: (env) => ref
-                .read(currentEnvironmentProvider.notifier)
-                .setEnvironment(env),
-          ),
-          const SizedBox(width: 12),
-
-          // 3. Tenant Selector
-          _TenantSelector(
-            currentApp: currentApp,
-            onChanged: (tenant) =>
-                ref.read(currentAppProvider.notifier).setApp(tenant),
-          ),
-
-          // 4. Elastic Space to push content to the right
-          const Spacer(),
-
-          // 5. Right-Justified Notifications
-          IconButton(
-            tooltip: 'Notifications',
-            icon: const Icon(Icons.notifications_outlined,
-                size: 22, color: AdminColors.textSecondary),
-            onPressed: () {},
-          ),
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          const Text('Build: v42.1.28', style: TextStyle(color: AdminColors.textSecondary, fontSize: 11)),
         ],
       ),
+      actions: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AdminColors.slateDark,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AdminColors.borderDefault),
+            ),
+            child: const Row(
+              children: [
+                Text('DEV', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                SizedBox(width: 4),
+                Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 16),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        const Center(
+          child: Text('PROJECT: local2local-dev', style: TextStyle(color: AdminColors.emeraldGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+        ),
+        const SizedBox(width: 16),
+        IconButton(
+          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+          onPressed: () {},
+        ),
+        const SizedBox(width: 16),
+      ],
     );
   }
-}
-
-class _EnvironmentBadge extends StatelessWidget {
-  final AppEnvironment environment;
-  final Function(AppEnvironment) onChanged;
-  const _EnvironmentBadge({required this.environment, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
-    final Color badgeColor = switch (environment) {
-      AppEnvironment.prod => AdminColors.rubyRed,
-      AppEnvironment.dev => AdminColors.statusInfo,
-    };
-
-    return PopupMenuButton<AppEnvironment>(
-      initialValue: environment,
-      onSelected: onChanged,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: badgeColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: badgeColor.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(environment.label,
-                style: TextStyle(
-                    color: badgeColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, size: 16, color: badgeColor),
-          ],
-        ),
-      ),
-      itemBuilder: (context) => AppEnvironment.values
-          .map((env) => PopupMenuItem(value: env, child: Text(env.displayName)))
-          .toList(),
-    );
-  }
-}
-
-class _TenantSelector extends StatelessWidget {
-  final AppTenant currentApp;
-  final Function(AppTenant) onChanged;
-  const _TenantSelector({required this.currentApp, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<AppTenant>(
-      showSelectedIcon: false,
-      style: SegmentedButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-      segments: AppTenant.values
-          .map((t) => ButtonSegment(
-                value: t,
-                label: Text(t.displayName.toUpperCase()),
-              ))
-          .toList(),
-      selected: {currentApp},
-      onSelectionChanged: (set) => onChanged(set.first),
-    );
-  }
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
