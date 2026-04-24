@@ -1,1 +1,1 @@
-fix(cicd): strip invalid string node IDs to allow n8n to generate valid UUIDs and cleanly mount webhooks v11.42.1.16
+fix(cicd): apply claude routing fix with static node uuids, PATCH activation, and path verification v11.42.1.17
