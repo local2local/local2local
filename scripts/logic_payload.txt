@@ -1,16 +1,16 @@
 /**
- * L2LAAF Phase 42.1.22: The Second Webhook ID Fix
+ * L2LAAF Phase 42.1.23: Template Literal URL Fix
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(cicd): add static webhookId to the Approval Listener webhook to prevent 404 on chat card clicks v11.42.1.22
+fix(cicd): update httpRequest node urls to use valid n8n template literal expressions v11.42.1.23
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Initial State:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.1.22",
+  "current_phase": "42.1.23",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -214,7 +214,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.22\n**Commit:** fix(cicd): add static webhookId to the Approval Listener webhook to prevent 404 on chat card clicks v11.42.1.22",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 42.1.23\n**Commit:** fix(cicd): update httpRequest node urls to use valid n8n template literal expressions v11.42.1.23",
         "height": 150,
         "width": 350,
         "color": 6
@@ -270,7 +270,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  // Silently drop GitHub noise AND Claude's health-check probes\n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.22\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  // Silently drop GitHub noise AND Claude's health-check probes\n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"42.1.23\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -470,7 +470,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\"",
+        "url": "={{ `https://firestore.googleapis.com/v1/projects/${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery` }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}",
@@ -627,8 +627,7 @@ L2LAAF_BLOCK_END */
           "id": "6OSt2bN1T5JeIKvt",
           "name": "GitHub L2LAAF Admin"
         }
-      },
-      "continueOnFail": true
+      }
     },
     {
       "parameters": {
@@ -727,7 +726,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\"",
+        "url": "={{ `https://firestore.googleapis.com/v1/projects/${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals` }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"fields\": { \"status\": { \"stringValue\": \"PROMOTED\" }, \"hbrId\": { \"stringValue\": $('Automated Testing Suite').first().json.hbrId || \"\" }, \"buildId\": { \"stringValue\": $('Automated Testing Suite').first().json.buildId || \"\" }, \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" } } } }}",

@@ -1,1 +1,1 @@
-fix(cicd): add static webhookId to the Approval Listener webhook to prevent 404 on chat card clicks v11.42.1.22
+fix(cicd): update httpRequest node urls to use valid n8n template literal expressions v11.42.1.23
