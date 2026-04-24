@@ -55,7 +55,7 @@ class AdminHubPage extends ConsumerWidget {
       case 4:
         return const DiagnosticsScreen();
       case 5:
-        return const SuperadminDashboard(); // Phase 42: 6th Destination Added
+        return const SuperadminDashboard(); 
       default:
         return const TriageQueuePage();
     }

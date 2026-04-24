@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-import 'package:local2local/features/triage_hub/screens/superadmin_dashboard.dart';
+import 'package:local2local/features/triage_hub/pages/admin_hub_page.dart';
 import 'package:local2local/firebase_options.dart';
 
 const String telemetryEndpoint = 'https://us-central1-local2local-dev.cloudfunctions.net/ingestWebError';
@@ -64,7 +64,7 @@ void main() async {
       child: const MaterialApp(
         title: 'L2LAAF Orchestrator',
         debugShowCheckedModeBanner: false,
-        home: SuperadminDashboard(),
+        home: AdminHubPage(),
       ),
     ),
   );

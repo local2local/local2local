@@ -84,7 +84,6 @@ class AdminShell extends ConsumerWidget {
                 icon: Icon(Icons.troubleshoot_rounded),
                 label: Text('Diagnostics'),
               ),
-              // Phase 42: New 6th Destination
               const NavigationRailDestination(
                 icon: Icon(Icons.admin_panel_settings_rounded),
                 label: Text('Superadmin'),
