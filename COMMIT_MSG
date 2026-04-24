@@ -1,1 +1,1 @@
-fix(ui): enforce 6th navigation item, update build version to v42.1.28 in appbar, finalize superadmin dashboard
+fix(ui): anchor superadmin dashboard into active cockpit shell, restore diagnostics nav, and patch environment version to v42.1.29

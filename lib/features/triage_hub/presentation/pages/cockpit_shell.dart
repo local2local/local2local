@@ -6,7 +6,7 @@ import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_hea
 import 'package:local2local/features/triage_hub/presentation/widgets/hbr_lock_indicator.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
-import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
+import 'package:local2local/features/triage_hub/pages/superadmin_dashboard.dart';
 import 'package:local2local/main.dart';
 
 class CockpitShell extends ConsumerStatefulWidget {
@@ -17,7 +17,7 @@ class CockpitShell extends ConsumerStatefulWidget {
 }
 
 class _CockpitShellState extends ConsumerState<CockpitShell> {
-  int _selectedIndex = 3;
+  int _selectedIndex = 5; // Defaulting to the new Superadmin tab
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoggingIn = false;
@@ -64,6 +64,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
                     _buildNavItem(2, Icons.directions_car, 'Fleet'),
                     _buildNavItem(3, Icons.psychology, 'Evolution'),
                     _buildNavItem(4, Icons.troubleshoot, 'Diagnostics'),
+                    _buildNavItem(5, Icons.admin_panel_settings, 'Superadmin'),
                     const Spacer(),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24),
@@ -220,7 +221,8 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
       case 1: return _buildFirestoreList(projectId, 'system_health', 'System Health', Icons.grid_view);
       case 2: return _buildFirestoreList(projectId, 'fleet_status', 'Fleet Logistics', Icons.directions_car);
       case 3: return _buildEvolutionTimeline(projectId);
-      case 4: return const DiagnosticsScreen();
+      case 4: return _buildFirestoreList(projectId, 'diagnostics', 'System Diagnostics', Icons.troubleshoot);
+      case 5: return const SuperadminDashboard(); // PHASE 42 Dashboard rendering inside active shell
       default: return const SizedBox.shrink();
     }
   }
@@ -236,7 +238,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) return Center(child: Text("Connection failed. Check permissions.", style: const TextStyle(color: Colors.white24, fontSize: 10)));
+        if (snapshot.hasError) return const Center(child: Text("Connection failed. Check permissions.", style: TextStyle(color: Colors.white24, fontSize: 10)));
         
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return _buildEmptyState(title, icon);
@@ -251,7 +253,6 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
             final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
             final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
             
-            // MUTEX VISUALIZATION
             final isLocked = data['lock_status'] == 'LOCKED';
 
             return Card(

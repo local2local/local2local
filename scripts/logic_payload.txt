@@ -2,17 +2,17 @@
  * L2LAAF Phase 42 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: superadmin_dashboard_ui
- * Description: Ensures 6th Navigation Item is present, wires up Superadmin UI, and fixes the version bug in AdminAppBar.
+ * Description: Anchors Superadmin Dashboard directly into the active CockpitShell and patches environment versioning.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(ui): enforce 6th navigation item, update build version to v42.1.28 in appbar, finalize superadmin dashboard
+fix(ui): anchor superadmin dashboard into active cockpit shell, restore diagnostics nav, and patch environment version to v42.1.29
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "42.1.28",
+  "current_phase": "42.1.29",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -31,227 +31,492 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(dart:Admin Appbar:lib/features/triage_hub/widgets/admin_appbar.dart)
+/* L2LAAF_BLOCK_START(dart:Environment Provider:lib/features/triage_hub/providers/environment_provider.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-class AdminAppBar extends ConsumerWidget implements PreferredSizeWidget {
-  final String title;
-  const AdminAppBar({super.key, required this.title});
+enum L2LEnvironment { dev, staging, prod }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return AppBar(
-      backgroundColor: AdminColors.slateDarkest,
-      elevation: 1,
-      shadowColor: Colors.black,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          const Text('Build: v42.1.28', style: TextStyle(color: AdminColors.textSecondary, fontSize: 11)),
-        ],
-      ),
-      actions: [
-        Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AdminColors.slateDark,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AdminColors.borderDefault),
-            ),
-            child: const Row(
-              children: [
-                Text('DEV', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                SizedBox(width: 4),
-                Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 16),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        const Center(
-          child: Text('PROJECT: local2local-dev', style: TextStyle(color: AdminColors.emeraldGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(width: 16),
-        IconButton(
-          icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
-          onPressed: () {},
-        ),
-        const SizedBox(width: 16),
-      ],
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
+  final String version;
+
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+    required this.version,
+  });
+
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+      version: 'v42.1.29', // FIX: Updated from legacy v11
     );
   }
 
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(dart:Admin Hub Page:lib/features/triage_hub/pages/admin_hub_page.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/auth/providers/auth_provider.dart';
-import 'package:local2local/features/triage_hub/pages/admin_shell.dart';
-import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
-import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
-import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
-import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
-import 'package:local2local/features/triage_hub/pages/superadmin_dashboard.dart';
-import 'package:local2local/features/triage_hub/providers/app_providers.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
-
-class AdminHubPage extends ConsumerWidget {
-  const AdminHubPage({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isAdminAsync = ref.watch(isAdminProvider);
-
-    return isAdminAsync.when(
-      data: (isAdmin) {
-        if (!isAdmin) {
-          return const Scaffold(backgroundColor: AdminColors.slateDarkest);
-        }
-
-        return AdminShell(
-          child: _buildCurrentPage(ref.watch(selectedNavIndexProvider)),
-        );
-      },
-      loading: () => const Scaffold(
-        backgroundColor: AdminColors.slateDarkest,
-        body: Center(
-            child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-      ),
-      error: (e, _) => Scaffold(
-        backgroundColor: AdminColors.slateDarkest,
-        body: Center(
-            child: Text('Auth Error: $e',
-                style: const TextStyle(color: AdminColors.rubyRed))),
-      ),
-    );
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.staging: return 'local2local-staging';
+      case L2LEnvironment.prod: return 'local2local-prod';
+      default: return 'local2local-kaskflow'; 
+    }
   }
 
-  Widget _buildCurrentPage(int index) {
-    switch (index) {
-      case 0:
-        return const TriageQueuePage();
-      case 1:
-        return const HealthGridPage(); 
-      case 2:
-        return const FleetMapPage();
-      case 3:
-        return const EvolutionTimelinePage();
-      case 4:
-        return const DiagnosticsScreen();
-      case 5:
-        return const SuperadminDashboard(); 
-      default:
-        return const TriageQueuePage();
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod: return const Color(0xFFFF1744);
+      case L2LEnvironment.staging: return const Color(0xFFFF9100);
+      default: return const Color(0xFF1E1E2C);
     }
   }
 }
+
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-kaskflow',
+      headerColor: const Color(0xFF1E1E2C),
+      version: 'v42.1.29', // FIX: Updated from legacy v11
+    );
+  }
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('⚠️ CONFIRM PRODUCTION ACCESS'),
+          content: const Text('Entering LIVE production environment. Extreme caution required.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('BACK')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider = NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
+  return EnvironmentNotifier();
+});
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(dart:Admin Shell:lib/features/triage_hub/pages/admin_shell.dart)
+/* L2LAAF_BLOCK_START(dart:Cockpit Shell:lib/features/triage_hub/presentation/pages/cockpit_shell.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/auth/providers/auth_provider.dart';
-import 'package:local2local/features/triage_hub/providers/app_providers.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/widgets/admin_appbar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
+import 'package:local2local/features/triage_hub/presentation/widgets/hbr_lock_indicator.dart';
+import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
+import 'package:local2local/features/triage_hub/models/evolution_event_model.dart';
+import 'package:local2local/features/triage_hub/pages/superadmin_dashboard.dart';
+import 'package:local2local/main.dart';
 
-class AdminShell extends ConsumerWidget {
-  final Widget child;
-  const AdminShell({super.key, required this.child});
+class CockpitShell extends ConsumerStatefulWidget {
+  const CockpitShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectedIndex = ref.watch(selectedNavIndexProvider);
-    final activeInterventionsAsync = ref.watch(activeInterventionCountProvider);
+  ConsumerState<CockpitShell> createState() => _CockpitShellState();
+}
+
+class _CockpitShellState extends ConsumerState<CockpitShell> {
+  int _selectedIndex = 5; // Defaulting to the new Superadmin tab
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoggingIn = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _handleLogout() async {
+    await FirebaseAuth.instance.signOut();
+    _emailController.clear();
+    _passwordController.clear();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isReady = ref.watch(firebaseReadyProvider);
+    final error = ref.watch(initErrorProvider);
+    final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      backgroundColor: AdminColors.slateDarkest,
-      appBar: const AdminAppBar(title: 'L2LAAF Cockpit'),
-      body: Row(
-        children: [
-          // Sidebar Navigation
-          NavigationRail(
-            backgroundColor: AdminColors.slateDark,
-            selectedIndex: selectedIndex,
-            onDestinationSelected: (index) =>
-                ref.read(selectedNavIndexProvider.notifier).setIndex(index),
-            labelType: NavigationRailLabelType.all,
-            unselectedLabelTextStyle:
-                const TextStyle(color: AdminColors.textSecondary, fontSize: 11),
-            selectedLabelTextStyle: const TextStyle(
-                color: AdminColors.emeraldGreen,
-                fontSize: 11,
-                fontWeight: FontWeight.bold),
-            leading: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child:
-                  Icon(Icons.blur_on, color: AdminColors.emeraldGreen, size: 32),
+      backgroundColor: const Color(0xFF0F0F1E),
+      body: authState.when(
+        data: (user) {
+          if (user == null) return _buildLoginGate();
+          
+          return Row(
+            children: [
+              // SIDE NAVIGATION
+              Container(
+                width: 72,
+                color: const Color(0xFF16162A),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    const Icon(Icons.blur_on, color: Colors.greenAccent, size: 32),
+                    const SizedBox(height: 48),
+                    _buildNavItem(0, Icons.list_alt, 'Triage'),
+                    _buildNavItem(1, Icons.grid_view, 'Health'),
+                    _buildNavItem(2, Icons.directions_car, 'Fleet'),
+                    _buildNavItem(3, Icons.psychology, 'Evolution'),
+                    _buildNavItem(4, Icons.troubleshoot, 'Diagnostics'),
+                    _buildNavItem(5, Icons.admin_panel_settings, 'Superadmin'),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: IconButton(
+                        icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                        tooltip: 'Sign Out',
+                        onPressed: _handleLogout,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // MAIN CONTENT
+              Expanded(
+                child: Column(
+                  children: [
+                    const CockpitHeader(),
+                    Expanded(
+                      child: error != null 
+                        ? Center(child: Text('BOOT ERROR: $error', style: const TextStyle(color: Colors.redAccent, fontSize: 10)))
+                        : !isReady 
+                            ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
+                            : _buildBody(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('AUTH ERROR: $err', style: const TextStyle(color: Colors.redAccent))),
+      ),
+    );
+  }
+
+  Widget _buildLoginGate() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shield_outlined, color: Colors.blueAccent, size: 64),
+            const SizedBox(height: 24),
+            const Text('L2LAAF COCKPIT', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+            const SizedBox(height: 12),
+            const Text('CREDENTIAL ACCESS REQUIRED', style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 48),
+            
+            TextField(
+              controller: _emailController,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Email address',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white24, size: 18),
+              ),
             ),
-            // LOWER LEFT ACTIONS (Trailing)
-            trailing: Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Password',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white24, size: 18),
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: _isLoggingIn ? null : _handleLogin,
+                child: _isLoggingIn 
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('AUTHORIZE ACCESS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleLogin() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showError('Email and Password are required.');
+      return;
+    }
+
+    setState(() => _isLoggingIn = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (e) {
+      _showError(e.message ?? 'Authentication failed.');
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent)
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      child: Container(
+        width: double.infinity,
+        height: 64,
+        decoration: BoxDecoration(
+          border: isSelected ? const Border(left: BorderSide(color: Colors.blueAccent, width: 4)) : null,
+          color: isSelected ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isSelected ? Colors.blueAccent : Colors.white24, size: 24),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(color: isSelected ? Colors.blueAccent : Colors.white24, fontSize: 8)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    final env = ref.watch(environmentProvider);
+    final projectId = env.projectId;
+
+    switch (_selectedIndex) {
+      case 0: return _buildFirestoreList(projectId, 'agent_bus', 'Active Exceptions', Icons.list_alt);
+      case 1: return _buildFirestoreList(projectId, 'system_health', 'System Health', Icons.grid_view);
+      case 2: return _buildFirestoreList(projectId, 'fleet_status', 'Fleet Logistics', Icons.directions_car);
+      case 3: return _buildEvolutionTimeline(projectId);
+      case 4: return _buildFirestoreList(projectId, 'diagnostics', 'System Diagnostics', Icons.troubleshoot);
+      case 5: return const SuperadminDashboard(); // PHASE 42 Dashboard rendering inside active shell
+      default: return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildFirestoreList(String appId, String coll, String title, IconData icon) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc(appId)
+          .collection('public')
+          .doc('data')
+          .collection(coll)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return const Center(child: Text("Connection failed. Check permissions.", style: TextStyle(color: Colors.white24, fontSize: 10)));
+        
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) return _buildEmptyState(title, icon);
+        
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: docs.length,
+          itemBuilder: (ctx, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            
+            final displayTitle = data['title'] ?? data['metric_name'] ?? data['event_type'] ?? data['agent_id'] ?? data['correlation_id'] ?? 'Record';
+            final displaySub = data['details'] ?? data['status'] ?? data['value']?.toString() ?? data['message'] ?? 'Active Trace';
+            final statusColor = _getColorForStatus(data['status'] ?? data['severity']);
+            
+            final isLocked = data['lock_status'] == 'LOCKED';
+
+            return Card(
+              color: const Color(0xFF1E1E2C),
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: ListTile(
+                leading: Icon(Icons.circle, color: statusColor, size: 10),
+                title: Row(
+                  children: [
+                    Text(displayTitle, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    HbrLockIndicator(isLocked: isLocked, lockedBy: data['locked_by']),
+                  ],
+                ),
+                subtitle: Text(displaySub, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: data['timestamp'] != null ? Text(_formatTs(data['timestamp']), style: const TextStyle(color: Colors.white10, fontSize: 10)) : null,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _getColorForStatus(dynamic status) {
+    final s = status.toString().toLowerCase();
+    if (s.contains('error') || s.contains('failed') || s.contains('critical')) return Colors.redAccent;
+    if (s.contains('warn')) return Colors.orangeAccent;
+    if (s.contains('healthy') || s.contains('ok') || s.contains('success')) return Colors.greenAccent;
+    return Colors.blueAccent;
+  }
+
+  String _formatTs(dynamic ts) {
+    if (ts is Timestamp) return "${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}";
+    return "";
+  }
+
+  Widget _buildEvolutionTimeline(String appId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc(appId)
+          .collection('public')
+          .doc('data')
+          .collection('evolution_timeline')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data?.docs ?? [];
+        final events = docs.map((d) => EvolutionEventModel.fromFirestore(d)).toList();
+        events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+        return Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    tooltip: 'Sign Out',
-                    icon: const Icon(Icons.exit_to_app_rounded,
-                        color: AdminColors.rubyRed),
-                    onPressed: () async {
-                      await ref.read(authActionProvider.notifier).logout();
-                    },
-                  ),
-                  const SizedBox(height: 20),
+                  const Text('Evolution Timeline', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  _buildAdminBadge(),
                 ],
               ),
-            ),
-            destinations: [
-              NavigationRailDestination(
-                icon: Badge(
-                  label: activeInterventionsAsync.when(
-                    data: (count) => Text(count.toString()),
-                    loading: () => const Text('...'),
-                    error: (_, __) => const Text('!'),
-                  ),
-                  backgroundColor: AdminColors.rubyRed,
-                  isLabelVisible: activeInterventionsAsync.asData?.value != 0,
-                  child: const Icon(Icons.list_alt_rounded),
-                ),
-                label: const Text('Triage'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.grid_view_rounded),
-                label: Text('Health'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.map_rounded),
-                label: Text('Fleet'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.history_edu_rounded),
-                label: Text('Evolution'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.troubleshoot_rounded),
-                label: Text('Diagnostics'),
-              ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.admin_panel_settings_rounded),
-                label: Text('Superadmin'),
+              const SizedBox(height: 32),
+              Expanded(
+                child: events.isEmpty 
+                  ? const Center(child: Text('No evolution cycles detected.', style: TextStyle(color: Colors.white10)))
+                  : ListView.builder(
+                      itemCount: events.length,
+                      itemBuilder: (ctx, i) => _buildTimelineCard(events[i]),
+                    ),
               ),
             ],
           ),
-          // Main Content Area
-          const VerticalDivider(width: 1, color: AdminColors.borderDefault),
-          Expanded(child: child),
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminBadge() {
+    return Consumer(builder: (context, ref, child) {
+      final isAdmin = ref.watch(isAdminProvider).value ?? false;
+      if (!isAdmin) return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.blueAccent.withValues(alpha: 0.1), 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3))
+        ),
+        child: const Text('ADMIN ACCESS', style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+      );
+    });
+  }
+
+  Widget _buildTimelineCard(EvolutionEventModel event) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: const Color(0xFF1E1E2C), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(event.title, style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+              Text(event.timeDisplay, style: const TextStyle(color: Colors.white24, fontSize: 10)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(event.description, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
+                child: Text(event.agentName, style: const TextStyle(color: Colors.white54, fontSize: 9)),
+              ),
+              if (event.isAutonomous) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.bolt, color: Colors.greenAccent, size: 12),
+                const SizedBox(width: 4),
+                const Text('AUTONOMOUS', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String title, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.white10),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(color: Colors.white24, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('Waiting for data feed...', style: TextStyle(color: Colors.white10, fontSize: 10)),
         ],
       ),
     );
@@ -259,40 +524,260 @@ class AdminShell extends ConsumerWidget {
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(dart:System Status Banner:lib/features/triage_hub/widgets/system_status_banner.dart)
+/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 
-final systemStatusProvider = StreamProvider<String>((ref) {
+final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSnapshot>, String>((ref, appId) {
   return FirebaseFirestore.instance
-      .doc('artifacts/system_status/public/data/telemetry/current')
+      .collection('artifacts')
+      .doc(appId)
+      .collection('public')
+      .doc('data')
+      .collection('agent_bus')
+      .snapshots()
+      .map((snapshot) => snapshot.docs);
+});
+
+final _systemStatusProvider = StreamProvider.autoDispose<String>((ref) {
+  return FirebaseFirestore.instance
+      .collection('artifacts')
+      .doc('system_status')
+      .collection('public')
+      .doc('data')
+      .collection('telemetry')
+      .doc('current')
       .snapshots()
       .map((snap) => snap.data()?['status'] as String? ?? 'GREEN');
 });
 
-class SystemStatusBanner extends ConsumerWidget {
-  const SystemStatusBanner({super.key});
+class SuperadminDashboard extends ConsumerWidget {
+  const SuperadminDashboard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusAsync = ref.watch(systemStatusProvider);
+    final env = ref.watch(environmentProvider);
+    final busAsync = ref.watch(_agentBusProvider(env.projectId));
+
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Superadmin Command Center',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final doc = FirebaseFirestore.instance
+                      .collection('artifacts')
+                      .doc(env.projectId)
+                      .collection('public')
+                      .doc('data')
+                      .collection('agent_bus')
+                      .doc();
+                  
+                  await doc.set({
+                    "status": "dispatched",
+                    "correlation_id": "TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}",
+                    "payload": {
+                      "manifest": {
+                        "intent": "PROPOSE_LOGIC_CHANGE",
+                        "hbrId": "HBR-DASHBOARD-TEST",
+                        "agentId": "TEST_BOT_ORCHESTRATOR",
+                        "reason": "Test Injection: Dashboard manual trigger verified.",
+                        "proposedLogic": "// UI manual trigger executed successfully.",
+                        "targetPath": "functions/src/logic/does_not_exist.ts"
+                      }
+                    }
+                  });
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Test Payload injected into Agent Bus!'),
+                        backgroundColor: Colors.greenAccent,
+                        behavior: SnackBarBehavior.floating,
+                      )
+                    );
+                  }
+                },
+                icon: const Icon(Icons.rocket_launch_rounded, size: 16),
+                label: const Text('Test Inject'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E1E2C),
+                  foregroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  side: BorderSide(
+                    color: Colors.blueAccent.withValues(alpha: 0.5),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          const _SystemStatusBanner(),
+          const SizedBox(height: 40),
+          const Text(
+            'AGENT BUS (ACTIVE PROPOSALS)',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+          const SizedBox(height: 16),
+          Expanded(
+            child: busAsync.when(
+              data: (docs) {
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No active proposals in the Agent Bus.", 
+                      style: TextStyle(color: Colors.white38, fontSize: 14)
+                    )
+                  );
+                }
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final correlationId = data['correlation_id'] ?? 'Unknown ID';
+                    final status = data['status'] ?? 'pending';
+                    final payload = data['payload'] as Map<String, dynamic>? ?? {};
+                    final manifest = payload['manifest'] as Map<String, dynamic>? ?? {};
+                    
+                    final intent = manifest['intent'] ?? 'UNKNOWN_INTENT';
+                    final reason = manifest['reason'] ?? 'No reason provided.';
+                    final targetPath = manifest['targetPath'] ?? 'N/A';
+
+                    final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
+                    final accentColor = isPromoted ? Colors.greenAccent : Colors.blueAccent;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1E2C),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isPromoted ? Icons.check_circle : Icons.memory, 
+                                    color: accentColor,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    intent,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: accentColor.withValues(alpha: 0.5),
+                                    width: 1,
+                                  )
+                                ),
+                                child: Text(
+                                  status.toString().toUpperCase(),
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(reason, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F0F1E),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("ID: $correlationId", style: const TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+                                const SizedBox(height: 4),
+                                Text("TARGET: $targetPath", style: const TextStyle(color: Colors.white54, fontSize: 11, fontFamily: 'monospace')),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
+              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SystemStatusBanner extends ConsumerWidget {
+  const _SystemStatusBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusAsync = ref.watch(_systemStatusProvider);
 
     return statusAsync.when(
       data: (status) {
-        Color color = AdminColors.emeraldGreen;
+        Color color = Colors.greenAccent;
         IconData icon = Icons.check_circle_rounded;
         String text = 'TELEMETRY HEALTH: STABLE';
         String subtext = 'Code modifications permitted';
 
         if (status == 'YELLOW') {
-          color = Colors.orange.shade400;
+          color = Colors.orangeAccent;
           icon = Icons.warning_amber_rounded;
           text = 'TELEMETRY HEALTH: WARNING';
           subtext = 'Feature deployments delayed by 60s';
         } else if (status == 'RED') {
-          color = AdminColors.rubyRed;
+          color = Colors.redAccent;
           icon = Icons.error_outline_rounded;
           text = 'TELEMETRY HEALTH: CRITICAL';
           subtext = 'Feature deployments completely blocked';
@@ -314,8 +799,8 @@ class SystemStatusBanner extends ConsumerWidget {
                 text,
                 style: TextStyle(
                   color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                   letterSpacing: 1.2,
                 ),
               ),
@@ -335,222 +820,8 @@ class SystemStatusBanner extends ConsumerWidget {
       error: (_, __) => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
-        color: AdminColors.slateDark,
-        child: const Text("TELEMETRY DISCONNECTED", style: TextStyle(color: AdminColors.textSecondary)),
-      ),
-    );
-  }
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
-
-final agentBusProvider = StreamProvider.autoDispose<List<QueryDocumentSnapshot>>((ref) {
-  return FirebaseFirestore.instance
-      .collection('artifacts/local2local-kaskflow/public/data/agent_bus')
-      .snapshots()
-      .map((snapshot) => snapshot.docs);
-});
-
-class SuperadminDashboard extends ConsumerWidget {
-  const SuperadminDashboard({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final busAsync = ref.watch(agentBusProvider);
-
-    return Scaffold(
-      backgroundColor: AdminColors.slateDarkest,
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Superadmin Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    final doc = FirebaseFirestore.instance.collection('artifacts/local2local-kaskflow/public/data/agent_bus').doc();
-                    await doc.set({
-                      "status": "dispatched",
-                      "correlation_id": "TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}",
-                      "payload": {
-                        "manifest": {
-                          "intent": "PROPOSE_LOGIC_CHANGE",
-                          "hbrId": "HBR-DASHBOARD-TEST",
-                          "agentId": "TEST_BOT_ORCHESTRATOR",
-                          "reason": "Test Injection: Dashboard manual trigger verified.",
-                          "proposedLogic": "// UI manual trigger executed successfully.",
-                          "targetPath": "functions/src/logic/does_not_exist.ts"
-                        }
-                      }
-                    });
-                    
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Test Payload injected into Agent Bus!'),
-                          backgroundColor: AdminColors.emeraldGreen,
-                          behavior: SnackBarBehavior.floating,
-                        )
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.rocket_launch_rounded, size: 18),
-                  label: const Text('Test Inject'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminColors.slateDark,
-                    foregroundColor: AdminColors.emeraldGreen,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    side: BorderSide(
-                      color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            const SystemStatusBanner(),
-            const SizedBox(height: 40),
-            const Text(
-              'AGENT BUS (ACTIVE PROPOSALS)',
-              style: TextStyle(
-                color: AdminColors.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: AdminColors.borderDefault, height: 1),
-            const SizedBox(height: 16),
-            Expanded(
-              child: busAsync.when(
-                data: (docs) {
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        "No active proposals in the Agent Bus.", 
-                        style: TextStyle(color: AdminColors.textSecondary, fontSize: 16)
-                      )
-                    );
-                  }
-                  return ListView.builder(
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      final correlationId = data['correlation_id'] ?? 'Unknown ID';
-                      final status = data['status'] ?? 'pending';
-                      final payload = data['payload'] as Map<String, dynamic>? ?? {};
-                      final manifest = payload['manifest'] as Map<String, dynamic>? ?? {};
-                      
-                      final intent = manifest['intent'] ?? 'UNKNOWN_INTENT';
-                      final reason = manifest['reason'] ?? 'No reason provided.';
-                      final targetPath = manifest['targetPath'] ?? 'N/A';
-
-                      final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
-                      final accentColor = isPromoted ? AdminColors.emeraldGreen : Colors.blueAccent;
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AdminColors.slateDark,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isPromoted ? accentColor.withValues(alpha: 0.3) : AdminColors.borderDefault,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      isPromoted ? Icons.check_circle : Icons.memory, 
-                                      color: accentColor,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      intent,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                  ],
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: accentColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: accentColor.withValues(alpha: 0.5),
-                                      width: 1,
-                                    )
-                                  ),
-                                  child: Text(
-                                    status.toString().toUpperCase(),
-                                    style: TextStyle(
-                                      color: accentColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(reason, style: const TextStyle(color: AdminColors.textSecondary, fontSize: 15, height: 1.4)),
-                            const SizedBox(height: 16),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AdminColors.slateDarkest,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text("ID: $correlationId", style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11, fontFamily: 'monospace')),
-                                  const SizedBox(height: 4),
-                                  Text("TARGET: $targetPath", style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-                error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-              ),
-            ),
-          ],
-        ),
+        color: const Color(0xFF1E1E2C),
+        child: const Text("TELEMETRY DISCONNECTED", style: TextStyle(color: Colors.white54)),
       ),
     );
   }
