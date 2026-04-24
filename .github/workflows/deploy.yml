@@ -120,7 +120,7 @@ jobs:
             --arg env "$ENV_NAME" \
             '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env}' > n8n_payload.json
             
-          WEBHOOK_URL="https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger"
+          WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
           echo "Firing Webhook with payload to $WEBHOOK_URL"
           cat n8n_payload.json
           

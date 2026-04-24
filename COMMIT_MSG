@@ -1,1 +1,1 @@
-fix(cicd): implement 404 polling loop and hardcode webhook route to bypass n8n propagation delays v11.42.1.14
+fix(cicd): restore internal webhook node IDs to repair n8n routing table and revert to webhook secret v11.42.1.15
