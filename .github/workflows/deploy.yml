@@ -59,7 +59,7 @@ jobs:
           N8N_KEY: ${{ secrets.N8N_API_KEY }}
           N8N_ID: ${{ secrets.N8N_WORKFLOW_ID }}
         run: |
-          WORKFLOW_FILE="n8n_workflows/n8n_workflow.json"
+          WORKFLOW_FILE="n8n_workflows/l2laaf_autonomous_orchestrator.json"
           if [ -f "$WORKFLOW_FILE" ]; then
             echo "Deploying $WORKFLOW_FILE to n8n Cloud..."
             if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
@@ -114,7 +114,7 @@ jobs:
               fi
             fi
           else
-            echo "⚠️ n8n_workflows/n8n_workflow.json not found. Skipping."
+            echo "⚠️ n8n_workflows/l2laaf_autonomous_orchestrator.json not found. Skipping."
           fi
 
       - name: Notify Orchestrator
