@@ -1,1 +1,1 @@
-fix(ui): resolve flutter analyzer errors, supply missing banner widget, and update deprecated opacity methods v11.42.1.26
+fix(ui): restore stable superadmin dashboard UI and flush heavy JSON context v11.42.1.27

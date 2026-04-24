@@ -18,13 +18,13 @@ class SuperadminDashboard extends ConsumerWidget {
     final busAsync = ref.watch(agentBusProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Slate 900
+      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
         title: const Text(
           'L2LAAF Control Tower', 
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 1.2)
         ),
-        backgroundColor: const Color(0xFF1E293B), // Slate 800
+        backgroundColor: const Color(0xFF1E293B),
         elevation: 4,
         shadowColor: Colors.black45,
       ),
@@ -147,7 +147,6 @@ class SuperadminDashboard extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // Instantly inject a test payload to watch the pipeline react
           final doc = FirebaseFirestore.instance.collection('artifacts/local2local-kaskflow/public/data/agent_bus').doc();
           await doc.set({
             "status": "dispatched",
