@@ -1,1 +1,1 @@
-fix(cicd): attach static webhookId to MCP Code Payload trigger to stabilize routing v11.42.1.21
+fix(cicd): add static webhookId to the Approval Listener webhook to prevent 404 on chat card clicks v11.42.1.22

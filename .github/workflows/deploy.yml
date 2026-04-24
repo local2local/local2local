@@ -123,6 +123,7 @@ jobs:
           PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
           
+          # Safely build JSON payload using jq to prevent string interpolation breaks
           jq -n \
             --arg phase "$PHASE" \
             --arg build "${{ github.run_id }}" \
