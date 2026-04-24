@@ -1,1 +1,1 @@
-fix(cicd): update httpRequest node urls to use valid n8n template literal expressions v11.42.1.23
+fix(cicd): enforce template literal expressions in http nodes and intercept Test D missing file SHA error v11.42.1.24
