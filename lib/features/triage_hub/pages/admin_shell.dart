@@ -42,13 +42,11 @@ class AdminShell extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // This is the logout button you see in the lower left
                   IconButton(
                     tooltip: 'Sign Out',
                     icon: const Icon(Icons.exit_to_app_rounded,
                         color: AdminColors.rubyRed),
                     onPressed: () async {
-                      // Handshake with Firebase Auth
                       await ref.read(authActionProvider.notifier).logout();
                     },
                   ),
@@ -70,21 +68,26 @@ class AdminShell extends ConsumerWidget {
                 ),
                 label: const Text('Triage'),
               ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.grid_view_rounded),
-                label: const Text('Health'),
+              const NavigationRailDestination(
+                icon: Icon(Icons.grid_view_rounded),
+                label: Text('Health'),
               ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.map_rounded),
-                label: const Text('Fleet'),
+              const NavigationRailDestination(
+                icon: Icon(Icons.map_rounded),
+                label: Text('Fleet'),
               ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.history_edu_rounded),
-                label: const Text('Evolution'),
+              const NavigationRailDestination(
+                icon: Icon(Icons.history_edu_rounded),
+                label: Text('Evolution'),
               ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.troubleshoot_rounded),
-                label: const Text('Diagnostics'),
+              const NavigationRailDestination(
+                icon: Icon(Icons.troubleshoot_rounded),
+                label: Text('Diagnostics'),
+              ),
+              // Phase 42: New 6th Destination
+              const NavigationRailDestination(
+                icon: Icon(Icons.admin_panel_settings_rounded),
+                label: Text('Superadmin'),
               ),
             ],
           ),

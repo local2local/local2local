@@ -6,6 +6,7 @@ import 'package:local2local/features/triage_hub/pages/triage_queue_page.dart';
 import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
 import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
 import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
+import 'package:local2local/features/triage_hub/pages/superadmin_dashboard.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
@@ -53,6 +54,8 @@ class AdminHubPage extends ConsumerWidget {
         return const EvolutionTimelinePage();
       case 4:
         return const DiagnosticsScreen();
+      case 5:
+        return const SuperadminDashboard(); // Phase 42: 6th Destination Added
       default:
         return const TriageQueuePage();
     }

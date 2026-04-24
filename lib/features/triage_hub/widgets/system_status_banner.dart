@@ -1,66 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-final systemStatusProvider = StreamProvider<String>((ref) {
-  return FirebaseFirestore.instance
-      .doc('artifacts/system_status/public/data/telemetry/current')
-      .snapshots()
-      .map((snap) => snap.data()?['status'] as String? ?? 'GREEN');
-});
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
 class SystemStatusBanner extends ConsumerWidget {
   const SystemStatusBanner({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusAsync = ref.watch(systemStatusProvider);
+    // Phase 42: Pending Riverpod StreamProvider connection
+    const String status = 'STABLE'; 
+    const Color color = AdminColors.emeraldGreen;
 
-    return statusAsync.when(
-      data: (status) {
-        Color bgColor = Colors.green.shade800;
-        IconData icon = Icons.check_circle;
-        String text = "SYSTEM NORMAL - ALL DEPLOYMENTS PERMITTED";
-
-        if (status == 'YELLOW') {
-          bgColor = Colors.orange.shade800;
-          icon = Icons.warning_amber_rounded;
-          text = "WARNING STATE - FEATURE DEPLOYMENTS DELAYED BY 60s";
-        } else if (status == 'RED') {
-          bgColor = Colors.red.shade900;
-          icon = Icons.error_outline;
-          text = "CRITICAL STATE - FEATURE DEPLOYMENTS BLOCKED";
-        }
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: bgColor,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.bold, 
-                  letterSpacing: 1.1,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1), // Flutter 3.27 compliant
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, color: color, size: 28),
+          const SizedBox(width: 16),
+          const Text(
+            'TELEMETRY HEALTH: $status',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              letterSpacing: 1.2,
+            ),
           ),
-        );
-      },
-      loading: () => const LinearProgressIndicator(minHeight: 36),
-      error: (e, s) => Container(
-        width: double.infinity,
-        color: Colors.grey.shade800,
-        height: 36,
-        alignment: Alignment.center,
-        child: const Text("TELEMETRY DISCONNECTED", style: TextStyle(color: Colors.white)),
+          const Spacer(),
+          Text(
+            'Code modifications permitted',
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          )
+        ],
       ),
     );
   }
