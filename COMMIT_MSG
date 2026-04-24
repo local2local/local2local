@@ -1,1 +1,1 @@
-fix(cicd): implement forced deactivate/activate sequence with health check probing for n8n edge routing v11.42.1.20
+fix(cicd): attach static webhookId to MCP Code Payload trigger to stabilize routing v11.42.1.21
