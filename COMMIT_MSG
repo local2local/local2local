@@ -1,1 +1,1 @@
-fix(cicd): restore internal webhook node IDs to repair n8n routing table and revert to webhook secret v11.42.1.15
+fix(cicd): strip invalid string node IDs to allow n8n to generate valid UUIDs and cleanly mount webhooks v11.42.1.16
