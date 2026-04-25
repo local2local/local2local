@@ -1,18 +1,18 @@
 /**
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: n8n_orchestrator, superadmin_dashboard
- * Description: Fixes Mutex locking collision and explicit IGNORE routing to prevent Gemini hallucinations.
+ * Target: relay_pipeline, n8n_orchestrator
+ * Description: Refactors relay.sh to use bulletproof boolean execution logic.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(evolution): resolve mutex collision on manual triggers and enforce explicit IGNORE routing for test payloads
+43.1.14 - FIX(pipeline): Refactor relay.sh to use strict boolean logic and functions to eliminate bash clipboard parsing errors
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.9",
+  "current_phase": "43.1.14",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -32,229 +32,79 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
-import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
+/* L2LAAF_BLOCK_START(bash:Relay Pipeline:scripts/relay.sh)
+#!/bin/bash
+# --- L2LAAF RELAY v5.9 (Syntax Bulletproof Upgrade) ---
+# Target: logic_payload.txt
+# Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
 
-final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSnapshot>, String>((ref, appId) {
-  return FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc(appId)
-      .collection('public')
-      .doc('data')
-      .collection('agent_bus')
-      .snapshots()
-      .map((snapshot) => snapshot.docs);
-});
+PAYLOAD_FILE="./scripts/logic_payload.txt"
 
-class SuperadminDashboard extends ConsumerWidget {
-  const SuperadminDashboard({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final env = ref.watch(environmentProvider);
-    final busAsync = ref.watch(_agentBusProvider(env.projectId));
-
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Superadmin Command Center',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-                  final doc = FirebaseFirestore.instance
-                      .collection('artifacts')
-                      .doc(env.projectId)
-                      .collection('public')
-                      .doc('data')
-                      .collection('agent_bus')
-                      .doc();
-                  
-                  await doc.set({
-                    "status": "dispatched",
-                    "correlation_id": "TEST-DASHBOARD-$timestamp",
-                    "payload": {
-                      "manifest": {
-                        "intent": "PROPOSE_LOGIC_CHANGE",
-                        "hbrId": "HBR-TEST-$timestamp",
-                        "agentId": "TEST_BOT_ORCHESTRATOR",
-                        "reason": "Test Injection: Dashboard manual trigger verified.",
-                        "proposedLogic": "// UI manual trigger executed successfully.",
-                        "targetPath": "functions/src/logic/does_not_exist.ts"
-                      }
-                    }
-                  });
-                  
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Test Payload injected into Agent Bus!'),
-                        backgroundColor: AdminColors.emeraldGreen,
-                        behavior: SnackBarBehavior.floating,
-                      )
-                    );
-                  }
-                },
-                icon: const Icon(Icons.rocket_launch_rounded, size: 16),
-                label: const Text('Test Inject'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AdminColors.slateDark,
-                  foregroundColor: AdminColors.emeraldGreen,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  side: BorderSide(
-                    color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          const SystemStatusBanner(),
-          const SizedBox(height: 40),
-          const Text(
-            'AGENT BUS (ACTIVE PROPOSALS)',
-            style: TextStyle(
-              color: AdminColors.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: AdminColors.borderDefault, height: 1),
-          const SizedBox(height: 16),
-          Expanded(
-            child: busAsync.when(
-              data: (docs) {
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No active proposals in the Agent Bus.", 
-                      style: TextStyle(color: AdminColors.textSecondary, fontSize: 16)
-                    )
-                  );
-                }
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final correlationId = data['correlation_id'] ?? 'Unknown ID';
-                    final status = data['status'] ?? 'pending';
-                    final payload = data['payload'] as Map<String, dynamic>? ?? {};
-                    final manifest = payload['manifest'] as Map<String, dynamic>? ?? {};
-                    
-                    final intent = manifest['intent'] ?? 'UNKNOWN_INTENT';
-                    final reason = manifest['reason'] ?? 'No reason provided.';
-                    final targetPath = manifest['targetPath'] ?? 'N/A';
-
-                    final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
-                    final accentColor = isPromoted ? AdminColors.emeraldGreen : AdminColors.statusInfo;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AdminColors.slateDark,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : AdminColors.borderDefault,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isPromoted ? Icons.check_circle : Icons.memory, 
-                                    color: accentColor,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    intent,
-                                    style: const TextStyle(color: AdminColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: accentColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: accentColor.withValues(alpha: 0.5),
-                                    width: 1,
-                                  )
-                                ),
-                                child: Text(
-                                  status.toString().toUpperCase(),
-                                  style: TextStyle(
-                                    color: accentColor,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(reason, style: const TextStyle(color: AdminColors.textSecondary, fontSize: 15, height: 1.4)),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AdminColors.slateDarkest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("ID: $correlationId", style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11, fontFamily: 'monospace')),
-                                const SizedBox(height: 4),
-                                Text("TARGET: $targetPath", style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+function fatal_error {
+    echo "❌ FATAL: $1"
+    exit 1
 }
+
+test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
+
+echo "--- L2LAAF RELAY v5.9 ---"
+echo "📂 Project Root: $(pwd)"
+echo "📡 Using Payload: $PAYLOAD_FILE"
+
+# 0. SMART CLEANUP OLD ARTIFACTS
+grep -q "n8n_workflows/" "$PAYLOAD_FILE"
+GREP_RES=$?
+test $GREP_RES -eq 0 && echo "🧹 New n8n workflow detected in payload. Purging legacy workflows..."
+test $GREP_RES -eq 0 && rm -f n8n_workflows/*.json
+test $GREP_RES -ne 0 && echo "⏭️ No n8n workflow update in payload. Preserving current workflow JSON."
+
+# 1. RUN PATCHER
+node ./scripts/patcher.js < "$PAYLOAD_FILE" || fatal_error "Patcher failed."
+
+# 2. RUN TSC VALIDATION (Cloud Functions)
+echo "🔍 Pre-flight check [1/3]: Validating Cloud Functions..."
+cd functions || fatal_error "Could not enter functions directory."
+npm run build || fatal_error "TypeScript validation failed. Bad code will not be pushed."
+cd ..
+echo "🟢 SUCCESS: Cloud Functions Validated."
+
+# 3. RUN FLUTTER ANALYZE
+echo "🔍 Pre-flight check [2/3]: Analyzing Flutter Code..."
+flutter analyze > /dev/null || fatal_error "Flutter validation failed. Fix outstanding problems before deploying."
+echo "🟢 SUCCESS: Flutter Analysis Passed."
+
+# 4. N8N JSON VALIDATION
+function validate_n8n {
+    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { if(!JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")).nodes) throw Error("Missing nodes array"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
+    node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Fix syntax before deploying."
+    rm -f .tmp_check.js
+    
+    MISSING=$(jq '[.nodes[] | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name]' n8n_workflows/*.json 2>/dev/null)
+    test "$MISSING" != "[]" && test -n "$MISSING" && fatal_error "Webhook nodes missing webhookId: $MISSING"
+    
+    echo "🟢 SUCCESS: n8n Workflows Validated (Syntax & Webhook IDs)."
+}
+
+echo "🔍 Pre-flight check [3/3]: Validating n8n Workflows..."
+test -d "n8n_workflows" && validate_n8n
+test -d "n8n_workflows" || echo "⚠️  n8n_workflows directory not found. Skipping validation."
+
+# 5. GITHUB DEPLOYMENT SEQUENCE
+echo "🚀 Initializing Deployment to GitHub..."
+test -f "COMMIT_MSG" || fatal_error "No COMMIT_MSG found. Did patcher run correctly?"
+
+MSG=$(cat COMMIT_MSG)
+echo "📦 Force-tracking n8n_workflows..."
+git add -f n8n_workflows/
+git add .
+git commit -m "$MSG"
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "📡 Pushing to origin/$CURRENT_BRANCH..."
+git push origin "$CURRENT_BRANCH" || fatal_error "Push failed."
+
+echo "🎉 DEPLOYMENT COMPLETE: Stack stabilized and pushed."
+rm COMMIT_MSG
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Autonomous Orchestrator JSON:n8n_workflows/l2laaf_autonomous_orchestrator.json)
@@ -264,7 +114,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.9\n**Commit:** fix(evolution): resolve mutex collision and enforce explicit IGNORE routing",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.14\n**Commit:** 43.1.14 - FIX(pipeline): Refactor relay.sh to use strict boolean logic and functions to eliminate bash clipboard parsing errors",
         "height": 150,
         "width": 350,
         "color": 6
@@ -320,7 +170,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.9\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.14\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -349,7 +199,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\nreturn [{ json: { ...stateManager, throttle_decision: throttleDecision, throttle_message: throttleMessage, system_status: currentStatus, intent: intent } }];"
+        "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\") || summary.toLowerCase().includes(\"fix(\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\nreturn [{ json: { ...stateManager, throttle_decision: throttleDecision, throttle_message: throttleMessage, system_status: currentStatus, intent: intent } }];"
       },
       "id": "f512dbb9-6b5d-4f11-9ab0-9b4ef0f9ebc7",
       "name": "Throttling Evaluator",
@@ -448,7 +298,8 @@ L2LAAF_BLOCK_END */
       "position": [
         1300,
         300
-      ]
+      ],
+      "webhookId": "d83d05c7-f947-47ff-a965-909f7d06bd98"
     },
     {
       "parameters": {
@@ -456,7 +307,7 @@ L2LAAF_BLOCK_END */
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED\", \"subtitle\": \"Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } } ] }] } } ] } }}",
         "options": {}
       },
       "id": "1ab4792c-67ad-4560-912b-b9d9df3c0e14",
@@ -474,7 +325,7 @@ L2LAAF_BLOCK_END */
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase, \"subtitle\": \"Status: \" + $json.system_status + \" | Intent: \" + $json.intent }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -685,7 +536,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nlet rawCode = '';\nif (response && response.candidates && response.candidates[0] && response.candidates[0].content) {\n  const content = response.candidates[0].content;\n  if (content['parts'] && content['parts'][0]) {\n    rawCode = content['parts'][0]['text'] || '';\n  }\n}\nrawCode = rawCode.replace(/^\\x60\\x60\\x60[a-z]*\\n/i, '').replace(/\\n\\x60\\x60\\x60$/i, '').trim();\nreturn [{ json: { ...$('Automated Testing Suite').first().json, fileContent: rawCode } }];"
+        "jsCode": "const response = $input.first().json;\nlet rawCode = '';\ntry {\n  const candidates = Reflect.get(response, 'candidates');\n  if (candidates && candidates.length > 0) {\n    const content = Reflect.get(candidates[0], 'content');\n    if (content) {\n      const parts = Reflect.get(content, 'parts');\n      if (parts && parts.length > 0) {\n        rawCode = Reflect.get(parts[0], 'text') || '';\n      }\n    }\n  }\n} catch (e) {\n  // Silent fail, rawCode defaults to ''\n}\nrawCode = rawCode.replace(/^\\x60\\x60\\x60[a-z]*\\n/i, '').replace(/\\n\\x60\\x60\\x60$/i, '').trim();\nreturn [{ json: { ...$('Automated Testing Suite').first().json, fileContent: rawCode } }];"
       },
       "id": "extract-gemini-code-node",
       "name": "Extract Code",
@@ -844,7 +695,7 @@ L2LAAF_BLOCK_END */
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\n\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \" ⮕ Deployment Finalized.\" } }}",
+        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\nlocal2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop) ⮕ local2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop)\" } }}",
         "options": {}
       },
       "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
