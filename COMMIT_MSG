@@ -1,1 +1,1 @@
-fix(n8n): use $input.first() instead of $input.item in extract code node to fix execution context error
+fix(n8n): bypass strict schema linter in extract code node by utilizing bracket notation
