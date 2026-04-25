@@ -1,1 +1,1 @@
-fix(n8n): remove split string concatenation from http urls to resolve static validation errors
+fix(n8n): use $input.first() instead of $input.item in code node to fix execution context error
