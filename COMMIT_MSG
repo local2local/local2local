@@ -1,1 +1,1 @@
-docs(evolution): initialize phase 43 state for autonomous LLM integration
+feat(evolution): integrate Gemini Code Fixer node into n8n autonomous orchestrator
