@@ -1,1 +1,1 @@
-fix(n8n): bypass strict schema linter in extract code node by utilizing bracket notation
+fix(n8n): strip hardcoded credential ID to force semantic name binding on gemini auth
