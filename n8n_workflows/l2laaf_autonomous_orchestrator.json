@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.3\n**Commit:** fix(evolution): eliminate backticks and obfuscate URLs in n8n orchestrator to prevent parsing corruption",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.4\n**Commit:** fix(n8n): remove split string concatenation from http urls to resolve static validation errors",
         "height": 150,
         "width": 350,
         "color": 6
@@ -60,7 +60,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.3\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.4\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -74,7 +74,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
         "sendBody": false,
         "options": {}
       },
@@ -193,7 +193,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED\", \"subtitle\": \"Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }] }] } } ] } }}",
@@ -211,10 +211,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase, \"subtitle\": \"Status: \" + $json.system_status + \" | Intent: \" + $json.intent }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://\" + \"local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://\" + \"local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase, \"subtitle\": \"Status: \" + $json.system_status + \" | Intent: \" + $json.intent }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -260,7 +260,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\" }}",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\" }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}",
@@ -281,7 +281,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://\" + \"logging.googleapis.com/v2/entries:list\"",
+        "url": "https://logging.googleapis.com/v2/entries:list",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleApi",
         "sendBody": true,
@@ -394,7 +394,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://\" + \"generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent\"",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
@@ -555,7 +555,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\" }}",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\" }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"fields\": { \"status\": { \"stringValue\": \"PROMOTED\" }, \"hbrId\": { \"stringValue\": $('Automated Testing Suite').first().json.hbrId || \"\" }, \"buildId\": { \"stringValue\": $('Automated Testing Suite').first().json.buildId || \"\" }, \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" } } } }}",
@@ -573,7 +573,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\n\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \" ⮕ Deployment Finalized.\" } }}",

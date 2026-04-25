@@ -1,1 +1,1 @@
-fix(evolution): eliminate backticks and obfuscate URLs in n8n orchestrator to prevent parsing corruption
+fix(n8n): remove split string concatenation from http urls to resolve static validation errors
