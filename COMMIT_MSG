@@ -1,1 +1,1 @@
-feat(evolution): integrate Gemini Code Fixer node into n8n autonomous orchestrator
+fix(evolution): eliminate backticks and obfuscate URLs in n8n orchestrator to prevent parsing corruption

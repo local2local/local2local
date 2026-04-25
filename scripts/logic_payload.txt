@@ -2,17 +2,17 @@
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator
- * Description: Safely injects the Gemini HTTP integration into the orchestration flow.
+ * Description: Injects Gemini logic while completely circumventing clipboard URL auto-formatting and backtick syntax errors.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-feat(evolution): integrate Gemini Code Fixer node into n8n autonomous orchestrator
+fix(evolution): eliminate backticks and obfuscate URLs in n8n orchestrator to prevent parsing corruption
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.2",
+  "current_phase": "43.1.3",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -39,7 +39,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.2\n**Commit:** feat(evolution): integrate Gemini Code Fixer node into n8n autonomous orchestrator",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.3\n**Commit:** fix(evolution): eliminate backticks and obfuscate URLs in n8n orchestrator to prevent parsing corruption",
         "height": 150,
         "width": 350,
         "color": 6
@@ -95,7 +95,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  // Silently drop GitHub noise AND Claude's health-check probes\n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.2\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.3\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -109,7 +109,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ `https://firestore.googleapis.com/v1/projects/${$json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/system_status/public/data/telemetry` }}",
+        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
         "sendBody": false,
         "options": {}
       },
@@ -228,10 +228,10 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "[https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw](https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw)",
+        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED\", \"subtitle\": `Phase ${$json.updated_state.current_phase}` }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED\", \"subtitle\": \"Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }] }] } } ] } }}",
         "options": {}
       },
       "id": "1ab4792c-67ad-4560-912b-b9d9df3c0e14",
@@ -246,10 +246,10 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "[https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw](https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw)",
+        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": `🚀 L2LAAF Deployment: Phase ${$json.updated_state.current_phase}`, \"subtitle\": `Status: ${$json.system_status} | Intent: ${$json.intent}` }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": `https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=${$json.updated_state.active_environment}&build_id=${$json.meta.build_id}&phase=${$json.updated_state.current_phase}&hbrId=${$json.meta.hbrId}` } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": `https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=${$json.updated_state.active_environment}&build_id=${$json.meta.build_id}&phase=${$json.updated_state.current_phase}&hbrId=${$json.meta.hbrId}` } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase, \"subtitle\": \"Status: \" + $json.system_status + \" | Intent: \" + $json.intent }, \"sections\": [{ \"widgets\": [{ \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://\" + \"local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://\" + \"local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -295,7 +295,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ `https://firestore.googleapis.com/v1/projects/${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery` }}",
+        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\" }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}",
@@ -316,12 +316,12 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "[https://logging.googleapis.com/v2/entries:list](https://logging.googleapis.com/v2/entries:list)",
+        "url": "=\"https://\" + \"logging.googleapis.com/v2/entries:list\"",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"resourceNames\": [ `projects/${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}` ], \"filter\": \"textPayload:\\\"Null check operator used on a null value\\\"\", \"pageSize\": 10 } }}",
+        "jsonBody": "={{ { \"resourceNames\": [ \"projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') ], \"filter\": \"textPayload:\\\"Null check operator used on a null value\\\"\", \"pageSize\": 10 } }}",
         "options": {}
       },
       "id": "3b2a1c9d-8e7f-4b60-91c8-e3df5a6b7c89",
@@ -365,7 +365,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? `🛑 Phase ${updatedState.current_phase} DECLINED.` : (auditPassed ? `✅ Phase ${updatedState.current_phase} PROMOTED from ${state.current_phase}.` : `❌ Phase ${updatedState.current_phase} FAILED AUDIT.`);\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  // INTERCEPT TEST D MISSING FILE\n  // If the agent proposes a file that intentionally does not exist, we intercept it\n  // to prevent the GitHub node from throwing a \"Could not get the SHA\" execution error.\n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = ''; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent\n  } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"🛑 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"✅ Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"❌ Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = ''; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent\n  } }];\n})();"
       },
       "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
       "name": "Automated Testing Suite",
@@ -429,7 +429,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent)",
+        "url": "=\"https://\" + \"generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent\"",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
@@ -472,7 +472,7 @@ L2LAAF_BLOCK_END */
         "repository": "local2local",
         "filePath": "={{ $json.filePath }}",
         "fileContent": "={{ $json.fileContent }}",
-        "commitMessage": "=feat(evolution): autonomous code mutation for phase {{ $json.updated_state.current_phase }}",
+        "commitMessage": "=\"feat(evolution): autonomous code mutation for phase \" + $json.updated_state.current_phase",
         "options": {
           "branch": "develop"
         }
@@ -515,7 +515,7 @@ L2LAAF_BLOCK_END */
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
         "fileContent": "={{ JSON.stringify($json.updated_state || $('Automated Testing Suite').first().json.updated_state, null, 2) }}",
-        "commitMessage": "=chore(orchestration): promote phase {{ $('Automated Testing Suite').first().json.updated_state.current_phase }} to STABLE",
+        "commitMessage": "=\"chore(orchestration): promote phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" to STABLE\"",
         "options": {
           "branch": "develop"
         }
@@ -590,7 +590,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ `https://firestore.googleapis.com/v1/projects/${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'}/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals` }}",
+        "url": "={{ \"https://\" + \"firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\" }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"fields\": { \"status\": { \"stringValue\": \"PROMOTED\" }, \"hbrId\": { \"stringValue\": $('Automated Testing Suite').first().json.hbrId || \"\" }, \"buildId\": { \"stringValue\": $('Automated Testing Suite').first().json.buildId || \"\" }, \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" } } } }}",
@@ -608,10 +608,10 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "[https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw](https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw)",
+        "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw\"",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"text\": `${$('Automated Testing Suite').first().json.notification_text}\\n${$('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev'} ⮕ Deployment Finalized.` } }}",
+        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\n\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \" ⮕ Deployment Finalized.\" } }}",
         "options": {}
       },
       "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
