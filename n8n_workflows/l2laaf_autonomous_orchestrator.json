@@ -1,38 +1,3 @@
-/**
- * L2LAAF Logic Payload
- * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: n8n_orchestrator
- * Description: Fixes the execution context error in the Extract Code node using $input.first().
- */
-
-/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-fix(n8n): use $input.first() instead of $input.item in extract code node to fix execution context error
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
-{
-  "system_status": "OPERATIONAL",
-  "current_phase": "43.1.6",
-  "active_environment": "develop",
-  "deployment_telemetry": {
-    "last_success_commit": null,
-    "current_build_id": null,
-    "verification_status": "IDLE"
-  },
-  "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
-    "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
-  },
-  "reconciliation": {
-    "last_sync_timestamp": null,
-    "conflict_detected": false
-  }
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:Autonomous Orchestrator JSON:n8n_workflows/l2laaf_autonomous_orchestrator.json)
 {
   "name": "L2LAAF: Autonomous Orchestrator",
   "active": true,
@@ -896,4 +861,3 @@ L2LAAF_BLOCK_END */
     "saveManualExecutions": true
   }
 }
-L2LAAF_BLOCK_END */
