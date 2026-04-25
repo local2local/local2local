@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 
 final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSnapshot>, String>((ref, appId) {
@@ -12,18 +14,6 @@ final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSn
       .collection('agent_bus')
       .snapshots()
       .map((snapshot) => snapshot.docs);
-});
-
-final _systemStatusProvider = StreamProvider.autoDispose<String>((ref) {
-  return FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc('system_status')
-      .collection('public')
-      .doc('data')
-      .collection('telemetry')
-      .doc('current')
-      .snapshots()
-      .map((snap) => snap.data()?['status'] as String? ?? 'GREEN');
 });
 
 class SuperadminDashboard extends ConsumerWidget {
@@ -52,6 +42,7 @@ class SuperadminDashboard extends ConsumerWidget {
               ),
               ElevatedButton.icon(
                 onPressed: () async {
+                  final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
                   final doc = FirebaseFirestore.instance
                       .collection('artifacts')
                       .doc(env.projectId)
@@ -62,11 +53,11 @@ class SuperadminDashboard extends ConsumerWidget {
                   
                   await doc.set({
                     "status": "dispatched",
-                    "correlation_id": "TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}",
+                    "correlation_id": "TEST-DASHBOARD-$timestamp",
                     "payload": {
                       "manifest": {
                         "intent": "PROPOSE_LOGIC_CHANGE",
-                        "hbrId": "HBR-DASHBOARD-TEST",
+                        "hbrId": "HBR-TEST-$timestamp",
                         "agentId": "TEST_BOT_ORCHESTRATOR",
                         "reason": "Test Injection: Dashboard manual trigger verified.",
                         "proposedLogic": "// UI manual trigger executed successfully.",
@@ -79,7 +70,7 @@ class SuperadminDashboard extends ConsumerWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Test Payload injected into Agent Bus!'),
-                        backgroundColor: Colors.greenAccent,
+                        backgroundColor: AdminColors.emeraldGreen,
                         behavior: SnackBarBehavior.floating,
                       )
                     );
@@ -88,11 +79,11 @@ class SuperadminDashboard extends ConsumerWidget {
                 icon: const Icon(Icons.rocket_launch_rounded, size: 16),
                 label: const Text('Test Inject'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E1E2C),
-                  foregroundColor: Colors.blueAccent,
+                  backgroundColor: AdminColors.slateDark,
+                  foregroundColor: AdminColors.emeraldGreen,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   side: BorderSide(
-                    color: Colors.blueAccent.withValues(alpha: 0.5),
+                    color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -102,19 +93,19 @@ class SuperadminDashboard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 32),
-          const _SystemStatusBanner(),
+          const SystemStatusBanner(),
           const SizedBox(height: 40),
           const Text(
             'AGENT BUS (ACTIVE PROPOSALS)',
             style: TextStyle(
-              color: Colors.white54,
-              fontSize: 12,
+              color: AdminColors.textSecondary,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 16),
-          Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+          const Divider(color: AdminColors.borderDefault, height: 1),
           const SizedBox(height: 16),
           Expanded(
             child: busAsync.when(
@@ -123,7 +114,7 @@ class SuperadminDashboard extends ConsumerWidget {
                   return const Center(
                     child: Text(
                       "No active proposals in the Agent Bus.", 
-                      style: TextStyle(color: Colors.white38, fontSize: 14)
+                      style: TextStyle(color: AdminColors.textSecondary, fontSize: 16)
                     )
                   );
                 }
@@ -141,16 +132,16 @@ class SuperadminDashboard extends ConsumerWidget {
                     final targetPath = manifest['targetPath'] ?? 'N/A';
 
                     final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
-                    final accentColor = isPromoted ? Colors.greenAccent : Colors.blueAccent;
+                    final accentColor = isPromoted ? AdminColors.emeraldGreen : AdminColors.statusInfo;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E1E2C),
+                        color: AdminColors.slateDark,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.1),
+                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : AdminColors.borderDefault,
                         ),
                       ),
                       child: Column(
@@ -169,7 +160,7 @@ class SuperadminDashboard extends ConsumerWidget {
                                   const SizedBox(width: 8),
                                   Text(
                                     intent,
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                    style: const TextStyle(color: AdminColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                                   ),
                                 ],
                               ),
@@ -196,21 +187,21 @@ class SuperadminDashboard extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          Text(reason, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
+                          Text(reason, style: const TextStyle(color: AdminColors.textSecondary, fontSize: 15, height: 1.4)),
                           const SizedBox(height: 16),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F0F1E),
+                              color: AdminColors.slateDarkest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text("ID: $correlationId", style: const TextStyle(color: Colors.white38, fontSize: 10, fontFamily: 'monospace')),
+                                Text("ID: $correlationId", style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11, fontFamily: 'monospace')),
                                 const SizedBox(height: 4),
-                                Text("TARGET: $targetPath", style: const TextStyle(color: Colors.white54, fontSize: 11, fontFamily: 'monospace')),
+                                Text("TARGET: $targetPath", style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
                               ],
                             ),
                           ),
@@ -220,81 +211,11 @@ class SuperadminDashboard extends ConsumerWidget {
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator(color: Colors.blueAccent)),
-              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.redAccent))),
+              loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SystemStatusBanner extends ConsumerWidget {
-  const _SystemStatusBanner();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statusAsync = ref.watch(_systemStatusProvider);
-
-    return statusAsync.when(
-      data: (status) {
-        Color color = Colors.greenAccent;
-        IconData icon = Icons.check_circle_rounded;
-        String text = 'TELEMETRY HEALTH: STABLE';
-        String subtext = 'Code modifications permitted';
-
-        if (status == 'YELLOW') {
-          color = Colors.orangeAccent;
-          icon = Icons.warning_amber_rounded;
-          text = 'TELEMETRY HEALTH: WARNING';
-          subtext = 'Feature deployments delayed by 60s';
-        } else if (status == 'RED') {
-          color = Colors.redAccent;
-          icon = Icons.error_outline_rounded;
-          text = 'TELEMETRY HEALTH: CRITICAL';
-          subtext = 'Feature deployments completely blocked';
-        }
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(width: 16),
-              Text(
-                text,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                subtext,
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
-                  fontSize: 12,
-                ),
-              )
-            ],
-          ),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        color: const Color(0xFF1E1E2C),
-        child: const Text("TELEMETRY DISCONNECTED", style: TextStyle(color: Colors.white54)),
       ),
     );
   }
