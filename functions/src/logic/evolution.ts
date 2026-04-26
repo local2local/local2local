@@ -12,7 +12,6 @@ async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_
   const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
   try {
     await axios.post(N8N_WEBHOOK_URL, { 
-      incoming_phase: "43.0.4", 
       build_id: payload.correlation_id || ("EVO-" + Date.now()), 
       summary: payload.manifest?.reason || payload.manifest?.error || payload.summary || "Autonomous logic update.", 
       event: eventType, 

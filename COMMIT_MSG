@@ -1,1 +1,1 @@
-43.1.18 - FIX(pipeline): Resolve n8n API validation error by explicitly filtering json payload and add global error reporting to Google Chat
+43.1.19 - FIX(orchestration): Remove continueOnFail from GitHub Mutate node and strip hardcoded phase downgrades from evolution webhook
