@@ -65,8 +65,8 @@ jobs:
             if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
               echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
             else
-              # STEP 1: Upload the modified JSON (keeping the static UUIDs intact)
-              jq 'del(.meta, .active, .createdAt, .updatedAt)' "$WORKFLOW_FILE" > sanitized_workflow.json
+              # STEP 1: Upload the modified JSON (explicitly whitelist fields to avoid schema rejection)
+              jq '{name: .name, nodes: .nodes, connections: .connections, settings: .settings}' "$WORKFLOW_FILE" > sanitized_workflow.json
               
               RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
                 -H "X-N8N-API-KEY: $N8N_KEY" \
