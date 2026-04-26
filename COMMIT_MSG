@@ -1,1 +1,1 @@
-43.1.22 - FIX(orchestration): Move branch parameter to root of GitHub node configuration to resolve 404 API error
+43.1.23 - FIX(orchestration): Nest branch target inside options parameter for GitHub v1 nodes to resolve 404 API error
