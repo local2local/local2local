@@ -2,17 +2,17 @@
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator
- * Description: Resolves the 404 GitHub error by correcting the schema placement of the branch target.
+ * Description: Restores the missing connections object to satisfy the n8n REST API schema requirements.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-43.1.20 - FIX(orchestration): Correct branch targeting in GitHub nodes from additionalParameters to options to fix 404 Not Found error
+43.1.21 - FIX(orchestration): Restore missing connections object in n8n workflow JSON to resolve 400 Bad Request API deployment failure
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.20",
+  "current_phase": "43.1.21",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -38,7 +38,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.20\n**Commit:** 43.1.20 - FIX(orchestration): Correct branch targeting in GitHub nodes from additionalParameters to options to fix 404 Not Found error",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.21\n**Commit:** 43.1.21 - FIX(orchestration): Restore missing connections object in n8n workflow JSON",
         "height": 150,
         "width": 350,
         "color": 6
@@ -123,7 +123,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.20\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.21\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -372,7 +372,9 @@ L2LAAF_BLOCK_END */
         "owner": "local2local",
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
-        "reference": "develop"
+        "additionalParameters": {
+          "reference": "develop"
+        }
       },
       "id": "7c8b9a1d-2e4f-4a70-8b1c-d5e3f7a8b9c0",
       "name": "Fetch Latest State",
@@ -506,7 +508,7 @@ L2LAAF_BLOCK_END */
         "repository": "local2local",
         "filePath": "={{ $json.filePath }}",
         "fileContent": "={{ $json.fileContent }}",
-        "commitMessage": "=feat(evolution): autonomous code mutation for phase {{ $json.updated_state.current_phase }}",
+        "commitMessage": "={{ \"feat(evolution): autonomous code mutation for phase \" + $json.updated_state.current_phase }}",
         "options": {
           "branch": "develop"
         }
@@ -548,7 +550,7 @@ L2LAAF_BLOCK_END */
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
         "fileContent": "={{ JSON.stringify($json.updated_state || $('Automated Testing Suite').first().json.updated_state, null, 2) }}",
-        "commitMessage": "=chore(orchestration): promote phase {{ $('Automated Testing Suite').first().json.updated_state.current_phase }} to STABLE",
+        "commitMessage": "={{ \"chore(orchestration): promote phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" to STABLE\" }}",
         "options": {
           "branch": "develop"
         }
@@ -658,6 +660,272 @@ L2LAAF_BLOCK_END */
       ]
     }
   ],
+  "connections": {
+    "MCP Code Payload": {
+      "main": [
+        [
+          {
+            "node": "Fetch Main State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Main State": {
+      "main": [
+        [
+          {
+            "node": "State Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State Manager": {
+      "main": [
+        [
+          {
+            "node": "Fetch System Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch System Status": {
+      "main": [
+        [
+          {
+            "node": "Throttling Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttling Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Throttle Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle Switch": {
+      "main": [
+        [
+          {
+            "node": "Google Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Throttle Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Blocked Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle Wait": {
+      "main": [
+        [
+          {
+            "node": "Google Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Listener": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Proposal Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Proposal Data": {
+      "main": [
+        [
+          {
+            "node": "Log Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Scraper": {
+      "main": [
+        [
+          {
+            "node": "Fetch Latest State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest State": {
+      "main": [
+        [
+          {
+            "node": "Automated Testing Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Automated Testing Suite": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Filter": {
+      "main": [
+        [
+          {
+            "node": "Gemini Code Fixer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GitHub: Update State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Code Fixer": {
+      "main": [
+        [
+          {
+            "node": "Extract Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Code": {
+      "main": [
+        [
+          {
+            "node": "GitHub: Mutate Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: Mutate Logic": {
+      "main": [
+        [
+          {
+            "node": "Sync Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Wait": {
+      "main": [
+        [
+          {
+            "node": "GitHub: Update State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: Update State": {
+      "main": [
+        [
+          {
+            "node": "Proposal Closure Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proposal Closure Check": {
+      "main": [
+        [
+          {
+            "node": "Trigger Firestore Closure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Firestore Closure": {
+      "main": [
+        [
+          {
+            "node": "Final Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "active": true,
   "settings": {
     "executionOrder": "v1",

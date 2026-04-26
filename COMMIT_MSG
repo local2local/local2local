@@ -1,1 +1,1 @@
-43.1.20 - FIX(orchestration): Correct branch targeting in GitHub nodes from additionalParameters to options to fix 404 Not Found error
+43.1.21 - FIX(orchestration): Restore missing connections object in n8n workflow JSON to resolve 400 Bad Request API deployment failure
