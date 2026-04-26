@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.19\n**Commit:** 43.1.19 - FIX(orchestration): Remove continueOnFail from GitHub Mutate node and strip hardcoded phase downgrades",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.20\n**Commit:** 43.1.20 - FIX(orchestration): Correct branch targeting in GitHub nodes from additionalParameters to options to fix 404 Not Found error",
         "height": 150,
         "width": 350,
         "color": 6
@@ -69,9 +69,7 @@
         "owner": "local2local",
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
-        "additionalParameters": {
-          "reference": "develop"
-        }
+        "reference": "develop"
       },
       "id": "c7e2b1fa-8a56-4f40-811a-6d0e9a7e6b03",
       "name": "Fetch Main State",
@@ -81,7 +79,6 @@
         304,
         304
       ],
-      "webhookId": "198c881b-43f1-43fc-90aa-41ed3517f63d",
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -91,7 +88,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.19\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.20\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -217,8 +214,7 @@
       "position": [
         1312,
         304
-      ],
-      "webhookId": "d83d05c7-f947-47ff-a965-909f7d06bd98"
+      ]
     },
     {
       "parameters": {
@@ -341,9 +337,7 @@
         "owner": "local2local",
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
-        "additionalParameters": {
-          "reference": "develop"
-        }
+        "reference": "develop"
       },
       "id": "7c8b9a1d-2e4f-4a70-8b1c-d5e3f7a8b9c0",
       "name": "Fetch Latest State",
@@ -353,7 +347,6 @@
         704,
         1008
       ],
-      "webhookId": "c9ac3461-39dc-4ac1-b2cf-aa119ef297bd",
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -479,7 +472,7 @@
         "filePath": "={{ $json.filePath }}",
         "fileContent": "={{ $json.fileContent }}",
         "commitMessage": "=feat(evolution): autonomous code mutation for phase {{ $json.updated_state.current_phase }}",
-        "additionalParameters": {
+        "options": {
           "branch": "develop"
         }
       },
@@ -491,7 +484,6 @@
         1760,
         800
       ],
-      "webhookId": "10d89189-4b07-46e9-8859-9f27433f6d47",
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -511,8 +503,7 @@
       "position": [
         1952,
         800
-      ],
-      "webhookId": "d8f6ca36-baf8-4b7d-8032-f4def3f04538"
+      ]
     },
     {
       "parameters": {
@@ -523,7 +514,7 @@
         "filePath": ".l2laaf/state.json",
         "fileContent": "={{ JSON.stringify($json.updated_state || $('Automated Testing Suite').first().json.updated_state, null, 2) }}",
         "commitMessage": "=chore(orchestration): promote phase {{ $('Automated Testing Suite').first().json.updated_state.current_phase }} to STABLE",
-        "additionalParameters": {
+        "options": {
           "branch": "develop"
         }
       },
@@ -535,7 +526,6 @@
         2160,
         912
       ],
-      "webhookId": "034464ea-5d21-49d2-9c93-fbce7ff39a6b",
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -633,318 +623,6 @@
       ]
     }
   ],
-  "pinData": {
-    "Approval Listener": [
-      {
-        "json": {
-          "headers": {
-            "host": "local2local.app.n8n.cloud",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Mobile/15E148 Safari/604.1",
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "accept-encoding": "gzip, br",
-            "accept-language": "en-US,en;q=0.9",
-            "cdn-loop": "cloudflare; loops=1; subreqs=1",
-            "cf-connecting-ip": "2a09:bac3:13c0:2b4::45:10a",
-            "cf-ew-via": "15",
-            "cf-ipcountry": "CA",
-            "cf-ray": "9f2004269ecc5a49-YVR",
-            "cf-visitor": "{\"scheme\":\"https\"}",
-            "cf-worker": "n8n.cloud",
-            "priority": "u=0, i",
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "none",
-            "x-forwarded-for": "2a09:bac3:13c0:2b4::45:10a, 162.159.102.17",
-            "x-forwarded-host": "local2local.app.n8n.cloud",
-            "x-forwarded-port": "443",
-            "x-forwarded-proto": "https",
-            "x-forwarded-server": "traefik-prod-users-gwc-74-6649cf98c6-cf6pz",
-            "x-is-trusted": "yes",
-            "x-real-ip": "2a09:bac3:13c0:2b4::45:10a"
-          },
-          "params": {},
-          "query": {
-            "action": "approve",
-            "env": "develop",
-            "build_id": "24939616732",
-            "phase": "43.1.4",
-            "hbrId": "undefined"
-          },
-          "webhookUrl": "https://local2local.app.n8n.cloud/webhook/approve-promotion",
-          "executionMode": "production"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
-  "connections": {
-    "MCP Code Payload": {
-      "main": [
-        [
-          {
-            "node": "Fetch Main State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Main State": {
-      "main": [
-        [
-          {
-            "node": "State Manager",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "State Manager": {
-      "main": [
-        [
-          {
-            "node": "Fetch System Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch System Status": {
-      "main": [
-        [
-          {
-            "node": "Throttling Evaluator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttling Evaluator": {
-      "main": [
-        [
-          {
-            "node": "Throttle Switch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttle Switch": {
-      "main": [
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Throttle Wait",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Blocked Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttle Wait": {
-      "main": [
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approval Listener": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Proposal Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Proposal Data": {
-      "main": [
-        [
-          {
-            "node": "Log Scraper",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Scraper": {
-      "main": [
-        [
-          {
-            "node": "Fetch Latest State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Latest State": {
-      "main": [
-        [
-          {
-            "node": "Automated Testing Suite",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Automated Testing Suite": {
-      "main": [
-        [
-          {
-            "node": "Payload Filter",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Payload Filter": {
-      "main": [
-        [
-          {
-            "node": "Gemini Code Fixer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "GitHub: Update State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini Code Fixer": {
-      "main": [
-        [
-          {
-            "node": "Extract Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Code": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Mutate Logic",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GitHub: Mutate Logic": {
-      "main": [
-        [
-          {
-            "node": "Sync Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sync Wait": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Update State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GitHub: Update State": {
-      "main": [
-        [
-          {
-            "node": "Proposal Closure Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Proposal Closure Check": {
-      "main": [
-        [
-          {
-            "node": "Trigger Firestore Closure",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Trigger Firestore Closure": {
-      "main": [
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error Trigger": {
-      "main": [
-        [
-          {
-            "node": "Error Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
   "active": true,
   "settings": {
     "executionOrder": "v1",
