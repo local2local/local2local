@@ -1,1 +1,1 @@
-43.1.16 - FIX(orchestration): Correct n8n GitHub node expression evaluation and restore explicit branch targeting to resolve silent commit failures
+43.1.17 - FIX(orchestration): Correct n8n GitHub node expression evaluation and restore explicit branch targeting to resolve silent commit failures
