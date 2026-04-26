@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.15\n**Commit:** 43.1.15 - FEAT(evolution): Update Gemini prompt mapping and wire Superadmin Dashboard for live autonomous UI mutation test",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.16\n**Commit:** 43.1.16 - FIX(orchestration): Correct n8n GitHub node expression evaluation and restore explicit branch targeting",
         "height": 150,
         "width": 350,
         "color": 6
@@ -60,7 +60,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.15\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.16\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -215,7 +215,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + $json.meta.build_id + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + $json.meta.hbrId } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id) + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || ($json.meta.payload && $json.meta.payload.manifest ? $json.meta.payload.manifest.hbrId : \"manual\")) } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id) + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || ($json.meta.payload && $json.meta.payload.manifest ? $json.meta.payload.manifest.hbrId : \"manual\")) } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -445,7 +445,8 @@
         "repository": "local2local",
         "filePath": "={{ $json.filePath }}",
         "fileContent": "={{ $json.fileContent }}",
-        "commitMessage": "=\"feat(evolution): autonomous code mutation for phase \" + $json.updated_state.current_phase",
+        "commitMessage": "={{ \"feat(evolution): autonomous code mutation for phase \" + $json.updated_state.current_phase }}",
+        "branch": "develop",
         "options": {
           "branch": "develop"
         }
@@ -488,7 +489,8 @@
         "repository": "local2local",
         "filePath": ".l2laaf/state.json",
         "fileContent": "={{ JSON.stringify($json.updated_state || $('Automated Testing Suite').first().json.updated_state, null, 2) }}",
-        "commitMessage": "=\"chore(orchestration): promote phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" to STABLE\"",
+        "commitMessage": "={{ \"chore(orchestration): promote phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" to STABLE\" }}",
+        "branch": "develop",
         "options": {
           "branch": "develop"
         }
