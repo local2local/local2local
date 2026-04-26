@@ -1,18 +1,18 @@
 /**
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: relay_pipeline, n8n_orchestrator
- * Description: Refactors relay.sh to use bulletproof boolean execution logic.
+ * Target: n8n_orchestrator, superadmin_dashboard
+ * Description: Wires the dashboard for a live UI mutation test and fixes the Gemini prompt mapping in n8n.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-43.1.14 - FIX(pipeline): Refactor relay.sh to use strict boolean logic and functions to eliminate bash clipboard parsing errors
+43.1.15 - FEAT(evolution): Update Gemini prompt mapping and wire Superadmin Dashboard for live autonomous UI mutation test
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.14",
+  "current_phase": "43.1.15",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -32,79 +32,278 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(bash:Relay Pipeline:scripts/relay.sh)
-#!/bin/bash
-# --- L2LAAF RELAY v5.9 (Syntax Bulletproof Upgrade) ---
-# Target: logic_payload.txt
-# Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Push.
+/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
+import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
 
-PAYLOAD_FILE="./scripts/logic_payload.txt"
+final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSnapshot>, String>((ref, appId) {
+  return FirebaseFirestore.instance
+      .collection('artifacts')
+      .doc(appId)
+      .collection('public')
+      .doc('data')
+      .collection('agent_bus')
+      .snapshots()
+      .map((snapshot) => snapshot.docs);
+});
 
-function fatal_error {
-    echo "❌ FATAL: $1"
-    exit 1
+class SuperadminDashboard extends ConsumerWidget {
+  const SuperadminDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final env = ref.watch(environmentProvider);
+    final busAsync = ref.watch(_agentBusProvider(env.projectId));
+
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Superadmin Command Center',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+                  final doc = FirebaseFirestore.instance
+                      .collection('artifacts')
+                      .doc(env.projectId)
+                      .collection('public')
+                      .doc('data')
+                      .collection('agent_bus')
+                      .doc();
+                      
+                  final String currentBannerCode = r'''import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+
+class SystemStatusBanner extends ConsumerWidget {
+  const SystemStatusBanner({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // TODO: Connect to your actual StreamProvider for telemetry status
+    // For now, mocked to Green/Stable as requested in Phase 42 UI setup
+    const String status = 'STABLE'; 
+    const Color color = AdminColors.emeraldGreen;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1), // Flutter 3.27 compliant
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_rounded, color: color, size: 28),
+          const SizedBox(width: 16),
+          const Text(
+            'TELEMETRY HEALTH: $status',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Code modifications permitted',
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}''';
+                  
+                  await doc.set({
+                    "status": "dispatched",
+                    "correlation_id": "TEST-LIVE-$timestamp",
+                    "payload": {
+                      "manifest": {
+                        "intent": "PROPOSE_LOGIC_CHANGE",
+                        "hbrId": "HBR-LIVE-$timestamp",
+                        "agentId": "TEST_BOT_ORCHESTRATOR",
+                        "reason": "Update the status string to 'AWAITING TELEMETRY', change the color variable to AdminColors.statusWarning, and change the icon to Icons.warning_rounded.",
+                        "proposedLogic": currentBannerCode,
+                        "targetPath": "lib/features/triage_hub/widgets/system_status_banner.dart"
+                      }
+                    }
+                  });
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Live UI Mutation Payload injected into Agent Bus!'),
+                        backgroundColor: AdminColors.emeraldGreen,
+                        behavior: SnackBarBehavior.floating,
+                      )
+                    );
+                  }
+                },
+                icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+                label: const Text('Test Inject'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.slateDark,
+                  foregroundColor: AdminColors.emeraldGreen,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  side: BorderSide(
+                    color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          const SystemStatusBanner(),
+          const SizedBox(height: 40),
+          const Text(
+            'AGENT BUS (ACTIVE PROPOSALS)',
+            style: TextStyle(
+              color: AdminColors.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.borderDefault, height: 1),
+          const SizedBox(height: 16),
+          Expanded(
+            child: busAsync.when(
+              data: (docs) {
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No active proposals in the Agent Bus.", 
+                      style: TextStyle(color: AdminColors.textSecondary, fontSize: 16)
+                    )
+                  );
+                }
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final correlationId = data['correlation_id'] ?? 'Unknown ID';
+                    final status = data['status'] ?? 'pending';
+                    final payload = data['payload'] as Map<String, dynamic>? ?? {};
+                    final manifest = payload['manifest'] as Map<String, dynamic>? ?? {};
+                    
+                    final intent = manifest['intent'] ?? 'UNKNOWN_INTENT';
+                    final reason = manifest['reason'] ?? 'No reason provided.';
+                    final targetPath = manifest['targetPath'] ?? 'N/A';
+
+                    final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
+                    final accentColor = isPromoted ? AdminColors.emeraldGreen : AdminColors.statusInfo;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AdminColors.slateDark,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : AdminColors.borderDefault,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    isPromoted ? Icons.check_circle : Icons.memory, 
+                                    color: accentColor,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    intent,
+                                    style: const TextStyle(color: AdminColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: accentColor.withValues(alpha: 0.5),
+                                    width: 1,
+                                  )
+                                ),
+                                child: Text(
+                                  status.toString().toUpperCase(),
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(reason, style: const TextStyle(color: AdminColors.textSecondary, fontSize: 15, height: 1.4)),
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AdminColors.slateDarkest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text("ID: $correlationId", style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11, fontFamily: 'monospace')),
+                                const SizedBox(height: 4),
+                                Text("TARGET: $targetPath", style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
-
-test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
-
-echo "--- L2LAAF RELAY v5.9 ---"
-echo "📂 Project Root: $(pwd)"
-echo "📡 Using Payload: $PAYLOAD_FILE"
-
-# 0. SMART CLEANUP OLD ARTIFACTS
-grep -q "n8n_workflows/" "$PAYLOAD_FILE"
-GREP_RES=$?
-test $GREP_RES -eq 0 && echo "🧹 New n8n workflow detected in payload. Purging legacy workflows..."
-test $GREP_RES -eq 0 && rm -f n8n_workflows/*.json
-test $GREP_RES -ne 0 && echo "⏭️ No n8n workflow update in payload. Preserving current workflow JSON."
-
-# 1. RUN PATCHER
-node ./scripts/patcher.js < "$PAYLOAD_FILE" || fatal_error "Patcher failed."
-
-# 2. RUN TSC VALIDATION (Cloud Functions)
-echo "🔍 Pre-flight check [1/3]: Validating Cloud Functions..."
-cd functions || fatal_error "Could not enter functions directory."
-npm run build || fatal_error "TypeScript validation failed. Bad code will not be pushed."
-cd ..
-echo "🟢 SUCCESS: Cloud Functions Validated."
-
-# 3. RUN FLUTTER ANALYZE
-echo "🔍 Pre-flight check [2/3]: Analyzing Flutter Code..."
-flutter analyze > /dev/null || fatal_error "Flutter validation failed. Fix outstanding problems before deploying."
-echo "🟢 SUCCESS: Flutter Analysis Passed."
-
-# 4. N8N JSON VALIDATION
-function validate_n8n {
-    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { if(!JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")).nodes) throw Error("Missing nodes array"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
-    node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Fix syntax before deploying."
-    rm -f .tmp_check.js
-    
-    MISSING=$(jq '[.nodes[] | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name]' n8n_workflows/*.json 2>/dev/null)
-    test "$MISSING" != "[]" && test -n "$MISSING" && fatal_error "Webhook nodes missing webhookId: $MISSING"
-    
-    echo "🟢 SUCCESS: n8n Workflows Validated (Syntax & Webhook IDs)."
-}
-
-echo "🔍 Pre-flight check [3/3]: Validating n8n Workflows..."
-test -d "n8n_workflows" && validate_n8n
-test -d "n8n_workflows" || echo "⚠️  n8n_workflows directory not found. Skipping validation."
-
-# 5. GITHUB DEPLOYMENT SEQUENCE
-echo "🚀 Initializing Deployment to GitHub..."
-test -f "COMMIT_MSG" || fatal_error "No COMMIT_MSG found. Did patcher run correctly?"
-
-MSG=$(cat COMMIT_MSG)
-echo "📦 Force-tracking n8n_workflows..."
-git add -f n8n_workflows/
-git add .
-git commit -m "$MSG"
-
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo "📡 Pushing to origin/$CURRENT_BRANCH..."
-git push origin "$CURRENT_BRANCH" || fatal_error "Push failed."
-
-echo "🎉 DEPLOYMENT COMPLETE: Stack stabilized and pushed."
-rm COMMIT_MSG
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:Autonomous Orchestrator JSON:n8n_workflows/l2laaf_autonomous_orchestrator.json)
@@ -114,7 +313,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.14\n**Commit:** 43.1.14 - FIX(pipeline): Refactor relay.sh to use strict boolean logic and functions to eliminate bash clipboard parsing errors",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.15\n**Commit:** 43.1.15 - FEAT(evolution): Update Gemini prompt mapping and wire Superadmin Dashboard for live autonomous UI mutation test",
         "height": 150,
         "width": 350,
         "color": 6
@@ -170,7 +369,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.14\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.15\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -441,7 +640,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"🛑 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"✅ Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"❌ Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent\n  } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"🛑 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"✅ Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"❌ Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  let summary = originalMeta.summary || \"No reason provided.\";\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
       },
       "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
       "name": "Automated Testing Suite",
@@ -517,7 +716,7 @@ L2LAAF_BLOCK_END */
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"systemInstruction\": { \"parts\": [ { \"text\": \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" } ] }, \"contents\": [ { \"parts\": [ { \"text\": \"File Path: \" + $json.filePath + \"\\n\\nReason: \" + $('Automated Testing Suite').first().json.notification_text + \"\\n\\nCode:\\n\" + $json.fileContent } ] } ] } }}",
+        "jsonBody": "={{ { \"systemInstruction\": { \"parts\": [ { \"text\": \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" } ] }, \"contents\": [ { \"parts\": [ { \"text\": \"File Path: \" + $json.filePath + \"\\n\\nReason: \" + $json.reason + \"\\n\\nCode:\\n\" + $json.fileContent } ] } ] } }}",
         "options": {}
       },
       "id": "gemini-code-fixer-node",
