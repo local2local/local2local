@@ -71,3 +71,14 @@ result stored as a plain field in $json for the HTTP node to reference.
 2. NEVER reference $json.execution.error.node.name in Error Alert expressions. 
    Code node errors do not populate a node sub-object. Always use 
    $json.execution.lastNodeExecuted for the failing node name.
+
+**Rule going forward:**
+- n8n If node typeVersion 2 conditions ALWAYS require: 
+  (a) `"combinator": "and"` at the conditions root level
+  (b) a unique `"id"` string on every condition object  
+  (c) a `"name"` field on every operator object
+  (d) `"typeValidation": "loose"` when comparing expression values to 
+      string literals
+- GUARD clauses in Code nodes must use `return []` not `throw` when the 
+  intent is to silently stop a leaked item. Only use `throw` when you 
+  genuinely want the Error Trigger to fire.
