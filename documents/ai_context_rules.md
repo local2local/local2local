@@ -58,10 +58,16 @@ For n8n GitHub node typeVersion 1:
   A missing branch is a silent bug — n8n will not warn you, it will just default to 
   main and 404 on any file that only exists on develop.
 
-  **Rule going forward:**
+**Rule going forward:**
 NEVER use Buffer, require(), process, or any other Node.js globals inside n8n 
 expression fields (={{ }}). These are only valid inside Code nodes. If base64 
 encoding, JSON stringification, or any Node.js operation is needed to prepare 
 an HTTP request body, it must be done in a preceding Code node first, with the 
 result stored as a plain field in $json for the HTTP node to reference.
 
+**Rules going forward:**
+1. NEVER use Switch nodes for binary (two-output) routing decisions. 
+   Always use an If node. Switch nodes are for 3+ output routing only.
+2. NEVER reference $json.execution.error.node.name in Error Alert expressions. 
+   Code node errors do not populate a node sub-object. Always use 
+   $json.execution.lastNodeExecuted for the failing node name.
