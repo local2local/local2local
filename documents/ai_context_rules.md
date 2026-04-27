@@ -46,3 +46,14 @@ The `url` parameter in an n8n HTTP Request node must **always** be a complete, l
 ```
 
 **Corollary:** Only use the `=` expression prefix on a `url` field when at least one segment of the URL is genuinely dynamic (i.e., references `$json`, `$env`, or another n8n variable). If the entire URL is static, it must be a plain string with no `=` prefix and no concatenation.
+
+
+
+
+**Rule going forward:**
+For n8n GitHub node typeVersion 1:
+- The `get` operation uses the `reference` parameter (directly in parameters) to specify branch.
+- The `edit` operation uses `options.branch` to specify branch.
+- NEVER leave either field unset when the target branch is not the repo default. 
+  A missing branch is a silent bug — n8n will not warn you, it will just default to 
+  main and 404 on any file that only exists on develop.
