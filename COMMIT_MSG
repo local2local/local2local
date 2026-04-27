@@ -1,1 +1,1 @@
-43.1.28 - FIX(orchestration): Re-add missing Fetch Latest State node and update base64 extraction logic to restore execution chain
+43.1.29 - FIX(orchestration): Apply continueOnFail to GitHub SHA retrieval nodes to gracefully handle nonexistent files and eradicate 404 API crashes
