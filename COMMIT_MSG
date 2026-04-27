@@ -1,1 +1,1 @@
-43.1.25 - FIX(orchestration): Apply correct branch specifiers to all GitHub nodes to enforce develop branch targeting and resolve 404 Not Found error
+43.1.28 - FIX(orchestration): Re-add missing Fetch Latest State node and update base64 extraction logic to restore execution chain
