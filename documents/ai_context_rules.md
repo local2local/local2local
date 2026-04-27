@@ -57,3 +57,11 @@ For n8n GitHub node typeVersion 1:
 - NEVER leave either field unset when the target branch is not the repo default. 
   A missing branch is a silent bug — n8n will not warn you, it will just default to 
   main and 404 on any file that only exists on develop.
+
+  **Rule going forward:**
+NEVER use Buffer, require(), process, or any other Node.js globals inside n8n 
+expression fields (={{ }}). These are only valid inside Code nodes. If base64 
+encoding, JSON stringification, or any Node.js operation is needed to prepare 
+an HTTP request body, it must be done in a preceding Code node first, with the 
+result stored as a plain field in $json for the HTTP node to reference.
+

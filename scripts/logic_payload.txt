@@ -2,17 +2,17 @@
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator
- * Description: Adds continueOnFail to SHA retrieval nodes to gracefully handle nonexistent files and bypass payloads.
+ * Description: Extracts Buffer operations to explicit Code nodes and adds a hard error guard against IGNORE file mutations.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-43.1.29 - FIX(orchestration): Apply continueOnFail to GitHub SHA retrieval nodes to gracefully handle nonexistent files and eradicate 404 API crashes
+43.1.30 - FIX(orchestration): Extract Node.js Buffer operations to dedicated Code nodes and guard against IGNORE payload leaks
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.29",
+  "current_phase": "43.1.30",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -38,7 +38,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.29\n**Commit:** 43.1.29 - FIX(orchestration): Apply continueOnFail to GitHub SHA retrieval nodes to handle 404 API crashes",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.30\n**Commit:** 43.1.30 - FIX(orchestration): Extract Node.js Buffer operations to Code nodes",
         "height": 150,
         "width": 350,
         "color": 6
@@ -123,7 +123,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.29\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.30\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -502,6 +502,19 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst extract = $('Extract Code').first().json;\nif (suite.filePath === 'IGNORE') throw new Error('GUARD: filePath is IGNORE, mutation path should not have been reached.');\nconst encodedContent = Buffer.from(extract.fileContent || '').toString('base64');\nconst commitMessage = 'feat(evolution): autonomous code mutation for phase ' + suite.updated_state.current_phase;\nreturn [{ json: { ...extract, encodedContent, commitMessage } }];"
+      },
+      "id": "prepare-mutate-payload-node",
+      "name": "Prepare Mutate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1650,
+        800
+      ]
+    },
+    {
+      "parameters": {
         "method": "GET",
         "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Automated Testing Suite').first().json.filePath + '?ref=develop' }}",
         "authentication": "predefinedCredentialType",
@@ -532,7 +545,7 @@ L2LAAF_BLOCK_END */
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ Object.assign({ message: 'feat(evolution): autonomous code mutation for phase ' + $('Automated Testing Suite').first().json.updated_state.current_phase, content: Buffer.from($('Extract Code').first().json.fileContent || '').toString('base64'), branch: 'develop' }, $json.sha ? { sha: $json.sha } : {}) }}",
+        "jsonBody": "={{ Object.assign({ message: $('Prepare Mutate Payload').first().json.commitMessage, content: $('Prepare Mutate Payload').first().json.encodedContent, branch: 'develop' }, $('Get Logic SHA').first().json.sha ? { sha: $('Get Logic SHA').first().json.sha } : {}) }}",
         "options": {}
       },
       "id": "mutate-logic-http",
@@ -567,6 +580,19 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst encodedContent = Buffer.from(JSON.stringify(suite.updated_state, null, 2)).toString('base64');\nconst commitMessage = 'chore(orchestration): promote phase ' + suite.updated_state.current_phase + ' to STABLE';\nreturn [{ json: { encodedContent, commitMessage } }];"
+      },
+      "id": "prepare-state-payload-node",
+      "name": "Prepare State Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2260,
+        800
+      ]
+    },
+    {
+      "parameters": {
         "method": "GET",
         "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=develop",
         "authentication": "predefinedCredentialType",
@@ -597,7 +623,7 @@ L2LAAF_BLOCK_END */
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ Object.assign({ message: 'chore(orchestration): promote phase ' + $('Automated Testing Suite').first().json.updated_state.current_phase + ' to STABLE', content: Buffer.from(JSON.stringify($('Automated Testing Suite').first().json.updated_state, null, 2)).toString('base64'), branch: 'develop' }, $json.sha ? { sha: $json.sha } : {}) }}",
+        "jsonBody": "={{ Object.assign({ message: $('Prepare State Payload').first().json.commitMessage, content: $('Prepare State Payload').first().json.encodedContent, branch: 'develop' }, $('Get State SHA').first().json.sha ? { sha: $('Get State SHA').first().json.sha } : {}) }}",
         "options": {}
       },
       "id": "update-state-http",
@@ -914,7 +940,7 @@ L2LAAF_BLOCK_END */
         ],
         [
           {
-            "node": "Get State SHA",
+            "node": "Prepare State Payload",
             "type": "main",
             "index": 0
           }
@@ -933,6 +959,17 @@ L2LAAF_BLOCK_END */
       ]
     },
     "Extract Code": {
+      "main": [
+        [
+          {
+            "node": "Prepare Mutate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Mutate Payload": {
       "main": [
         [
           {
@@ -966,6 +1003,17 @@ L2LAAF_BLOCK_END */
       ]
     },
     "Sync Wait": {
+      "main": [
+        [
+          {
+            "node": "Prepare State Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare State Payload": {
       "main": [
         [
           {
