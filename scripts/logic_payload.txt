@@ -2,17 +2,17 @@
  * L2LAAF Logic Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator, flutter_app
- * Description: Fixes local Flutter analyzer errors introduced by LLM and patches orchestrator prompt mapping.
+ * Description: Resets the environment for a fresh Live UI Mutation test execution.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-43.1.34 - FIX(pipeline): Resolve Flutter deprecated_member_use analyzer errors introduced by LLM and deploy prompt mapping fix
+43.1.35 - CHORE(testing): Reset environment for fresh end-to-end Live UI Mutation test execution
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.34",
+  "current_phase": "43.1.35",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,
@@ -88,7 +88,7 @@ L2LAAF_BLOCK_END */
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.34\n**Commit:** 43.1.34 - FIX(pipeline): Resolve Flutter deprecated_member_use analyzer errors introduced by LLM",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.35\n**Commit:** 43.1.35 - CHORE(testing): Reset environment for fresh end-to-end Live UI Mutation test execution",
         "height": 150,
         "width": 350,
         "color": 6
@@ -173,7 +173,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.34\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.35\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
