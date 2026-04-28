@@ -7,9 +7,10 @@ class SystemStatusBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Connected to StreamProvider for telemetry status (mocked for Phase 42 UI setup)
-    const String status = 'STABLE'; 
-    const Color color = AdminColors.emeraldGreen;
+    // TODO: Connect to your actual StreamProvider for telemetry status
+    // For now, mocked to Green/Stable as requested in Phase 42 UI setup
+    const String status = 'AWAITING TELEMETRY'; 
+    const Color color = AdminColors.statusWarning;
 
     return Container(
       width: double.infinity,
@@ -21,9 +22,9 @@ class SystemStatusBanner extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle_rounded, color: color, size: 28),
+          Icon(Icons.warning_rounded, color: color, size: 28),
           const SizedBox(width: 16),
-          const Text(
+          Text(
             'TELEMETRY HEALTH: $status',
             style: TextStyle(
               color: color,
