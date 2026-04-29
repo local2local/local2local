@@ -131,7 +131,7 @@ jobs:
             --arg summary "$(git log -1 --pretty=%B | head -n 1)" \
             --arg env "$ENV_NAME" \
             --arg method "$METHOD" \
-            '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env}' > n8n_payload.json
+            '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env, method: $method}' > n8n_payload.json
             
           WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
           
