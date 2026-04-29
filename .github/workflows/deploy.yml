@@ -57,13 +57,18 @@ jobs:
         if: success()
         env:
           N8N_KEY: ${{ secrets.N8N_API_KEY }}
-          N8N_ID: ${{ secrets.N8N_WORKFLOW_ID }}
+          N8N_ID: ${{ github.ref_name == 'main' && vars.N8N_WORKFLOW_ID_PROD || vars.N8N_WORKFLOW_ID_DEV }}
         run: |
-          WORKFLOW_FILE="n8n_workflows/l2laaf_autonomous_orchestrator.json"
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            WORKFLOW_FILE="n8n_workflows/l2laaf_autonomous_orchestrator.main.json"
+          else
+            WORKFLOW_FILE="n8n_workflows/l2laaf_autonomous_orchestrator.develop.json"
+          fi
+
           if [ -f "$WORKFLOW_FILE" ]; then
-            echo "Deploying $WORKFLOW_FILE to n8n Cloud..."
+            echo "Deploying $WORKFLOW_FILE to n8n Cloud (workflow: $N8N_ID)..."
             if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
-              echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID secret is missing or empty. Skipping API sync."
+              echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID is missing or empty. Skipping API sync."
             else
               # STEP 1: Upload the modified JSON (explicitly whitelist fields to avoid schema rejection)
               jq '{name: .name, nodes: .nodes, connections: .connections, settings: .settings}' "$WORKFLOW_FILE" > sanitized_workflow.json
@@ -114,7 +119,7 @@ jobs:
               fi
             fi
           else
-            echo "⚠️ n8n_workflows/l2laaf_autonomous_orchestrator.json not found. Skipping."
+            echo "⚠️ $WORKFLOW_FILE not found. Skipping n8n deployment."
           fi
 
       - name: Notify Orchestrator
@@ -132,8 +137,12 @@ jobs:
             --arg env "$ENV_NAME" \
             --arg method "$METHOD" \
             '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env, method: $method}' > n8n_payload.json
-            
-          WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL }}"
+
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_PROD }}"
+          else
+            WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_DEV }}"
+          fi
           
           # STEP 4: Probe the webhook before firing the real payload
           echo "🔍 Probing webhook availability at $WEBHOOK_URL"
