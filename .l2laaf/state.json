@@ -1,6 +1,5 @@
 {
   "system_status": "OPERATIONAL",
-  "current_phase": "43.1.39",
   "active_environment": "develop",
   "deployment_telemetry": {
     "last_success_commit": null,

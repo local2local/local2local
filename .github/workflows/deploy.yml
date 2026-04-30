@@ -9,9 +9,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   deploy:
-    # Skip deployments triggered by autonomous orchestrator commits to prevent pipeline loops
+    # Skip deployments triggered by autonomous orchestrator or merge commits
     if: |
-      !startsWith(github.event.head_commit.message, '[AUTO]') &&
       !contains(github.event.head_commit.message, '- [AUTO]') &&
       !startsWith(github.event.head_commit.message, 'Merge branch')
     runs-on: ubuntu-latest
@@ -20,35 +19,106 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.38.5'
-          
+
+      - name: Bump Version
+        id: bump_version
+        run: |
+          # --- Read current version from pubspec.yaml ---
+          CURRENT_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
+          MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+          PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+          echo "Current version: $MAJOR.$MINOR.$PATCH"
+
+          # --- Extract BUMP type from commit message (case insensitive) ---
+          COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
+          BUMP_RAW=$(echo "$COMMIT_MSG" | grep -ioE 'bump:[[:space:]]*(major|minor|patch)' | head -1 || echo "")
+          BUMP_TYPE=$(echo "$BUMP_RAW" | grep -ioE 'major|minor|patch' | tr '[:lower:]' '[:upper:]' || echo "PATCH")
+          if [ -z "$BUMP_TYPE" ]; then BUMP_TYPE="PATCH"; fi
+
+          echo "Bump type: $BUMP_TYPE"
+
+          # --- Calculate new version ---
+          if [ "$BUMP_TYPE" = "MAJOR" ]; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          elif [ "$BUMP_TYPE" = "MINOR" ]; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          BUILD_NUMBER="${{ github.run_number }}"
+          echo "New version: $NEW_VERSION+$BUILD_NUMBER"
+
+          # --- Strip BUMP tag from commit message for clean final message ---
+          CLEAN_MSG=$(echo "$COMMIT_MSG" | sed -E 's/[[:space:]]*[Bb][Uu][Mm][Pp]:[[:space:]]*(major|minor|patch)//i' | xargs)
+
+          # --- Extract METHOD from commit message ---
+          METHOD=$(echo "$CLEAN_MSG" | grep -oE '\[(MANUAL|ASSISTED|AUTO|DREAM)\]' | tr -d '[]' || echo "UNKNOWN")
+
+          # --- Build final versioned commit message ---
+          FINAL_MSG="$NEW_VERSION - $CLEAN_MSG"
+
+          # --- Update pubspec.yaml ---
+          sed -i "s/^version: .*/version: $NEW_VERSION+$BUILD_NUMBER/" pubspec.yaml
+
+          # --- Remove current_phase from state.json ---
+          if [ -f ".l2laaf/state.json" ]; then
+            node -e "
+              const fs = require('fs');
+              const s = JSON.parse(fs.readFileSync('.l2laaf/state.json'));
+              delete s.current_phase;
+              fs.writeFileSync('.l2laaf/state.json', JSON.stringify(s, null, 2));
+            "
+          fi
+
+          # --- Commit and push version bump ---
+          git config user.name "L2LAAF CI"
+          git config user.email "ci@local2local.ca"
+          git add pubspec.yaml .l2laaf/state.json
+          git commit -m "$NEW_VERSION - [AUTO] CHORE(version): Bump $CURRENT_VERSION to $NEW_VERSION ($BUMP_TYPE)"
+          git push origin ${{ github.ref_name }}
+
+          # --- Export for subsequent steps ---
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "final_msg=$FINAL_MSG" >> $GITHUB_OUTPUT
+          echo "method=$METHOD" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
       - name: Install Firebase CLI & Dependencies
         run: |
           npm install -g firebase-tools
-          cd functions 
+          cd functions
           npm install firebase-functions@latest firebase-admin@latest
           npm install
           cd ..
           flutter pub get
-          
+
       - name: Build Flutter Web
         run: flutter build web --release
-        
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-          
+
       - name: Deploy Stack
         run: |
           if [[ "${{ github.ref_name }}" == "main" ]]; then
@@ -57,7 +127,7 @@ jobs:
             PROJECT_ID="local2local-dev"
           fi
           firebase deploy --only hosting,functions --project $PROJECT_ID --non-interactive --force
-          
+
       - name: Deploy n8n Workflow
         if: success()
         env:
@@ -75,39 +145,36 @@ jobs:
             if [ -z "$N8N_KEY" ] || [ -z "$N8N_ID" ]; then
               echo "⚠️ N8N_API_KEY or N8N_WORKFLOW_ID is missing or empty. Skipping API sync."
             else
-              # STEP 1: Upload the modified JSON (explicitly whitelist fields to avoid schema rejection)
               jq '{name: .name, nodes: .nodes, connections: .connections, settings: .settings}' "$WORKFLOW_FILE" > sanitized_workflow.json
-              
+
               RESPONSE=$(curl -s --max-time 15 -w "\n%{http_code}" -X PUT "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID" \
                 -H "X-N8N-API-KEY: $N8N_KEY" \
                 -H "Accept: application/json" \
                 -H "Content-Type: application/json" \
                 -d @sanitized_workflow.json)
-              
+
               HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
               BODY=$(echo "$RESPONSE" | sed '$d')
-              
+
               if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
                 echo "🟢 Successfully deployed workflow payload to n8n!"
-                
-                # STEP 2: Deactivate first to force clean webhook teardown on the edge network
+
                 echo "Deactivating workflow $N8N_ID to force webhook re-registration..."
                 curl -s -X POST "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID/deactivate" \
                   -H "X-N8N-API-KEY: $N8N_KEY" \
                   -H "Accept: application/json" > /dev/null
-                  
+
                 echo "⏳ Waiting 10s for deactivation to propagate..."
                 sleep 10
-                
-                # STEP 3: Reactivate to force fresh webhook mount
+
                 echo "Reactivating workflow $N8N_ID..."
                 ACT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://local2local.app.n8n.cloud/api/v1/workflows/$N8N_ID/activate" \
                   -H "X-N8N-API-KEY: $N8N_KEY" \
                   -H "Accept: application/json")
-                
+
                 ACT_CODE=$(echo "$ACT_RESPONSE" | tail -n1)
                 ACT_BODY=$(echo "$ACT_RESPONSE" | sed '$d')
-                
+
                 if [[ "$ACT_CODE" -ge 200 && "$ACT_CODE" -lt 300 ]]; then
                   echo "🟢 Workflow reactivated!"
                   echo "⏳ Waiting 30s for Cloudflare edge to fully mount the webhook route..."
@@ -130,18 +197,16 @@ jobs:
       - name: Notify Orchestrator
         if: success()
         run: |
-          PHASE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.l2laaf/state.json')).current_phase)")
+          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
-          METHOD=$(git log -1 --pretty=%B | head -n 1 | grep -oE '\[(MANUAL|ASSISTED|AUTO|DREAM)\]' | tr -d '[]' || echo "UNKNOWN")
-          
-          # Use git commit SHA (not run ID) so the HITL gate can promote the exact commit
+          METHOD="${{ steps.bump_version.outputs.method }}"
+          FINAL_MSG="${{ steps.bump_version.outputs.final_msg }}"
           COMMIT_SHA="${{ github.sha }}"
 
-          # Safely build JSON payload using jq to prevent string interpolation breaks
           jq -n \
-            --arg phase "$PHASE" \
+            --arg phase "$NEW_VERSION" \
             --arg build "$COMMIT_SHA" \
-            --arg summary "$(git log -1 --pretty=%B | head -n 1)" \
+            --arg summary "$FINAL_MSG" \
             --arg env "$ENV_NAME" \
             --arg method "$METHOD" \
             '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env, method: $method}' > n8n_payload.json
@@ -151,19 +216,18 @@ jobs:
           else
             WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_DEV }}"
           fi
-          
-          # STEP 4: Probe the webhook before firing the real payload
+
           echo "🔍 Probing webhook availability at $WEBHOOK_URL"
           PROBE_MAX=6
           PROBE_COUNT=0
           PROBE_CODE=404
-          
+
           while [[ "$PROBE_CODE" -eq 404 && $PROBE_COUNT -lt $PROBE_MAX ]]; do
             PROBE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST \
               "$WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -d '{"probe": true}')
-            
+
             echo "Probe $((PROBE_COUNT+1)): HTTP $PROBE_CODE"
             if [[ "$PROBE_CODE" -eq 404 ]]; then
               echo "⚠️ Route not mounted yet. Waiting 10s..."
@@ -171,21 +235,21 @@ jobs:
             fi
             PROBE_COUNT=$((PROBE_COUNT+1))
           done
-          
+
           if [[ "$PROBE_CODE" -eq 404 ]]; then
             echo "❌ Webhook never mounted after deactivate/reactivate cycle."
             exit 1
           fi
-          
+
           echo "✅ Webhook is live! Firing real payload..."
           cat n8n_payload.json
-          
+
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d @n8n_payload.json)
-            
+
           echo "n8n Webhook Response Code: $HTTP_CODE"
-          
+
           if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
             echo "🟢 Webhook successfully received and processed by n8n!"
           else

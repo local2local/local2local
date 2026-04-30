@@ -89,7 +89,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.35\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  // Version comes exclusively from the webhook payload (set by deploy.yml Bump Version step)\n  const currentVersion = meta.incoming_phase || \"0.0.0\";\n  \n  // state.json no longer holds current_phase - just operational fields\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  \n  // Build updated state - version lives in pubspec.yaml, not here\n  let updatedState = { ...state };\n  delete updatedState.current_phase;\n  \n  return [{ json: { updated_state: updatedState, meta: { ...meta, current_version: currentVersion } } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -354,7 +354,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) {\n    stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"\ud83d\uded1 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"\u2705 Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"\u274c Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  let finalFilePath = originalMeta.filePath || filePath;\n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  return [{ json: {\n    action: action,\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) {\n    stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state };\n  // Version comes from webhook payload, not state.json\n  if (approvedPhase) { updatedState.current_version = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {};\n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"\ud83d\uded1 Phase \" + approvedPhase + \" DECLINED.\" : (auditPassed ? \"\u2705 Phase \" + approvedPhase + \" PROMOTED from dev.\" : \"\u274c Phase \" + approvedPhase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  let finalFilePath = originalMeta.filePath || filePath;\n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) {\n    finalFilePath = 'IGNORE';\n  } else {\n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, '');\n  }\n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  return [{ json: {\n    action: action,\n    audit_passed: auditPassed,\n    updated_state: { ...updatedState, meta: originalMeta, current_version: approvedPhase },\n    notification_text: notificationText,\n    is_proposal: isProposal,\n    hbrId: rawHbrId || '',\n    buildId: buildId,\n    filePath: finalFilePath,\n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
       },
       "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
       "name": "Automated Testing Suite",
@@ -440,7 +440,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst extract = $('Extract Code').first().json;\nif (suite.filePath === 'IGNORE') return [];\nconst encodedContent = Buffer.from(extract.fileContent || '').toString('base64');\nconst commitMessage = suite.updated_state.current_phase + ' - [AUTO] FEAT(evolution): Autonomous code mutation';\nreturn [{ json: { ...extract, encodedContent, commitMessage } }];"
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst extract = $('Extract Code').first().json;\nif (suite.filePath === 'IGNORE') return [];\nconst encodedContent = Buffer.from(extract.fileContent || '').toString('base64');\nconst commitMessage = suite.updated_state.current_version + ' - [AUTO] FEAT(evolution): Autonomous code mutation';\nreturn [{ json: { ...extract, encodedContent, commitMessage } }];"
       },
       "id": "prepare-mutate-payload-node",
       "name": "Prepare Mutate Payload",
@@ -517,7 +517,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst encodedContent = Buffer.from(JSON.stringify(suite.updated_state, null, 2)).toString('base64');\nconst commitMessage = suite.updated_state.current_phase + ' - [AUTO] CHORE(orchestration): Promote phase to prod';\nreturn [{ json: { encodedContent, commitMessage } }];"
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst version = suite.updated_state.meta?.current_version || $('Automated Testing Suite').first().json.updated_state.meta?.current_version || \"unknown\";\n// Write state without current_phase - version is source of truth in pubspec.yaml\nconst stateToWrite = { ...suite.updated_state };\ndelete stateToWrite.current_phase;\ndelete stateToWrite.meta;\nconst encodedContent = Buffer.from(JSON.stringify(stateToWrite, null, 2)).toString('base64');\nconst commitMessage = version + ' - [AUTO] CHORE(orchestration): Promote phase to prod';\nreturn [{ json: { encodedContent, commitMessage } }];"
       },
       "id": "prepare-state-payload-node",
       "name": "Prepare State Payload",
@@ -708,7 +708,7 @@
         "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": $('Automated Testing Suite').first().json.reason || \"\" }, \"originator\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.meta?.method || \"UNKNOWN\" }, \"abandoned_at\": { \"timestampValue\": new Date().toISOString() }, \"reason\": { \"stringValue\": \"KEEP_IN_DEV\" }, \"status\": { \"stringValue\": \"ABANDONED\" } } } }}",
+        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Approval Listener').first().json.query.phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": $('Automated Testing Suite').first().json.reason || \"\" }, \"originator\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.meta?.method || \"UNKNOWN\" }, \"abandoned_at\": { \"timestampValue\": new Date().toISOString() }, \"reason\": { \"stringValue\": \"KEEP_IN_DEV\" }, \"status\": { \"stringValue\": \"ABANDONED\" } } } }}",
         "options": {}
       },
       "id": "f1e2d3c4-b5a6-4890-9abc-d7e8f9a0b1c2",
@@ -718,6 +718,50 @@
       "position": [
         1456,
         960
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/version",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"fields\": { \"current\": { \"stringValue\": $('Automated Testing Suite').first().json.current_version || $('Automated Testing Suite').first().json.updated_state.current_version || \"unknown\" }, \"updated_at\": { \"timestampValue\": new Date().toISOString() }, \"environment\": { \"stringValue\": $('Approval Listener').first().json.query.env || \"dev\" } } } }}",
+        "options": {
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "updateMask.fieldPaths",
+                "value": "current"
+              },
+              {
+                "name": "updateMask.fieldPaths",
+                "value": "updated_at"
+              },
+              {
+                "name": "updateMask.fieldPaths",
+                "value": "environment"
+              }
+            ]
+          }
+        }
+      },
+      "id": "d4e5f6a7-b8c9-4012-abc3-d4e5f6a7b8c9",
+      "name": "Write Version to Firestore",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3696,
+        900
       ],
       "continueOnFail": true,
       "credentials": {
@@ -1054,7 +1098,7 @@
         ],
         [
           {
-            "node": "Final Alert",
+            "node": "Write Version to Firestore",
             "type": "main",
             "index": 0
           }
@@ -1065,7 +1109,7 @@
       "main": [
         [
           {
-            "node": "Final Alert",
+            "node": "Write Version to Firestore",
             "type": "main",
             "index": 0
           }
@@ -1102,6 +1146,17 @@
       ]
     },
     "Write Abandoned Phase": {
+      "main": [
+        [
+          {
+            "node": "Final Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Version to Firestore": {
       "main": [
         [
           {
