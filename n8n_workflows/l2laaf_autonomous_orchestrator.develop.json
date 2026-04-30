@@ -34,7 +34,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_error_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\udea8 n8n Workflow Error\", \"subtitle\": \"L2LAAF Autonomous Orchestrator\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Failing Node:</b><br>\" + $json.execution.lastNodeExecuted + \"<br><br><b>Error Message:</b><br>\" + $json.execution.error.message } } ] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_error_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\udea8 n8n Workflow Error\", \"subtitle\": \"L2LAAF Autonomous Orchestrator\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Failing Node:</b><br>\" + $json.execution.lastNodeExecuted + \"<br><br><b>Error Message:</b><br>\" + $json.execution.error.message + \"<br><br><b>Error Description:</b><br>\" + ($json.execution.error.description || \"none\") + \"<br><br><b>Cause:</b><br>\" + (JSON.stringify($json.execution.error.cause || {}) || \"none\") } } ] }] } } ] } }}",
         "options": {}
       },
       "id": "c1d2e3f4-a5b6-4870-981a-b7c6errornode",
@@ -798,7 +798,14 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ { \"base\": \"main\", \"head\": \"develop\", \"commit_message\": $('Approval Listener').first().json.query.phase + \" - [AUTO] CHORE(orchestration): Promote phase \" + $('Approval Listener').first().json.query.phase + \" to prod\" } }}",
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "id": "a9b8c7d6-e5f4-4321-abcd-098765432101",
       "name": "GitHub: Merge Develop to Main",
@@ -808,7 +815,7 @@
         1456,
         784
       ],
-      "continueOnFail": false,
+      "continueOnFail": true,
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -842,6 +849,57 @@
           "name": "GCP Orchestrator Admin"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c3d4e5f6-a7b8-4901-cdef-012345678902",
+              "leftValue": "={{ $json.error !== undefined || ($json.statusCode !== undefined && $json.statusCode >= 400) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-4901-cdef-012345678902",
+      "name": "Merge Error Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_merge_error\", \"card\": { \"header\": { \"title\": \"\u274c PROMOTE TO PROD Failed: Phase \" + $('Approval Listener').first().json.query.phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Failing Node:</b><br>GitHub: Merge Develop to Main<br><br><b>HTTP Status:</b><br>\" + ($json.statusCode || \"unknown\") + \"<br><br><b>Error Message:</b><br>\" + (JSON.stringify($json.body || $json) || \"unknown\") + \"<br><br><b>Phase:</b><br>\" + $('Approval Listener').first().json.query.phase + \"<br><br><b>Action Required:</b><br>Check for merge conflicts between develop and main, then retry.\" } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-4012-def0-123456789013",
+      "name": "Merge Failed Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1904,
+        688
+      ]
     }
   ],
   "pinData": {
@@ -1248,7 +1306,7 @@
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "Merge Error Check",
             "type": "main",
             "index": 0
           }
@@ -1260,6 +1318,24 @@
         [
           {
             "node": "Final Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Error Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Payload Filter",
             "type": "main",
             "index": 0
           }
