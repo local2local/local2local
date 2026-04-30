@@ -273,8 +273,8 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "<html><body style=\"background:#0f172a;color:white;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;padding:2rem;background:#1e293b;border-radius:1rem;border:1px solid #334155;\"><h1>MISSION REGISTERED</h1><p>Audit complete. Decisions saved.</p><script>setTimeout(()=>window.close(), 1000);</script></div></body></html>",
-        "options": {}
+        "options": {},
+        "responseBody": "<html><body style=\"background:#0f172a;color:white;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;\"><h2>\u2713 Decision recorded.</h2><script>setTimeout(()=>window.close(),800);</script></div></body></html>"
       },
       "id": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9",
       "name": "Respond to Webhook",
@@ -708,7 +708,7 @@
         "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Approval Listener').first().json.query.phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": $('Automated Testing Suite').first().json.reason || \"\" }, \"originator\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.meta?.method || \"UNKNOWN\" }, \"abandoned_at\": { \"timestampValue\": new Date().toISOString() }, \"reason\": { \"stringValue\": \"KEEP_IN_DEV\" }, \"status\": { \"stringValue\": \"ABANDONED\" } } } }}",
+        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Approval Listener').first().json.query.phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": decodeURIComponent($('Approval Listener').first().json.query.summary || \"\") }, \"originator\": { \"stringValue\": $('Approval Listener').first().json.query.method || \"UNKNOWN\" }, \"abandoned_at\": { \"timestampValue\": new Date().toISOString() }, \"reason\": { \"stringValue\": \"KEEP_IN_DEV\" }, \"status\": { \"stringValue\": \"ABANDONED\" } } } }}",
         "options": {}
       },
       "id": "f1e2d3c4-b5a6-4890-9abc-d7e8f9a0b1c2",
@@ -770,6 +770,24 @@
           "name": "GCP Orchestrator Admin"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_decision_ack\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $('Approval Listener').first().json.query.phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": $('Approval Listener').first().json.query.action === 'decline' ? \"<b>Keeping in DEV.</b><br>Saving abandoned change.<br><br><b>Phase:</b> \" + $('Approval Listener').first().json.query.phase + \"<br><b>Originator:</b> \" + ($('Approval Listener').first().json.query.method || 'UNKNOWN') + \"<br><b>Commit SHA:</b> \" + ($('Approval Listener').first().json.query.build_id || 'unknown') + \"<br><b>Summary:</b> \" + decodeURIComponent($('Approval Listener').first().json.query.summary || '') + \"<br><b>Status:</b> ABANDONED<br><b>Reason:</b> KEEP_IN_DEV\" : \"<b>Promotion to PROD in progress.</b>\" } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-4123-abcd-e4f5a6b7c8d9",
+      "name": "Post Decision Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        336,
+        688
+      ]
     }
   ],
   "pinData": {
@@ -920,6 +938,11 @@
           },
           {
             "node": "Fetch Proposal Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post Decision Card",
             "type": "main",
             "index": 0
           }
