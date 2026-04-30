@@ -10,9 +10,11 @@ env:
 jobs:
   deploy:
     # Skip deployments triggered by autonomous orchestrator commits to prevent pipeline loops
+    # Prevent merge commits entirely
     if: |
-      !startsWith(github.event.head_commit.message, '[AUTO]') &&
-      !contains(github.event.head_commit.message, '- [AUTO]')
+  !startsWith(github.event.head_commit.message, '[AUTO]') &&
+  !contains(github.event.head_commit.message, '- [AUTO]') &&
+  !startsWith(github.event.head_commit.message, 'Merge branch')
     runs-on: ubuntu-latest
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
