@@ -9,13 +9,14 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   deploy:
-    # Skip deployments triggered by autonomous orchestrator or merge commits
+    # Skip: auto version bumps (use [skip ci]), merge commits, and GitHub Actions bot commits
     if: |
-      !contains(github.event.head_commit.message, '- [AUTO]') &&
-      !startsWith(github.event.head_commit.message, 'Merge branch')
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !startsWith(github.event.head_commit.message, 'Merge branch') &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    runs-on: ubuntu-latest
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
     steps:
@@ -80,7 +81,7 @@ jobs:
           # --- Update pubspec.yaml ---
           sed -i "s/^version: .*/version: $NEW_VERSION+$BUILD_NUMBER/" pubspec.yaml
 
-          # --- Remove current_phase from state.json ---
+          # --- Remove current_phase from state.json if present ---
           if [ -f ".l2laaf/state.json" ]; then
             node -e "
               const fs = require('fs');
@@ -90,11 +91,11 @@ jobs:
             "
           fi
 
-          # --- Commit and push version bump ---
+          # --- Commit and push version bump using GITHUB_TOKEN (prevents pipeline loop) ---
           git config user.name "L2LAAF CI"
           git config user.email "ci@local2local.ca"
           git add pubspec.yaml .l2laaf/state.json
-          git commit -m "$NEW_VERSION - [AUTO] CHORE(version): Bump $CURRENT_VERSION to $NEW_VERSION ($BUMP_TYPE)"
+          git commit -m "$NEW_VERSION - [AUTO] CHORE(version): Bump $CURRENT_VERSION to $NEW_VERSION ($BUMP_TYPE) [skip ci]"
           git push origin ${{ github.ref_name }}
 
           # --- Export for subsequent steps ---

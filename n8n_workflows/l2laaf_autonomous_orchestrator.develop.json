@@ -923,6 +923,56 @@
           "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
         }
       }
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=main",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "f6a7b8c9-d0e1-4345-cdef-012345678905",
+      "name": "Get Main State SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1904,
+        784
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"message\": $('Approval Listener').first().json.query.phase + \" - [AUTO] CHORE(orchestration): Promote phase \" + $('Approval Listener').first().json.query.phase + \" to prod\", \"content\": $('Get Main State SHA').first().json.content.replace(/\\n/g, ''), \"sha\": $('Get Main State SHA').first().json.sha, \"branch\": \"main\" } }}",
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-4234-bcde-f12345678904",
+      "name": "Create Promotion Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2128,
+        784
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
     }
   ],
   "pinData": {
@@ -1347,7 +1397,7 @@
         ],
         [
           {
-            "node": "Payload Filter",
+            "node": "Get Main State SHA",
             "type": "main",
             "index": 0
           }
@@ -1370,6 +1420,28 @@
         [
           {
             "node": "Merge Error Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Main State SHA": {
+      "main": [
+        [
+          {
+            "node": "Create Promotion Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Promotion Commit": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
             "type": "main",
             "index": 0
           }
