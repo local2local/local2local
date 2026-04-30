@@ -114,4 +114,9 @@
 
 # L2LAAF Exceptions
 !n8n_workflows/
-!n8n_workflows/*.json
+!n8n_workflows/*.json.dart_tool/
+functions/package-lock.json
+functions/node_modules/
+functions/lib/
+.dart_tool/
+functions/package-lock.json

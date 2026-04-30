@@ -9,6 +9,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   deploy:
+    # Skip deployments triggered by autonomous orchestrator commits to prevent pipeline loops
+    if: |
+      !startsWith(github.event.head_commit.message, '[AUTO]') &&
+      !contains(github.event.head_commit.message, '- [AUTO]')
     runs-on: ubuntu-latest
     environment:
       name: ${{ (github.ref_name == 'main' && 'Production') || 'Development' }}
@@ -129,10 +133,13 @@ jobs:
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
           METHOD=$(git log -1 --pretty=%B | head -n 1 | grep -oE '\[(MANUAL|ASSISTED|AUTO|DREAM)\]' | tr -d '[]' || echo "UNKNOWN")
           
+          # Use git commit SHA (not run ID) so the HITL gate can promote the exact commit
+          COMMIT_SHA="${{ github.sha }}"
+
           # Safely build JSON payload using jq to prevent string interpolation breaks
           jq -n \
             --arg phase "$PHASE" \
-            --arg build "${{ github.run_id }}" \
+            --arg build "$COMMIT_SHA" \
             --arg summary "$(git log -1 --pretty=%B | head -n 1)" \
             --arg env "$ENV_NAME" \
             --arg method "$METHOD" \
