@@ -242,7 +242,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.meta.current_version }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb-prod?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb-prod?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.meta.current_version }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb-prod?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb-prod?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -395,7 +395,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1456,
+        1680,
         784
       ]
     },
@@ -524,7 +524,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        2800,
+        1904,
         784
       ]
     },
@@ -788,6 +788,60 @@
         336,
         688
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/local2local/local2local/merges",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"base\": \"main\", \"head\": \"develop\", \"commit_message\": $('Approval Listener').first().json.query.phase + \" - [AUTO] CHORE(orchestration): Promote phase \" + $('Approval Listener').first().json.query.phase + \" to prod\" } }}",
+        "options": {}
+      },
+      "id": "a9b8c7d6-e5f4-4321-abcd-098765432101",
+      "name": "GitHub: Merge Develop to Main",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1456,
+        784
+      ],
+      "continueOnFail": false,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/promoted_phases",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Approval Listener').first().json.query.phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": ($('Approval Listener').first().json.query.summary || \"\").replace(/\\+/g, \" \") }, \"originator\": { \"stringValue\": $('Approval Listener').first().json.query.method || \"UNKNOWN\" }, \"promoted_at\": { \"timestampValue\": new Date().toISOString() }, \"promoted_by\": { \"stringValue\": \"todd.herron@local2local.ca\" }, \"status\": { \"stringValue\": \"ACTIVE\" } } } }}",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f5a6-4789-bcde-f01234567890",
+      "name": "Write Promoted Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3696,
+        784
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
     }
   ],
   "pinData": {
@@ -1004,7 +1058,7 @@
         ],
         [
           {
-            "node": "Prepare State Payload",
+            "node": "Proposal Closure Check",
             "type": "main",
             "index": 0
           }
@@ -1154,7 +1208,7 @@
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "GitHub: Merge Develop to Main",
             "type": "main",
             "index": 0
           }
@@ -1180,6 +1234,28 @@
       ]
     },
     "Write Version to Firestore": {
+      "main": [
+        [
+          {
+            "node": "Write Promoted Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: Merge Develop to Main": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Promoted Phase": {
       "main": [
         [
           {
