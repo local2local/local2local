@@ -354,7 +354,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) {\n    stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"\ud83d\uded1 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"\u2705 Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"\u274c Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) {\n    stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"\ud83d\uded1 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"\u2705 Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"\u274c Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  let finalFilePath = originalMeta.filePath || filePath;\n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  return [{ json: {\n    action: action,\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
       },
       "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
       "name": "Automated Testing Suite",
@@ -395,7 +395,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1232,
+        1456,
         784
       ]
     },
@@ -654,7 +654,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.action === 'decline' ? \"\ud83d\uddc3\ufe0f Phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" kept in dev. This change remains in git history and can be cherry-picked into a future version. To view all abandoned versions, check Firestore collection `artifacts/system_status/public/data/abandoned_phases` in the local2local-dev GCP project. This can be viewed in the SuperAdmin dashboard in the dev environment.\" : \"\u2705 Phase \" + $('Automated Testing Suite').first().json.updated_state.current_phase + \" promoted to prod. This merged the tested 'develop' branch to the 'main' branch and deployed to local2local-prod.\" } }}",
+        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\nlocal2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop) \u2b95 local2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop)\" } }}",
         "options": {}
       },
       "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
@@ -665,6 +665,67 @@
         3920,
         784
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "b2c3d4e5-f6a7-4890-bcde-f12345678901",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "decline",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals",
+                "name": "filter.operator.notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-4780-9abc-d1e2f3a4b5c6",
+      "name": "Action Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/abandoned_phases",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": $('Automated Testing Suite').first().json.reason || \"\" }, \"originator\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.meta?.method || \"UNKNOWN\" }, \"abandoned_at\": { \"timestampValue\": new Date().toISOString() }, \"reason\": { \"stringValue\": \"KEEP_IN_DEV\" }, \"status\": { \"stringValue\": \"ABANDONED\" } } } }}",
+        "options": {}
+      },
+      "id": "f1e2d3c4-b5a6-4890-9abc-d7e8f9a0b1c2",
+      "name": "Write Abandoned Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1456,
+        960
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
     }
   ],
   "pinData": {
@@ -858,7 +919,7 @@
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "Action Gate",
             "type": "main",
             "index": 0
           }
@@ -1016,6 +1077,35 @@
         [
           {
             "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Gate": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Abandoned Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Abandoned Phase": {
+      "main": [
+        [
+          {
+            "node": "Final Alert",
             "type": "main",
             "index": 0
           }
