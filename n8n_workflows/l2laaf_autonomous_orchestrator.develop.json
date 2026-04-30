@@ -60,7 +60,7 @@
         112,
         208
       ],
-      "webhookId": "41e088a5-e47a-4a8c-851e-8ec03859f235"
+      "webhookId": "b8f49bcc-cb60-4c00-9f8c-ae008be7b5b3"
     },
     {
       "parameters": {
@@ -242,7 +242,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -268,7 +268,7 @@
         112,
         688
       ],
-      "webhookId": "7a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d"
+      "webhookId": "ea64f359-a428-46e4-9dc1-d5c643f385eb"
     },
     {
       "parameters": {
