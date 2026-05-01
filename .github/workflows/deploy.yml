@@ -198,7 +198,7 @@ jobs:
           fi
 
       - name: Notify Orchestrator
-        if: success()
+        if: success() && github.ref_name != 'main'
         run: |
           NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
           ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
