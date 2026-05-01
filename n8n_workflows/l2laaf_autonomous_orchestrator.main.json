@@ -1449,7 +1449,7 @@
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "Proposal Closure Check",
             "type": "main",
             "index": 0
           }
