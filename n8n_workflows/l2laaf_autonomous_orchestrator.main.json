@@ -103,7 +103,9 @@
     {
       "parameters": {
         "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
-        "options": {}
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi"
       },
       "id": "2bc59b88-1250-4824-b152-dc72de6f3d1b",
       "name": "Fetch System Status",
@@ -112,7 +114,13 @@
       "position": [
         784,
         208
-      ]
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
     },
     {
       "parameters": {
