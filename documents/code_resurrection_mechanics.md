@@ -24,7 +24,6 @@ Each abandoned phase is recorded with the following structure:
   "summary": "43.1.38 - [MANUAL] FEAT(pipeline): Split n8n workflow into dev/prod",
   "originator": "MANUAL",
   "abandoned_at": "2026-04-29T15:01:08Z",
-  "abandoned_by": "todd.herron@local2local.ca",
   "reason": "KEEP_IN_DEV",
   "status": "ABANDONED"
 }
@@ -37,7 +36,6 @@ Each abandoned phase is recorded with the following structure:
 | `summary` | The full commit message for context |
 | `originator` | Which development method created it: MANUAL, ASSISTED, AUTO, or DREAM |
 | `abandoned_at` | ISO 8601 timestamp of when KEEP IN DEV was pressed |
-| `abandoned_by` | The Google account that pressed KEEP IN DEV |
 | `reason` | Always `KEEP_IN_DEV` for abandoned phases |
 | `status` | `ABANDONED` initially, updated to `RESURRECTED` when cherry-picked |
 
@@ -62,15 +60,15 @@ Filter:     status == "ABANDONED"
 
 ### Step 2: Determine the next available version number
 
-Check the current phase on `develop`:
+Check the current version on `develop` — the pipeline reads from `pubspec.yaml`, which is the single source of truth:
 
 ```bash
 git checkout develop
-git pull origin develop
-cat .l2laaf/state.json | grep current_phase
+git pull --rebase origin develop
+grep '^version:' pubspec.yaml
 ```
 
-If the current phase is `43.2.1`, your resurrected change will become `43.2.2`.
+This will output something like `version: 43.1.54+557`. You do not need to manually set a version — the pipeline bumps it automatically on your next push. Note it for reference only.
 
 ---
 
@@ -78,7 +76,7 @@ If the current phase is `43.2.1`, your resurrected change will become `43.2.2`.
 
 ```bash
 git checkout develop
-git pull origin develop
+git pull --rebase origin develop
 git cherry-pick 83a524a
 ```
 
@@ -96,49 +94,39 @@ git cherry-pick --continue
 
 ---
 
-### Step 4: Update the version number
+### Step 4: Amend the commit message
 
-Open `pubspec.yaml` and update the version:
+The cherry-picked commit will have the original commit message. Amend it to use the correct format for a resurrection — no version prefix, as the pipeline will add it:
 
-```yaml
-# Before
-version: 43.1.38+530
-
-# After (using next available version)
-version: 43.2.2+531
+```bash
+git commit --amend -m "[MANUAL] FEAT(x): Resurrect abandoned phase 43.1.38 — original: Split n8n workflow into dev/prod"
 ```
 
-Open `.l2laaf/state.json` and update the current phase:
-
-```json
-{
-  "current_phase": "43.2.2",
-  ...
-}
-```
+Do not manually prefix a version number. The pipeline reads `pubspec.yaml`, bumps it, and prepends the version automatically.
 
 ---
 
-### Step 5: Commit with a resurrection message
+### Step 5: Push to develop
 
 ```bash
-git add pubspec.yaml .l2laaf/state.json
-git commit --amend -m "43.2.2 - [MANUAL] FEAT(x): Resurrect abandoned phase 43.1.38 — original: Split n8n workflow into dev/prod"
 git push origin develop
 ```
 
-The `--amend` updates the cherry-picked commit message to include the new version number.
+The pipeline will run and produce a versioned commit message such as:
+```
+43.1.55 - [MANUAL] FEAT(x): Resurrect abandoned phase 43.1.38 — original: Split n8n workflow into dev/prod
+```
 
 ---
 
 ### Step 6: Update the Firestore record
 
-After pushing, update the abandoned phase document in Firestore:
+After pushing, update the abandoned phase document in Firestore to reflect the resurrection:
 
 ```json
 {
   "status": "RESURRECTED",
-  "resurrected_as": "43.2.2",
+  "resurrected_as": "43.1.55",
   "resurrected_at": "2026-05-15T10:30:00Z"
 }
 ```
@@ -149,13 +137,15 @@ This can be done via the SuperAdmin dashboard or directly in the Firestore conso
 
 ### Step 7: Respond to the HITL gate
 
-The push to `develop` triggers the normal deployment pipeline. A `PROMOTE TO PROD` / `KEEP IN DEV` card will appear in the L2LAAF-Orchestrator Google Chat space. Review and respond as normal.
+The push to `develop` triggers the normal deployment pipeline. A `PROMOTE TO PROD` / `KEEP IN DEV` card will appear in the `L2LAAF-Orchestrator` Google Chat space. Review and respond as normal.
 
 ---
 
 ## Important Notes
 
-- **A resurrected phase always gets a new version number.** Never reuse the original phase number.
+- **A resurrected phase always gets a new version number.** Never reuse the original phase number. The pipeline assigns the next available version automatically.
+- **`pubspec.yaml` is the single source of truth for version.** Do not edit `state.json` to set a version — it no longer holds version information.
 - **Cherry-picks are safe.** Git cherry-pick copies the diff, not the commit history, so the original abandoned commit remains untouched in history.
 - **Multiple phases can be resurrected independently.** Each gets its own new version number and goes through its own HITL gate.
 - **The serial pipeline is preserved.** Resurrected changes enter the pipeline at the current tip of `develop`, not at their original position.
+- **Always use `git pull --rebase`**, never `git pull`. A merge commit will trigger a spurious pipeline run.
