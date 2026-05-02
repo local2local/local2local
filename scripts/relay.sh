@@ -69,7 +69,7 @@ echo
 # 3. RUN FLUTTER ANALYZE — only if payload contains .dart files
 echo "②  Pre-flight check [2/3]: Analyzing Flutter Code..."
 if [ "$HAS_DART" = "1" ]; then
-    flutter analyze > "$PROBLEMS_FILE"
+    flutter analyze 2>/dev/null > "$PROBLEMS_FILE"
     if [ $? -ne 0 ]; then
         fatal_error "Flutter validation failed. Fix outstanding problems before deploying. See $PROBLEMS_FILE for details."
     else
