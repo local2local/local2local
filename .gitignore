@@ -18,6 +18,10 @@ functions/node_modules/
 functions/lib/
 functions/package-lock.json
 
+# Android build outputs
+android/.gradle/
+android/app/build/
+
 # IDE
 .idea/
 .vscode/

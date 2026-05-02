@@ -1,102 +1,47 @@
-L2LAAF_BLOCK_START(code:repository:lib/features/triage_hub/data/superadmin_repository.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+L2LAAF_BLOCK_START(code:gitignore:.gitignore)
+# Flutter build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.stamp
 
-/// Repository for Phase 44 SuperAdmin capabilities.
-/// Handles multi-tenant telemetry, versioning, and agent bus streams.
-///
-/// Firestore structure (local2local-dev):
-///   artifacts/system_status/public/data/telemetry/last_heartbeat
-///     - status: "GREEN" | "YELLOW" | "RED"
-///     - version: "vX.X.X"
-///     - bridge: string
-///     - timestamp: Timestamp
-///   artifacts/system_status/public/data/abandoned_phases/{auto-id}
-///   artifacts/system_status/public/data/promoted_phases/{auto-id}
-class SuperadminRepository {
-  final FirebaseFirestore _firestore;
+# Firebase
+.firebaserc
+firebase-debug.log
 
-  SuperadminRepository(this._firestore);
+# Dart
+.packages
+pubspec.lock
 
-  /// Streams the current system telemetry status (GREEN | YELLOW | RED).
-  Stream<String> watchSystemStatus() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
-  }
+# Node / Cloud Functions
+functions/node_modules/
+functions/lib/
+functions/package-lock.json
 
-  /// Streams the current version from the telemetry heartbeat document.
-  Stream<String> watchCurrentVersion() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['version'] as String? ?? '–');
-  }
+# Android build outputs
+android/.gradle/
+android/app/build/
 
-  /// Streams agent bus entries from a specific tenant.
-  /// Tenant values: 'system_status' | 'local2local_kaskflow' | 'local2local_moonlitely'
-  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
-    return _firestore
-        .collection('artifacts/$tenant/public/data/agent_bus')
-        .orderBy('created_at', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = Map<String, dynamic>.from(doc.data());
-              data['id'] = doc.id;
-              return data;
-            }).toList());
-  }
+# IDE
+.idea/
+.vscode/
+*.iml
 
-  /// Streams phase history (promoted or abandoned).
-  /// promoted_phases sorts by promoted_at, abandoned_phases by abandoned_at.
-  Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
-    final sortField =
-        collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
-    return _firestore
-        .collection('artifacts/system_status/public/data/$collection')
-        .orderBy(sortField, descending: true)
-        .limit(10)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Map<String, dynamic>.from(doc.data()))
-            .toList());
-  }
+# OS
+.DS_Store
 
-  /// Manual Payload Injection for test sequences.
-  Future<void> injectTestPayload({
-    required String targetPath,
-    required String instructions,
-  }) async {
-    final timestamp = DateTime.now().toIso8601String();
-    await _firestore
-        .collection('artifacts/local2local-dev/public/data/agent_bus')
-        .add({
-      'status': 'dispatched',
-      'correlation_id':
-          'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
-      'created_at': FieldValue.serverTimestamp(),
-      'payload': {
-        'manifest': {
-          'intent': 'PROPOSE_LOGIC_CHANGE',
-          'hbrId': 'HBR-DASHBOARD-TEST',
-          'agentId': 'SUPERADMIN_UI',
-          'reason': instructions,
-          'targetPath': targetPath,
-          'proposedLogic':
-              '// Manual trigger from dashboard at $timestamp',
-        }
-      }
-    });
-  }
-}
+# L2LAAF scripts — never ignore n8n workflow JSONs
+!n8n_workflows/
+!n8n_workflows/*.json
 
-final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
-  return SuperadminRepository(FirebaseFirestore.instance);
-});
+# Relay script artifacts
+scripts/logic_payload.txt
+COMMIT_MSG
+flutter_problems_list.txt
+audit_bundle.txt
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
-[ASSISTED] FIX(triage): Correct Firestore document paths in SuperadminRepository
+[ASSISTED] CHORE(repo): Add Android build output dirs to .gitignore
 L2LAAF_BLOCK_END
