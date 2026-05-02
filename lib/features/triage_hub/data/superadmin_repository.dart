@@ -3,29 +3,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Repository for Phase 44 SuperAdmin capabilities.
 /// Handles multi-tenant telemetry, versioning, and agent bus streams.
+///
+/// Firestore structure (local2local-dev):
+///   artifacts/system_status/public/data/telemetry/last_heartbeat
+///     - status: "GREEN" | "YELLOW" | "RED"
+///     - version: "vX.X.X"
+///     - bridge: string
+///     - timestamp: Timestamp
+///   artifacts/system_status/public/data/abandoned_phases/{auto-id}
+///   artifacts/system_status/public/data/promoted_phases/{auto-id}
 class SuperadminRepository {
   final FirebaseFirestore _firestore;
 
   SuperadminRepository(this._firestore);
 
-  /// Streams the current system telemetry status.
-  /// Document: artifacts/system_status/public/data/telemetry
-  /// Field: status (GREEN | YELLOW | RED)
+  /// Streams the current system telemetry status (GREEN | YELLOW | RED).
   Stream<String> watchSystemStatus() {
     return _firestore
-        .doc('artifacts/system_status/public/data/telemetry')
+        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
         .snapshots()
         .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
   }
 
-  /// Streams the current app version from Firestore.
-  /// Document: artifacts/system_status/public/data/version
-  /// Field: current (e.g. "43.1.72")
+  /// Streams the current version from the telemetry heartbeat document.
   Stream<String> watchCurrentVersion() {
     return _firestore
-        .doc('artifacts/system_status/public/data/version')
+        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
         .snapshots()
-        .map((doc) => doc.data()?['current'] as String? ?? '0.0.0');
+        .map((doc) => doc.data()?['version'] as String? ?? '–');
   }
 
   /// Streams agent bus entries from a specific tenant.
@@ -44,9 +49,7 @@ class SuperadminRepository {
   }
 
   /// Streams phase history (promoted or abandoned).
-  /// Sort field differs per collection:
-  ///   promoted_phases  → promoted_at
-  ///   abandoned_phases → abandoned_at
+  /// promoted_phases sorts by promoted_at, abandoned_phases by abandoned_at.
   Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
     final sortField =
         collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
