@@ -1,15 +1,27 @@
-/**
- * L2LAAF Phase 44.0.0 Payload
- * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: triage_hub
- * Description: FEAT: Implements Phase 44 SuperAdmin dashboard and multi-tenant agent bus control.
- */
+L2LAAF_BLOCK_START(code:app:lib/core/app.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/nav.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(superadmin): Phase 44 dashboard [BUMP: MAJOR]
-L2LAAF_BLOCK_END */
+class L2LAAFApp extends ConsumerWidget {
+  const L2LAAFApp({super.key});
 
-/* L2LAAF_BLOCK_START(dart:Superadmin Repository:lib/features/triage_hub/data/superadmin_repository.dart)
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(AppRouter.routerProvider);
+
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'L2LAAF Cockpit',
+      theme: adminDarkTheme,
+      routerConfig: router,
+    );
+  }
+}
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(code:repository:lib/features/triage_hub/data/superadmin_repository.dart)
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,23 +32,28 @@ class SuperadminRepository {
 
   SuperadminRepository(this._firestore);
 
-  /// Streams the current system telemetry status from the system root.
+  /// Streams the current system telemetry status.
+  /// Document: artifacts/system_status/public/data/telemetry
+  /// Field: status (GREEN | YELLOW | RED)
   Stream<String> watchSystemStatus() {
     return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/current')
+        .doc('artifacts/system_status/public/data/telemetry')
         .snapshots()
         .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
   }
 
   /// Streams the current app version from Firestore.
+  /// Document: artifacts/system_status/public/data/version
+  /// Field: current (e.g. "43.1.72")
   Stream<String> watchCurrentVersion() {
     return _firestore
-        .doc('artifacts/system_status/public/data/version/current')
+        .doc('artifacts/system_status/public/data/version')
         .snapshots()
-        .map((doc) => doc.data()?['version'] as String? ?? '0.0.0');
+        .map((doc) => doc.data()?['current'] as String? ?? '0.0.0');
   }
 
   /// Streams agent bus entries from a specific tenant.
+  /// Tenant values: 'system_status' | 'local2local_kaskflow' | 'local2local_moonlitely'
   Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
     return _firestore
         .collection('artifacts/$tenant/public/data/agent_bus')
@@ -51,10 +68,15 @@ class SuperadminRepository {
   }
 
   /// Streams phase history (promoted or abandoned).
+  /// Sort field differs per collection:
+  ///   promoted_phases  → promoted_at
+  ///   abandoned_phases → abandoned_at
   Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
+    final sortField =
+        collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
     return _firestore
         .collection('artifacts/system_status/public/data/$collection')
-        .orderBy('timestamp', descending: true)
+        .orderBy(sortField, descending: true)
         .limit(10)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -62,15 +84,18 @@ class SuperadminRepository {
             .toList());
   }
 
-  /// Manual Payload Injection for Test Sequence A.
+  /// Manual Payload Injection for test sequences.
   Future<void> injectTestPayload({
     required String targetPath,
     required String instructions,
   }) async {
     final timestamp = DateTime.now().toIso8601String();
-    await _firestore.collection('artifacts/local2local-dev/public/data/agent_bus').add({
+    await _firestore
+        .collection('artifacts/local2local-dev/public/data/agent_bus')
+        .add({
       'status': 'dispatched',
-      'correlation_id': 'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
+      'correlation_id':
+          'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
       'created_at': FieldValue.serverTimestamp(),
       'payload': {
         'manifest': {
@@ -79,7 +104,8 @@ class SuperadminRepository {
           'agentId': 'SUPERADMIN_UI',
           'reason': instructions,
           'targetPath': targetPath,
-          'proposedLogic': '// Manual trigger from dashboard at $timestamp',
+          'proposedLogic':
+              '// Manual trigger from dashboard at $timestamp',
         }
       }
     });
@@ -89,394 +115,8 @@ class SuperadminRepository {
 final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
   return SuperadminRepository(FirebaseFirestore.instance);
 });
-L2LAAF_BLOCK_END */
+L2LAAF_BLOCK_END
 
-/* L2LAAF_BLOCK_START(dart:Superadmin Providers:lib/features/triage_hub/providers/superadmin_providers.dart)
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
-
-/// Live stream of system telemetry (GREEN/YELLOW/RED)
-final systemStatusStreamProvider = StreamProvider<String>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchSystemStatus();
-});
-
-/// Live stream of the official app version
-final currentVersionStreamProvider = StreamProvider<String>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchCurrentVersion();
-});
-
-/// Unified stream for the System-wide Agent Bus
-final systemAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchAgentBus('system_status');
-});
-
-/// Unified stream for the Kaskflow Agent Bus
-final kaskflowAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_kaskflow');
-});
-
-/// Unified stream for the Moonlitely Agent Bus
-final moonlitelyAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_moonlitely');
-});
-
-/// Phase History Providers
-final promotedPhasesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchPhaseHistory('promoted_phases');
-});
-
-final abandonedPhasesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchPhaseHistory('abandoned_phases');
-});
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(dart:System Status Banner:lib/features/triage_hub/widgets/system_status_banner.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
-
-class SystemStatusBanner extends ConsumerWidget {
-  const SystemStatusBanner({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statusAsync = ref.watch(systemStatusStreamProvider);
-    final versionAsync = ref.watch(currentVersionStreamProvider);
-
-    return statusAsync.when(
-      data: (status) {
-        final Color color = _getStatusColor(status);
-        final IconData icon = _getStatusIcon(status);
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'TELEMETRY HEALTH: $status',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  versionAsync.when(
-                    data: (v) => Text(
-                      'CORE VERSION: $v',
-                      style: TextStyle(
-                        color: color.withValues(alpha: 0.7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                status == 'RED' ? 'DEPLOYMENTS LOCKED' : 'Code modifications permitted',
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
-                  fontSize: 12,
-                ),
-              )
-            ],
-          ),
-        );
-      },
-      loading: () => const LinearProgressIndicator(color: AdminColors.emeraldGreen),
-      error: (e, _) => Text('Telemetry Offline: $e', style: const TextStyle(color: AdminColors.rubyRed)),
-    );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'GREEN':
-        return AdminColors.emeraldGreen;
-      case 'YELLOW':
-        return Colors.orangeAccent;
-      case 'RED':
-        return AdminColors.rubyRed;
-      default:
-        return AdminColors.textSecondary;
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'GREEN':
-        return Icons.check_circle_rounded;
-      case 'YELLOW':
-        return Icons.warning_rounded;
-      case 'RED':
-        return Icons.dangerous_rounded;
-      default:
-        return Icons.help_outline_rounded;
-    }
-  }
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
-import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
-import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
-
-class SuperadminDashboard extends ConsumerStatefulWidget {
-  const SuperadminDashboard({super.key});
-
-  @override
-  ConsumerState<SuperadminDashboard> createState() => _SuperadminDashboardState();
-}
-
-class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
-  int _selectedTenantIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final systemBus = ref.watch(systemAgentBusProvider);
-    final kaskflowBus = ref.watch(kaskflowAgentBusProvider);
-    final moonlitelyBus = ref.watch(moonlitelyAgentBusProvider);
-
-    return Scaffold(
-      backgroundColor: AdminColors.slateDarkest,
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Superadmin Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => _showTestInjectModal(context),
-                  icon: const Icon(Icons.rocket_launch_rounded, size: 18),
-                  label: const Text('Test Inject'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminColors.slateDark,
-                    foregroundColor: AdminColors.emeraldGreen,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    side: BorderSide(
-                      color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            
-            const SystemStatusBanner(),
-            const SizedBox(height: 40),
-            
-            // Tenant Selector Tabs for Agent Bus
-            Row(
-              children: [
-                _buildTab('SYSTEM', 0),
-                _buildTab('KASKFLOW', 1),
-                _buildTab('MOONLITELY', 2),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: AdminColors.borderDefault, height: 1),
-            const SizedBox(height: 16),
-            
-            // Unified Agent Bus List
-            Expanded(
-              child: _buildBusList(_selectedTenantIndex == 0 
-                  ? systemBus 
-                  : _selectedTenantIndex == 1 ? kaskflowBus : moonlitelyBus),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, int index) {
-    final isSelected = _selectedTenantIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedTenantIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected ? AdminColors.emeraldGreen : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AdminColors.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBusList(AsyncValue<List<Map<String, dynamic>>> busAsync) {
-    return busAsync.when(
-      data: (items) {
-        if (items.isEmpty) {
-          return const Center(
-            child: Text('No active bus traffic.', 
-                style: TextStyle(color: AdminColors.textSecondary)),
-          );
-        }
-        return ListView.builder(
-          itemCount: items.length,
-          itemBuilder: (context, index) => _buildProposalCard(items[index]),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-      error: (e, _) => Center(child: Text('Bus Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-    );
-  }
-
-  Widget _buildProposalCard(Map<String, dynamic> data) {
-    final Map<String, dynamic> manifest = data['payload']?['manifest'] != null 
-        ? Map<String, dynamic>.from(data['payload']['manifest'])
-        : {};
-    final status = data['status'] ?? 'unknown';
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.borderDefault),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AdminColors.slateDarkest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Icon(Icons.hub_rounded, color: AdminColors.emeraldGreen, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  manifest['reason']?.toString() ?? 'Autonomous Proposal',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Target: ${manifest['targetPath']?.toString() ?? 'Unknown'}',
-                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                status.toString().toUpperCase(),
-                style: const TextStyle(
-                  color: AdminColors.emeraldGreen,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                data['correlation_id']?.toString() ?? '',
-                style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.5), fontSize: 10),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTestInjectModal(BuildContext context) {
-    final TextEditingController pathController = TextEditingController(text: 'lib/features/triage_hub/widgets/system_status_banner.dart');
-    final TextEditingController reasonController = TextEditingController(text: "Update status string to 'AWAITING TELEMETRY' and color to orangeAccent.");
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AdminColors.slateDark,
-        title: const Text('Manual Logic Injection', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: pathController,
-              decoration: const InputDecoration(labelText: 'Target Path', labelStyle: TextStyle(color: AdminColors.textSecondary)),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Instructions', labelStyle: TextStyle(color: AdminColors.textSecondary)),
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
-          ElevatedButton(
-            onPressed: () async {
-              await ref.read(superadminRepositoryProvider).injectTestPayload(
-                targetPath: pathController.text,
-                instructions: reasonController.text,
-              );
-              if (mounted) {
-                // ignore: use_build_context_synchronously
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: const Text('INJECT'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-L2LAAF_BLOCK_END */
+L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
+[ASSISTED] FIX(triage): Wire GoRouter and fix Firestore path bugs in SuperadminRepository
+L2LAAF_BLOCK_END

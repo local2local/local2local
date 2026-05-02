@@ -1,31 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:local2local/features/triage_hub/presentation/pages/cockpit_shell.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/nav.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-class L2LAAFApp extends StatelessWidget {
+class L2LAAFApp extends ConsumerWidget {
   const L2LAAFApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(AppRouter.routerProvider);
+
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'L2LAAF Cockpit',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F1E),
-      ),
-      // Dreamflow Pattern: Standard error boundary
-      builder: (context, child) {
-        ErrorWidget.builder = (details) => Container(
-          alignment: Alignment.center,
-          color: const Color(0xFF0F0F1E),
-          child: Text(
-            'L2LAAF RUNTIME ERROR: ${details.exception}',
-            style: const TextStyle(color: Colors.redAccent, fontSize: 10),
-            textAlign: TextAlign.center,
-          ),
-        );
-        return child!;
-      },
-      home: const CockpitShell(),
+      theme: adminDarkTheme,
+      routerConfig: router,
     );
   }
 }
