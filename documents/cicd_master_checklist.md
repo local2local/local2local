@@ -1,10 +1,10 @@
 # CI/CD Implementation Record
 
-**Status:** COMPLETE  
-**Implemented:** April–May 2026  
-**Current version:** 43.1.x  
+**Status:** COMPLETE & STABLE
+**Implemented:** April–May 2026
+**Current version:** 43.1.66
 
-This document records what was actually built during the CI/CD implementation session (Phases 41–43). It replaces the pre-implementation planning checklist. For operational reference, see `documents/cicd_pipeline_reference.md`.
+This document records what was actually built during the CI/CD implementation session (Phases 41–43) plus the Upstream Relay mechanism added in Phase 43.1.66. For operational reference, see `documents/cicd_pipeline_reference.md`.
 
 ---
 
@@ -42,6 +42,25 @@ This document records what was actually built during the CI/CD implementation se
 - `Write Abandoned Phase` to `abandoned_phases` collection
 - `Final Alert` — rich card on promote, plain text on decline
 - Error Alert with full error message, description, and cause fields
+
+### Upstream Relay mechanism
+
+Allows agents running in `local2local-prod` to propose code fixes that are funnelled back through `develop` and the HITL gate before re-entering `main`. This guarantees no production-identified fix bypasses human review.
+
+Flow:
+1. A prod agent writes a `PROPOSE_LOGIC_CHANGE` payload to its local Firestore agent bus (`local2local-prod`)
+2. The PROD n8n Orchestrator intercepts the write and recognises the intent as a logic mutation
+3. The PROD Orchestrator commits the `proposedLogic` to the `develop` branch via the GitHub Contents API — **without** `[skip ci]` so the DEV pipeline triggers immediately
+4. Commit message format: `[AUTO] FIX(relay): Prod-identified fix for {path}`
+5. The `reason` field in the agent bus payload states: `"Discovered in local2local-prod"` — this flows through to the HITL card and Firestore audit records
+6. The DEV pipeline builds the change, deploys to `local2local-dev`, bumps the version, and fires the DEV n8n Orchestrator
+7. The operator receives a standard HITL card and decides: `PROMOTE TO PROD` or `KEEP IN DEV`
+
+Key rules:
+- The PROD Orchestrator is forbidden from committing directly to `main`
+- Relay commits never use `[skip ci]` — the fix must reach the HITL gate immediately
+- The relay fix receives a new version number from the DEV pipeline's `Bump Version` step
+- The `[AUTO] FIX(relay)` tag in the commit message creates a clear git audit trail
 
 ### Firestore tracking (in `local2local-dev`)
 

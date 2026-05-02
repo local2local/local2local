@@ -203,3 +203,72 @@ Autonomous changes are tracked the same way as all other methods — in `promote
 **The `targetPath` must be a relative path from the repo root.** Absolute paths or paths starting with `/` will be rejected by the Payload Filter node.
 
 **One change per bus message.** Each agent bus message maps to exactly one file change and one commit. If an agent needs to change multiple files, it must submit multiple messages in sequence, each going through its own HITL gate.
+
+---
+
+## Upstream Relay — production-identified fixes
+
+Agents running in `local2local-prod` can identify code fixes or improvements. These must not be applied directly to `main`. Instead they follow the **Upstream Relay** mechanism to flow back through `develop` and the standard HITL gate.
+
+### Why this is necessary
+
+If a production agent applied a fix directly to `main`, `develop` would diverge from `main` and the next HITL promotion would overwrite the fix. The relay mechanism ensures `develop` is always the source of truth and `main` only ever receives changes that have been human-approved.
+
+### How it works
+
+```
+Agent in local2local-prod identifies a fix
+    → Writes PROPOSE_LOGIC_CHANGE payload to local Firestore agent bus
+    → PROD n8n Orchestrator intercepts the write
+    → PROD Orchestrator commits proposedLogic to develop via GitHub Contents API
+    → Commit triggers DEV pipeline: Bump Version → Build → Deploy to dev → HITL card
+    → Operator: PROMOTE TO PROD or KEEP IN DEV
+        → PROMOTE: Fix is formally re-promoted to main
+        → KEEP IN DEV: Fix is abandoned and recorded in Firestore
+```
+
+### Agent bus payload
+
+The agent writes to its local Firestore in `local2local-prod`:
+
+```
+Path: artifacts/{tenant}/public/data/agent_bus/{message-id}
+```
+
+The payload must include:
+
+```json
+{
+  "event": "PROPOSE_LOGIC_CHANGE",
+  "method": "AUTO",
+  "payload": {
+    "manifest": {
+      "hbrId": "HBR-EVO-01",
+      "targetPath": "functions/src/logic/evolution.ts",
+      "proposedLogic": "// full file content here",
+      "reason": "[AUTO] FIX(relay): Prod-identified fix for evolution.ts"
+    }
+  },
+  "discovery_context": "Discovered in local2local-prod"
+}
+```
+
+The `discovery_context` field flows through to the HITL card's Build Details and to the `summary` field of the abandoned or promoted phase Firestore record, creating a clear audit trail.
+
+### Commit message format
+
+The PROD Orchestrator commits to `develop` using:
+
+```
+[AUTO] FIX(relay): Prod-identified fix for {path}
+```
+
+This commit does **not** include `[skip ci]` — the DEV pipeline must trigger immediately so the fix reaches the HITL gate without delay.
+
+### Key rules
+
+- The PROD Orchestrator is forbidden from committing directly to `main`
+- Relay commits never use `[skip ci]`
+- The relay fix receives a new version number from the DEV pipeline's `Bump Version` step — this is correct behaviour
+- The `[AUTO] FIX(relay)` tag in the commit message identifies the fix as relay-originated in the git history
+- The HITL card shows `Originator: AUTO` — the operator should check the Build Details for the `Prod-identified` context before approving
