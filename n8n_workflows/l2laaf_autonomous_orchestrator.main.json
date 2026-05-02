@@ -282,7 +282,7 @@
       "parameters": {
         "respondWith": "text",
         "options": {},
-        "responseBody": "<html><body style=\"background:#0f172a;color:white;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;\"><h2>\u2713 Decision recorded.</h2><script>setTimeout(()=>window.close(),800);</script></div></body></html>"
+        "responseBody": "<html><head><script>window.close();</script></head><body></body></html>"
       },
       "id": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9",
       "name": "Respond to Webhook",
@@ -981,6 +981,180 @@
           "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-4789-abcd-111111111111",
+              "leftValue": "={{ $json.meta.event || $('MCP Code Payload').first().json?.body?.event || '' }}",
+              "rightValue": "PROPOSE_LOGIC_CHANGE",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-4890-bcde-222222222222",
+      "name": "Intent Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('MCP Code Payload').first().json?.body || $('MCP Code Payload').first().json || {};\nconst manifest = meta.payload?.manifest || {};\nconst targetPath = (manifest.targetPath || '').trim().replace(/^\\/+/, '');\nconst proposedLogic = manifest.proposedLogic || '';\nconst reason = manifest.reason || '[AUTO] FIX(relay): Prod-identified fix';\nconst discoveryContext = meta.discovery_context || 'Discovered in local2local-prod';\nif (!targetPath || !proposedLogic) return [];\nconst encodedContent = Buffer.from(proposedLogic).toString('base64');\nconst commitMessage = reason.startsWith('[AUTO]') ? reason : '[AUTO] FIX(relay): Prod-identified fix for ' + targetPath;\nreturn [{ json: { targetPath, encodedContent, commitMessage, discoveryContext } }];"
+      },
+      "id": "c3d4e5f6-a7b8-4901-cdef-333333333333",
+      "name": "Prepare Relay Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $json.targetPath + '?ref=develop' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-4012-def0-444444444444",
+      "name": "Get Develop File SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1120,
+        320
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Prepare Relay Payload').first().json.targetPath }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"message\": $('Prepare Relay Payload').first().json.commitMessage, \"content\": $('Prepare Relay Payload').first().json.encodedContent, \"sha\": $json.sha || undefined, \"branch\": \"develop\" } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "e5f6a7b8-c9d0-4123-ef01-555555555555",
+      "name": "Relay Commit to Develop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1360,
+        320
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "f6a7b8c9-d0e1-4234-f012-666666666666",
+              "leftValue": "={{ $json.statusCode !== undefined && $json.statusCode >= 400 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f6a7b8c9-d0e1-4234-f012-666666666666",
+      "name": "Relay Commit Error Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_relay_error\", \"card\": { \"header\": { \"title\": \"\u274c Upstream Relay Failed\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Target Path:</b><br>\" + $('Prepare Relay Payload').first().json.targetPath + \"<br><br><b>HTTP Status:</b><br>\" + ($json.statusCode || 'unknown') + \"<br><br><b>Error:</b><br>\" + JSON.stringify($json.body || {}) + \"<br><br><b>Discovery Context:</b><br>\" + $('Prepare Relay Payload').first().json.discoveryContext + \"<br><br><b>Action Required:</b><br>Check the PROD agent bus and retry.\" } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "a7b8c9d0-e1f2-4345-a123-777777777777",
+      "name": "Relay Failed Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1840,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_relay_success\", \"card\": { \"header\": { \"title\": \"\ud83d\udd01 Upstream Relay Initiated\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"A production agent has identified a fix and relayed it to the develop branch. The DEV pipeline will build and deploy it shortly \u2014 watch for a HITL card.<br><br><b>Target Path:</b><br>\" + $('Prepare Relay Payload').first().json.targetPath + \"<br><br><b>Commit Message:</b><br>\" + $('Prepare Relay Payload').first().json.commitMessage + \"<br><br><b>Discovery Context:</b><br>\" + $('Prepare Relay Payload').first().json.discoveryContext + \"<br><br><b>Status:</b> Committed to develop \u2014 awaiting DEV pipeline\" } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "b8c9d0e1-f2a3-4456-b234-888888888888",
+      "name": "Relay Success Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1840,
+        400
+      ]
     }
   ],
   "pinData": {
@@ -1056,7 +1230,7 @@
       "main": [
         [
           {
-            "node": "Fetch System Status",
+            "node": "Intent Router",
             "type": "main",
             "index": 0
           }
@@ -1450,6 +1624,75 @@
         [
           {
             "node": "Proposal Closure Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Router": {
+      "main": [
+        [
+          {
+            "node": "Prepare Relay Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch System Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Relay Payload": {
+      "main": [
+        [
+          {
+            "node": "Get Develop File SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Develop File SHA": {
+      "main": [
+        [
+          {
+            "node": "Relay Commit to Develop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relay Commit to Develop": {
+      "main": [
+        [
+          {
+            "node": "Relay Commit Error Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Relay Commit Error Check": {
+      "main": [
+        [
+          {
+            "node": "Relay Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Relay Success Notification",
             "type": "main",
             "index": 0
           }
