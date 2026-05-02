@@ -2,7 +2,7 @@ name: local2local
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 43.1.71
+version: 43.1.72
 
 environment:
   sdk: ^3.6.0
