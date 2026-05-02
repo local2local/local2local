@@ -1,8 +1,8 @@
 name: local2local
-description: "A new Flutter project."
+description: "Connecting local businesses."
 publish_to: "none"
 
-version: 44.0.0+591
+version: 43.1.69+0
 
 environment:
   sdk: ^3.6.0
