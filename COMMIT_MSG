@@ -1,1 +1,1 @@
-[ASSISTED] FIX(triage): Wire GoRouter and fix Firestore path bugs in SuperadminRepository
+[ASSISTED] FIX(repo): Restore corrupted .gitignore and add Flutter build artifact exclusions

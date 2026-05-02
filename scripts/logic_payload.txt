@@ -1,122 +1,43 @@
-L2LAAF_BLOCK_START(code:app:lib/core/app.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/nav.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+L2LAAF_BLOCK_START(code:gitignore:.gitignore)
+# Flutter build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.stamp
 
-class L2LAAFApp extends ConsumerWidget {
-  const L2LAAFApp({super.key});
+# Firebase
+.firebaserc
+firebase-debug.log
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(AppRouter.routerProvider);
+# Dart
+.packages
+pubspec.lock
 
-    return MaterialApp.router(
-      debugShowCheckedModeBanner: false,
-      title: 'L2LAAF Cockpit',
-      theme: adminDarkTheme,
-      routerConfig: router,
-    );
-  }
-}
-L2LAAF_BLOCK_END
+# Node / Cloud Functions
+functions/node_modules/
+functions/lib/
+functions/package-lock.json
 
-L2LAAF_BLOCK_START(code:repository:lib/features/triage_hub/data/superadmin_repository.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+# IDE
+.idea/
+.vscode/
+*.iml
 
-/// Repository for Phase 44 SuperAdmin capabilities.
-/// Handles multi-tenant telemetry, versioning, and agent bus streams.
-class SuperadminRepository {
-  final FirebaseFirestore _firestore;
+# OS
+.DS_Store
 
-  SuperadminRepository(this._firestore);
+# L2LAAF scripts — never ignore n8n workflow JSONs
+!n8n_workflows/
+!n8n_workflows/*.json
 
-  /// Streams the current system telemetry status.
-  /// Document: artifacts/system_status/public/data/telemetry
-  /// Field: status (GREEN | YELLOW | RED)
-  Stream<String> watchSystemStatus() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry')
-        .snapshots()
-        .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
-  }
-
-  /// Streams the current app version from Firestore.
-  /// Document: artifacts/system_status/public/data/version
-  /// Field: current (e.g. "43.1.72")
-  Stream<String> watchCurrentVersion() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/version')
-        .snapshots()
-        .map((doc) => doc.data()?['current'] as String? ?? '0.0.0');
-  }
-
-  /// Streams agent bus entries from a specific tenant.
-  /// Tenant values: 'system_status' | 'local2local_kaskflow' | 'local2local_moonlitely'
-  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
-    return _firestore
-        .collection('artifacts/$tenant/public/data/agent_bus')
-        .orderBy('created_at', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = Map<String, dynamic>.from(doc.data());
-              data['id'] = doc.id;
-              return data;
-            }).toList());
-  }
-
-  /// Streams phase history (promoted or abandoned).
-  /// Sort field differs per collection:
-  ///   promoted_phases  → promoted_at
-  ///   abandoned_phases → abandoned_at
-  Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
-    final sortField =
-        collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
-    return _firestore
-        .collection('artifacts/system_status/public/data/$collection')
-        .orderBy(sortField, descending: true)
-        .limit(10)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Map<String, dynamic>.from(doc.data()))
-            .toList());
-  }
-
-  /// Manual Payload Injection for test sequences.
-  Future<void> injectTestPayload({
-    required String targetPath,
-    required String instructions,
-  }) async {
-    final timestamp = DateTime.now().toIso8601String();
-    await _firestore
-        .collection('artifacts/local2local-dev/public/data/agent_bus')
-        .add({
-      'status': 'dispatched',
-      'correlation_id':
-          'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
-      'created_at': FieldValue.serverTimestamp(),
-      'payload': {
-        'manifest': {
-          'intent': 'PROPOSE_LOGIC_CHANGE',
-          'hbrId': 'HBR-DASHBOARD-TEST',
-          'agentId': 'SUPERADMIN_UI',
-          'reason': instructions,
-          'targetPath': targetPath,
-          'proposedLogic':
-              '// Manual trigger from dashboard at $timestamp',
-        }
-      }
-    });
-  }
-}
-
-final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
-  return SuperadminRepository(FirebaseFirestore.instance);
-});
+# Relay script artifacts
+scripts/logic_payload.txt
+COMMIT_MSG
+flutter_problems_list.txt
+audit_bundle.txt
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
-[ASSISTED] FIX(triage): Wire GoRouter and fix Firestore path bugs in SuperadminRepository
+[ASSISTED] FIX(repo): Restore corrupted .gitignore and add Flutter build artifact exclusions
 L2LAAF_BLOCK_END
