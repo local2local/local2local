@@ -24,7 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,73 +36,34 @@ jobs:
           channel: 'stable'
           flutter-version: '3.38.5'
 
-      - name: Bump Version
-        id: bump_version
+      - name: Read Version and Parse Commit
+        id: read_version
         run: |
-          # --- Read current version from pubspec.yaml ---
+          # --- Read current version from pubspec.yaml (no bump — promotion bumps on PROMOTE TO PROD) ---
           CURRENT_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
-          MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
-          MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
-          PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
-
-          echo "Current version: $MAJOR.$MINOR.$PATCH"
+          echo "Current version: $CURRENT_VERSION"
 
           # --- Extract BUMP type from commit message (case insensitive) ---
           COMMIT_MSG=$(git log -1 --pretty=%B | head -n 1)
           BUMP_RAW=$(echo "$COMMIT_MSG" | grep -ioE 'bump:[[:space:]]*(major|minor|patch)' | head -1 || echo "")
           BUMP_TYPE=$(echo "$BUMP_RAW" | grep -ioE 'major|minor|patch' | tr '[:lower:]' '[:upper:]' || echo "PATCH")
           if [ -z "$BUMP_TYPE" ]; then BUMP_TYPE="PATCH"; fi
-
           echo "Bump type: $BUMP_TYPE"
 
-          # --- Calculate new version ---
-          if [ "$BUMP_TYPE" = "MAJOR" ]; then
-            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
-          elif [ "$BUMP_TYPE" = "MINOR" ]; then
-            MINOR=$((MINOR + 1)); PATCH=0
-          else
-            PATCH=$((PATCH + 1))
-          fi
-
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          BUILD_NUMBER="${{ github.run_number }}"
-          echo "New version: $NEW_VERSION+$BUILD_NUMBER"
-
-          # --- Strip BUMP tag from commit message for clean final message ---
+          # --- Strip BUMP tag from commit message ---
           CLEAN_MSG=$(echo "$COMMIT_MSG" | sed -E 's/[[:space:]]*[Bb][Uu][Mm][Pp]:[[:space:]]*(major|minor|patch)//i' | xargs)
 
           # --- Extract METHOD from commit message ---
           METHOD=$(echo "$CLEAN_MSG" | grep -oE '\[(MANUAL|ASSISTED|AUTO|DREAM)\]' | tr -d '[]' || echo "UNKNOWN")
 
-          # --- Build final versioned commit message ---
-          FINAL_MSG="$NEW_VERSION - $CLEAN_MSG"
-
-          # --- Update pubspec.yaml ---
-          sed -i "s/^version: .*/version: $NEW_VERSION+$BUILD_NUMBER/" pubspec.yaml
-
-          # --- Remove current_phase from state.json if present ---
-          if [ -f ".l2laaf/state.json" ]; then
-            node -e "
-              const fs = require('fs');
-              const s = JSON.parse(fs.readFileSync('.l2laaf/state.json'));
-              delete s.current_phase;
-              fs.writeFileSync('.l2laaf/state.json', JSON.stringify(s, null, 2));
-            "
-          fi
-
-          # --- Commit and push version bump using GITHUB_TOKEN (prevents pipeline loop) ---
-          git config user.name "L2LAAF CI"
-          git config user.email "ci@local2local.ca"
-          git add pubspec.yaml .l2laaf/state.json
-          git commit -m "$NEW_VERSION - [AUTO] CHORE(version): Bump $CURRENT_VERSION to $NEW_VERSION ($BUMP_TYPE) [skip ci]"
-          git push origin ${{ github.ref_name }}
+          # --- Build final display message ---
+          FINAL_MSG="$CURRENT_VERSION - $CLEAN_MSG"
 
           # --- Export for subsequent steps ---
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           echo "final_msg=$FINAL_MSG" >> $GITHUB_OUTPUT
           echo "method=$METHOD" >> $GITHUB_OUTPUT
-          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
 
       - name: Install Firebase CLI & Dependencies
         run: |
@@ -200,25 +160,23 @@ jobs:
       - name: Notify Orchestrator
         if: success() && github.ref_name != 'main'
         run: |
-          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
-          ENV_NAME="${{ (github.ref_name == 'main' && 'prod') || 'dev' }}"
-          METHOD="${{ steps.bump_version.outputs.method }}"
-          FINAL_MSG="${{ steps.bump_version.outputs.final_msg }}"
+          CURRENT_VERSION="${{ steps.read_version.outputs.current_version }}"
+          ENV_NAME="dev"
+          METHOD="${{ steps.read_version.outputs.method }}"
+          FINAL_MSG="${{ steps.read_version.outputs.final_msg }}"
+          BUMP_TYPE="${{ steps.read_version.outputs.bump_type }}"
           COMMIT_SHA="${{ github.sha }}"
 
           jq -n \
-            --arg phase "$NEW_VERSION" \
+            --arg phase "$CURRENT_VERSION" \
             --arg build "$COMMIT_SHA" \
             --arg summary "$FINAL_MSG" \
             --arg env "$ENV_NAME" \
             --arg method "$METHOD" \
-            '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env, method: $method}' > n8n_payload.json
+            --arg bump_type "$BUMP_TYPE" \
+            '{incoming_phase: $phase, build_id: $build, summary: $summary, event: "DEPLOYMENT_COMPLETE", env: $env, method: $method, bump_type: $bump_type}' > n8n_payload.json
 
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_PROD }}"
-          else
-            WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_DEV }}"
-          fi
+          WEBHOOK_URL="${{ secrets.N8N_WEBHOOK_URL_DEV }}"
 
           echo "🔍 Probing webhook availability at $WEBHOOK_URL"
           PROBE_MAX=6

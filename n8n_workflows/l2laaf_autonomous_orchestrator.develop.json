@@ -89,7 +89,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  // Version comes exclusively from the webhook payload (set by deploy.yml Bump Version step)\n  const currentVersion = meta.incoming_phase || \"0.0.0\";\n  \n  // state.json no longer holds current_phase - just operational fields\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  \n  // Build updated state - version lives in pubspec.yaml, not here\n  let updatedState = { ...state };\n  delete updatedState.current_phase;\n  \n  return [{ json: { updated_state: updatedState, meta: { ...meta, current_version: currentVersion } } }];\n})();"
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n\n  if (meta.commits || meta.pusher || meta.probe) return [];\n\n  const currentVersion = meta.incoming_phase || \"0.0.0\";\n  const bumpType = (meta.bump_type || 'PATCH').toUpperCase();\n\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n\n  let updatedState = { ...state };\n  delete updatedState.current_phase;\n\n  return [{ json: { updated_state: updatedState, meta: { ...meta, current_version: currentVersion, bump_type: bumpType } } }];\n})();"
       },
       "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
       "name": "State Manager",
@@ -242,7 +242,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.meta.current_version }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $json.meta.current_version }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \"UNKNOWN\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"\ud83d\udfe2  \" : ($json.system_status === \"YELLOW\" ? \"\ud83d\udfe1  \" : \"\ud83d\udd34  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"PROMOTE TO PROD\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&bump_type=\" + ($json.meta.bump_type || \"PATCH\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }, { \"text\": \"KEEP IN DEV\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || \"unknown\") + \"&phase=\" + $json.meta.current_version + \"&method=\" + ($json.meta.method || \"UNKNOWN\") + \"&summary=\" + ($json.meta.summary || \"\").replace(/ /g, \"+\") + \"&bump_type=\" + ($json.meta.bump_type || \"PATCH\") + \"&hbrId=\" + ($json.meta.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
         "options": {}
       },
       "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
@@ -274,7 +274,7 @@
       "parameters": {
         "respondWith": "text",
         "options": {},
-        "responseBody": "<html><body style=\"background:#0f172a;color:white;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;\"><h2>\u2713 Decision recorded.</h2><script>setTimeout(()=>window.close(),800);</script></div></body></html>"
+        "responseBody": "<html><head><script>window.close();</script></head><body></body></html>"
       },
       "id": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9",
       "name": "Respond to Webhook",
@@ -654,7 +654,7 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $('Automated Testing Suite').first().json.action === 'decline' ? { \"text\": \"\ud83d\uddc3\ufe0f Phase \" + $('Approval Listener').first().json.query.phase + \" kept in dev. This change remains in git history and can be cherry-picked into a future version. To view all abandoned versions, check Firestore collection `artifacts/system_status/public/data/abandoned_phases` in the local2local-dev GCP project. This can be viewed in the SuperAdmin dashboard in the dev environment.\" } : { \"cardsV2\": [ { \"cardId\": \"l2laaf_promoted\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $('Approval Listener').first().json.query.phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Promoted to PROD.</b><br>Phase \" + $('Approval Listener').first().json.query.phase + \" promoted to prod. This merged the tested 'develop' branch to the 'main' branch and deployed to local2local-prod.<br><br><b>Phase:</b> \" + $('Approval Listener').first().json.query.phase + \"<br><b>Originator:</b> \" + ($('Approval Listener').first().json.query.method || 'UNKNOWN') + \"<br><b>Commit SHA:</b> \" + ($('Approval Listener').first().json.query.build_id || 'unknown') + \"<br><b>Summary:</b> \" + decodeURIComponent($('Approval Listener').first().json.query.summary || '') + \"<br><b>Promoted by:</b> todd.herron@local2local.ca<br><b>Status:</b> ACTIVE\" } } ] }] } } ] } }}",
+        "jsonBody": "={{ $('Automated Testing Suite').first().json.action === 'decline' ? { \"text\": \"\ud83d\uddc3\ufe0f Phase \" + $('Approval Listener').first().json.query.phase + \" kept in dev. This change remains in git history and can be cherry-picked into a future version. To view all abandoned versions, check Firestore collection `artifacts/system_status/public/data/abandoned_phases` in the local2local-dev GCP project. This can be viewed in the SuperAdmin dashboard in the dev environment.\" } : { \"cardsV2\": [ { \"cardId\": \"l2laaf_promoted\", \"card\": { \"header\": { \"title\": \"\ud83d\ude80 L2LAAF Deployment: Phase \" + $('Calculate New Version').first().json.newVersion }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Promoted to PROD.</b><br>Phase \" + $('Calculate New Version').first().json.newVersion + \" promoted to prod. This merged the tested 'develop' branch to the 'main' branch and deployed to local2local-prod.<br><br><b>Phase:</b> \" + $('Calculate New Version').first().json.newVersion + \"<br><b>Originator:</b> \" + ($('Approval Listener').first().json.query.method || 'UNKNOWN') + \"<br><b>Commit SHA:</b> \" + ($('Approval Listener').first().json.query.build_id || 'unknown') + \"<br><b>Summary:</b> \" + $('Calculate New Version').first().json.promotionSummary + \"<br><b>Promoted by:</b> todd.herron@local2local.ca<br><b>Status:</b> ACTIVE\" } } ] }] } } ] } }}",
         "options": {}
       },
       "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
@@ -735,7 +735,7 @@
         "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"fields\": { \"current\": { \"stringValue\": $('Automated Testing Suite').first().json.current_version || $('Automated Testing Suite').first().json.updated_state.current_version || \"unknown\" }, \"updated_at\": { \"timestampValue\": new Date().toISOString() }, \"environment\": { \"stringValue\": $('Approval Listener').first().json.query.env || \"dev\" } } } }}",
+        "jsonBody": "={{ { \"fields\": { \"current\": { \"stringValue\": $('Calculate New Version').first().json.newVersion || \"unknown\" }, \"updated_at\": { \"timestampValue\": new Date().toISOString() }, \"environment\": { \"stringValue\": $('Approval Listener').first().json.query.env || \"dev\" } } } }}",
         "options": {
           "queryParameters": {
             "parameters": [
@@ -797,7 +797,7 @@
         "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Approval Listener').first().json.query.phase || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": ($('Approval Listener').first().json.query.summary || \"\").replace(/\\+/g, \" \") }, \"originator\": { \"stringValue\": $('Approval Listener').first().json.query.method || \"UNKNOWN\" }, \"promoted_at\": { \"timestampValue\": new Date().toISOString() }, \"promoted_by\": { \"stringValue\": \"todd.herron@local2local.ca\" }, \"status\": { \"stringValue\": \"ACTIVE\" } } } }}",
+        "jsonBody": "={{ { \"fields\": { \"phase\": { \"stringValue\": $('Calculate New Version').first().json.newVersion || \"\" }, \"commit_sha\": { \"stringValue\": $('Approval Listener').first().json.query.build_id || \"\" }, \"summary\": { \"stringValue\": $('Calculate New Version').first().json.promotionSummary || \"\" }, \"originator\": { \"stringValue\": $('Approval Listener').first().json.query.method || \"UNKNOWN\" }, \"promoted_at\": { \"timestampValue\": new Date().toISOString() }, \"promoted_by\": { \"stringValue\": \"todd.herron@local2local.ca\" }, \"status\": { \"stringValue\": \"ACTIVE\" } } } }}",
         "options": {}
       },
       "id": "b1c2d3e4-f5a6-4789-bcde-f01234567890",
@@ -955,7 +955,7 @@
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"message\": $('Approval Listener').first().json.query.phase + \" - [AUTO] CHORE(orchestration): Promote phase \" + $('Approval Listener').first().json.query.phase + \" to prod\", \"content\": $('Get Main State SHA').first().json.content.replace(/\\n/g, ''), \"sha\": $('Get Main State SHA').first().json.sha, \"branch\": \"main\" } }}",
+        "jsonBody": "={{ { \"message\": $('Calculate New Version').first().json.newVersion + \" - [AUTO] CHORE(orchestration): Promote phase \" + $('Calculate New Version').first().json.newVersion + \" to prod\", \"content\": $('Get Main State SHA').first().json.content.replace(/\\\\n/g, ''), \"sha\": $('Get Main State SHA').first().json.sha, \"branch\": \"main\" } }}",
         "options": {}
       },
       "id": "e5f6a7b8-c9d0-4234-bcde-f12345678904",
@@ -964,6 +964,76 @@
       "typeVersion": 4,
       "position": [
         2128,
+        784
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/pubspec.yaml?ref=develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "aa11bb22-cc33-4444-ddee-ff5566778899",
+      "name": "Get pubspec on Develop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1456,
+        784
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const pubspecResponse = $('Get pubspec on Develop').first().json;\nif (!pubspecResponse || !pubspecResponse.content) throw new Error('Could not fetch pubspec.yaml from develop');\n\nconst content = Buffer.from(pubspecResponse.content.replace(/\\n/g, ''), 'base64').toString('utf8');\nconst versionMatch = content.match(/^version:\\s*(\\d+)\\.(\\d+)\\.(\\d+)/m);\nif (!versionMatch) throw new Error('Could not parse version from pubspec.yaml: ' + content.substring(0, 200));\n\nlet major = parseInt(versionMatch[1]);\nlet minor = parseInt(versionMatch[2]);\nlet patch = parseInt(versionMatch[3]);\n\nconst bumpType = ($('Approval Listener').first().json.query.bump_type || 'PATCH').toUpperCase();\nconst summary = decodeURIComponent($('Approval Listener').first().json.query.summary || '');\nconst phase = $('Approval Listener').first().json.query.phase || `${major}.${minor}.${patch}`;\n\nif (bumpType === 'MAJOR') { major++; minor = 0; patch = 0; }\nelse if (bumpType === 'MINOR') { minor++; patch = 0; }\nelse { patch++; }\n\nconst newVersion = `${major}.${minor}.${patch}`;\nconst newContent = content.replace(/^version:\\s*[\\d.]+(\\+\\d+)?/m, `version: ${newVersion}`);\nconst encodedContent = Buffer.from(newContent).toString('base64');\nconst promotionSummary = `${newVersion} - ${summary.replace(/^\\d+\\.\\d+\\.\\d+\\s*-\\s*/, '')}`;\n\nreturn [{ json: {\n    newVersion,\n    encodedContent,\n    currentSha: pubspecResponse.sha,\n    bumpType,\n    summary,\n    promotionSummary\n}}];"
+      },
+      "id": "bb22cc33-dd44-5555-eeff-006677889900",
+      "name": "Calculate New Version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/local2local/local2local/contents/pubspec.yaml",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"message\": $json.newVersion + \" - [AUTO] CHORE(version): Bump to \" + $json.newVersion + \" (\" + $json.bumpType + \") [skip ci]\", \"content\": $json.encodedContent, \"sha\": $json.currentSha, \"branch\": \"develop\" } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "cc33dd44-ee55-6666-ffaa-117788990011",
+      "name": "Write Bumped pubspec",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1904,
         784
       ],
       "continueOnFail": true,
@@ -1339,7 +1409,7 @@
       "main": [
         [
           {
-            "node": "Get Develop SHA",
+            "node": "Get pubspec on Develop",
             "type": "main",
             "index": 0
           }
@@ -1442,6 +1512,39 @@
         [
           {
             "node": "Proposal Closure Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pubspec on Develop": {
+      "main": [
+        [
+          {
+            "node": "Calculate New Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate New Version": {
+      "main": [
+        [
+          {
+            "node": "Write Bumped pubspec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Bumped pubspec": {
+      "main": [
+        [
+          {
+            "node": "Get Develop SHA",
             "type": "main",
             "index": 0
           }
