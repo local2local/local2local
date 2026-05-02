@@ -1,1123 +1,482 @@
 /**
- * L2LAAF Logic Payload
+ * L2LAAF Phase 44.0.0 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: n8n_orchestrator, flutter_app
- * Description: Appends [skip ci] to orchestrator commits to break recursive Github Actions triggers.
+ * Target: triage_hub
+ * Description: FEAT: Implements Phase 44 SuperAdmin dashboard and multi-tenant agent bus control.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-43.1.36 - FIX(orchestration): Append [skip ci] to orchestrator commit messages to prevent recursive GitHub Actions pipeline triggers
+[ASSISTED] FEAT(superadmin): Phase 44 dashboard [BUMP: MAJOR]
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:State Version Bump:.l2laaf/state.json)
-{
-  "system_status": "OPERATIONAL",
-  "current_phase": "43.1.36",
-  "active_environment": "develop",
-  "deployment_telemetry": {
-    "last_success_commit": null,
-    "current_build_id": null,
-    "verification_status": "IDLE"
-  },
-  "approval_gate": {
-    "pending": false,
-    "timeout_at": null,
-    "gate_type": "HITL_REQUIRED",
-    "status": "PROMOTED"
-  },
-  "reconciliation": {
-    "last_sync_timestamp": null,
-    "conflict_detected": false
+/* L2LAAF_BLOCK_START(dart:Superadmin Repository:lib/features/triage_hub/data/superadmin_repository.dart)
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// Repository for Phase 44 SuperAdmin capabilities.
+/// Handles multi-tenant telemetry, versioning, and agent bus streams.
+class SuperadminRepository {
+  final FirebaseFirestore _firestore;
+
+  SuperadminRepository(this._firestore);
+
+  /// Streams the current system telemetry status from the system root.
+  Stream<String> watchSystemStatus() {
+    return _firestore
+        .doc('artifacts/system_status/public/data/telemetry/current')
+        .snapshots()
+        .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
+  }
+
+  /// Streams the current app version from Firestore.
+  Stream<String> watchCurrentVersion() {
+    return _firestore
+        .doc('artifacts/system_status/public/data/version/current')
+        .snapshots()
+        .map((doc) => doc.data()?['version'] as String? ?? '0.0.0');
+  }
+
+  /// Streams agent bus entries from a specific tenant.
+  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
+    return _firestore
+        .collection('artifacts/$tenant/public/data/agent_bus')
+        .orderBy('created_at', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = Map<String, dynamic>.from(doc.data());
+              data['id'] = doc.id;
+              return data;
+            }).toList());
+  }
+
+  /// Streams phase history (promoted or abandoned).
+  Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
+    return _firestore
+        .collection('artifacts/system_status/public/data/$collection')
+        .orderBy('timestamp', descending: true)
+        .limit(10)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => Map<String, dynamic>.from(doc.data()))
+            .toList());
+  }
+
+  /// Manual Payload Injection for Test Sequence A.
+  Future<void> injectTestPayload({
+    required String targetPath,
+    required String instructions,
+  }) async {
+    final timestamp = DateTime.now().toIso8601String();
+    await _firestore.collection('artifacts/local2local-dev/public/data/agent_bus').add({
+      'status': 'dispatched',
+      'correlation_id': 'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
+      'created_at': FieldValue.serverTimestamp(),
+      'payload': {
+        'manifest': {
+          'intent': 'PROPOSE_LOGIC_CHANGE',
+          'hbrId': 'HBR-DASHBOARD-TEST',
+          'agentId': 'SUPERADMIN_UI',
+          'reason': instructions,
+          'targetPath': targetPath,
+          'proposedLogic': '// Manual trigger from dashboard at $timestamp',
+        }
+      }
+    });
   }
 }
+
+final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
+  return SuperadminRepository(FirebaseFirestore.instance);
+});
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(dart:Superadmin Providers:lib/features/triage_hub/providers/superadmin_providers.dart)
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
+
+/// Live stream of system telemetry (GREEN/YELLOW/RED)
+final systemStatusStreamProvider = StreamProvider<String>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchSystemStatus();
+});
+
+/// Live stream of the official app version
+final currentVersionStreamProvider = StreamProvider<String>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchCurrentVersion();
+});
+
+/// Unified stream for the System-wide Agent Bus
+final systemAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('system_status');
+});
+
+/// Unified stream for the Kaskflow Agent Bus
+final kaskflowAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_kaskflow');
+});
+
+/// Unified stream for the Moonlitely Agent Bus
+final moonlitelyAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_moonlitely');
+});
+
+/// Phase History Providers
+final promotedPhasesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchPhaseHistory('promoted_phases');
+});
+
+final abandonedPhasesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchPhaseHistory('abandoned_phases');
+});
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(dart:System Status Banner:lib/features/triage_hub/widgets/system_status_banner.dart)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
 
 class SystemStatusBanner extends ConsumerWidget {
   const SystemStatusBanner({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Connected to StreamProvider for telemetry status (mocked for Phase 42 UI setup)
-    const String status = 'STABLE'; 
-    const Color color = AdminColors.emeraldGreen;
+    final statusAsync = ref.watch(systemStatusStreamProvider);
+    final versionAsync = ref.watch(currentVersionStreamProvider);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1), // Flutter 3.27 compliant
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.check_circle_rounded, color: color, size: 28),
-          const SizedBox(width: 16),
-          const Text(
-            'TELEMETRY HEALTH: $status',
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              letterSpacing: 1.2,
-            ),
+    return statusAsync.when(
+      data: (status) {
+        final Color color = _getStatusColor(status);
+        final IconData icon = _getStatusIcon(status);
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(12),
           ),
-          const Spacer(),
-          Text(
-            'Code modifications permitted',
-            style: TextStyle(
-              color: color.withValues(alpha: 0.8),
-              fontSize: 12,
-            ),
-          )
-        ],
-      ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'TELEMETRY HEALTH: $status',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  versionAsync.when(
+                    data: (v) => Text(
+                      'CORE VERSION: $v',
+                      style: TextStyle(
+                        color: color.withValues(alpha: 0.7),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                status == 'RED' ? 'DEPLOYMENTS LOCKED' : 'Code modifications permitted',
+                style: TextStyle(
+                  color: color.withValues(alpha: 0.8),
+                  fontSize: 12,
+                ),
+              )
+            ],
+          ),
+        );
+      },
+      loading: () => const LinearProgressIndicator(color: AdminColors.emeraldGreen),
+      error: (e, _) => Text('Telemetry Offline: $e', style: const TextStyle(color: AdminColors.rubyRed)),
     );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'GREEN':
+        return AdminColors.emeraldGreen;
+      case 'YELLOW':
+        return Colors.orangeAccent;
+      case 'RED':
+        return AdminColors.rubyRed;
+      default:
+        return AdminColors.textSecondary;
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'GREEN':
+        return Icons.check_circle_rounded;
+      case 'YELLOW':
+        return Icons.warning_rounded;
+      case 'RED':
+        return Icons.dangerous_rounded;
+      default:
+        return Icons.help_outline_rounded;
+    }
   }
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:Autonomous Orchestrator JSON:n8n_workflows/l2laaf_autonomous_orchestrator.json)
-{
-  "name": "L2LAAF: Autonomous Orchestrator",
-  "nodes": [
-    {
-      "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 43.1.36\n**Commit:** 43.1.36 - FIX(orchestration): Append [skip ci] to prevent recursive pipeline runs",
-        "height": 150,
-        "width": 350,
-        "color": 6
-      },
-      "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-      "name": "Sticky Note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        112,
-        112
-      ]
-    },
-    {
-      "parameters": {},
-      "id": "e45a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c",
-      "name": "Error Trigger",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [
-        112,
-        -100
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_error_gate\", \"card\": { \"header\": { \"title\": \"🚨 n8n Workflow Error\", \"subtitle\": \"L2LAAF Autonomous Orchestrator\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Failing Node:</b><br>\" + $json.execution.lastNodeExecuted + \"<br><br><b>Error Message:</b><br>\" + $json.execution.error.message } } ] }] } } ] } }}",
-        "options": {}
-      },
-      "id": "c1d2e3f4-a5b6-4870-981a-b7c6errornode",
-      "name": "Error Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        304,
-        -100
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "l2laaf-payload-trigger",
-        "options": {}
-      },
-      "id": "f8a44b1c-9e62-4299-90b5-4db9d51e7c02",
-      "name": "MCP Code Payload",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        112,
-        304
-      ],
-      "webhookId": "41e088a5-e47a-4a8c-851e-8ec03859f235"
-    },
-    {
-      "parameters": {
-        "resource": "file",
-        "operation": "get",
-        "owner": "local2local",
-        "repository": "local2local",
-        "filePath": ".l2laaf/state.json",
-        "reference": "develop"
-      },
-      "id": "c7e2b1fa-8a56-4f40-811a-6d0e9a7e6b03",
-      "name": "Fetch Main State",
-      "type": "n8n-nodes-base.github",
-      "typeVersion": 1,
-      "position": [
-        304,
-        304
-      ],
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n  \n  if (meta.commits || meta.pusher || meta.probe) return [];\n  \n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  let updatedState = { ...state };\n  updatedState.current_phase = (meta.incoming_phase || state.current_phase || \"43.1.36\").toString();\n  return [{ json: { updated_state: updatedState, meta: meta } }];\n})();"
-      },
-      "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
-      "name": "State Manager",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        512,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
-        "options": {}
-      },
-      "id": "2bc59b88-1250-4824-b152-dc72de6f3d1b",
-      "name": "Fetch System Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        704,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\") || summary.toLowerCase().includes(\"fix(\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\nreturn [{ json: { ...stateManager, throttle_decision: throttleDecision, throttle_message: throttleMessage, system_status: currentStatus, intent: intent } }];"
-      },
-      "id": "f512dbb9-6b5d-4f11-9ab0-9b4ef0f9ebc7",
-      "name": "Throttling Evaluator",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        912,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.throttle_decision }}",
-                    "rightValue": "PROCEED",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "PROCEED"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.throttle_decision }}",
-                    "rightValue": "DELAYED",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "DELAYED"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.throttle_decision }}",
-                    "rightValue": "BLOCKED",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "BLOCKED"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "42d3c909-543e-48a5-ab65-c3ccdf9e7d98",
-      "name": "Throttle Switch",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [
-        1104,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "unit": "minutes"
-      },
-      "id": "cd972eb0-ec9a-4c22-b8e7-0bd5c5f88b43",
-      "name": "Throttle Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [
-        1312,
-        304
-      ],
-      "webhookId": "d83d05c7-f947-47ff-a965-909f7d06bd98"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"⛔ L2LAAF Deployment BLOCKED: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } } ] }] } } ] } }}",
-        "options": {}
-      },
-      "id": "1ab4792c-67ad-4560-912b-b9d9df3c0e14",
-      "name": "Blocked Chat Card",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1312,
-        512
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_deploy_gate\", \"card\": { \"header\": { \"title\": \"🚀 L2LAAF Deployment: Phase \" + $json.updated_state.current_phase }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>System<br><br><b>Status:</b><br>\" + ($json.system_status === \"GREEN\" ? \"🟢  \" : ($json.system_status === \"YELLOW\" ? \"🟡  \" : \"🔴  \")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Build Details\", \"text\": $json.meta.summary, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Throttle Evaluation\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"textParagraph\": { \"text\": \"<b>GCP Projects</b><br>local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \" ⮕ local2local-\" + ($json.updated_state.active_environment === \"prod\" ? \"prod\" : \"dev\") + \"<br><br><b>Github Branches</b><br>develop ⮕ develop\" } }, { \"buttonList\": { \"buttons\": [{ \"text\": \"APPROVE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=approve&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }, { \"text\": \"DECLINE\", \"onClick\": { \"openLink\": { \"url\": \"https://local2local.app.n8n.cloud/webhook/approve-promotion?action=decline&env=\" + $json.updated_state.active_environment + \"&build_id=\" + ($json.meta.build_id || $json.meta.correlation_id || \"unknown\") + \"&phase=\" + $json.updated_state.current_phase + \"&hbrId=\" + ($json.meta.hbrId || $json.meta.payload?.manifest?.hbrId || \"manual\") } } }] } }] }] } } ] } }}",
-        "options": {}
-      },
-      "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
-      "name": "Google Chat Card",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1552,
-        160
-      ]
-    },
-    {
-      "parameters": {
-        "path": "approve-promotion",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "5cb8107c-9b51-40e8-8a8b-12d8cf129bb8",
-      "name": "Approval Listener",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        112,
-        912
-      ],
-      "webhookId": "7a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "<html><body style=\"background:#0f172a;color:white;display:flex;justify-content:center;align-items:center;height:100vh;\"><div style=\"text-align:center;padding:2rem;background:#1e293b;border-radius:1rem;border:1px solid #334155;\"><h1>MISSION REGISTERED</h1><p>Audit complete. Decisions saved.</p><script>setTimeout(()=>window.close(), 1000);</script></div></body></html>",
-        "options": {}
-      },
-      "id": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        304,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\" }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}",
-        "options": {
-          "ignoreResponseCode": true
-        }
-      },
-      "id": "e2c34a9b-6d8b-4b72-b8ec-f2307c8d9e2a",
-      "name": "Fetch Proposal Data",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        304,
-        960
-      ],
-      "continueOnFail": true
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://logging.googleapis.com/v2/entries:list",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"resourceNames\": [ \"projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') ], \"filter\": \"textPayload:\\\"Null check operator used on a null value\\\"\", \"pageSize\": 10 } }}",
-        "options": {}
-      },
-      "id": "3b2a1c9d-8e7f-4b60-91c8-e3df5a6b7c89",
-      "name": "Log Scraper",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        512,
-        1008
-      ],
-      "credentials": {
-        "googleApi": {
-          "id": "NlT4tfnPyrdMF8jv",
-          "name": "GCP Orchestrator Admin"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=develop",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "options": {
-          "ignoreResponseCode": true
-        }
-      },
-      "id": "7c8b9a1d-2e4f-4a70-8b1c-d5e3f7a8b9c0",
-      "name": "Fetch Latest State",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        704,
-        1008
-      ],
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) {\n    stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing or undefined.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) { console.log(\"Missing payload file data\"); }\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state }; \n  if (approvedPhase) { updatedState.current_phase = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {}; \n  let auditPassed = (logResponse.entries || []).length === 0 && action !== 'decline';\n  let notificationText = action === 'decline' ? \"🛑 Phase \" + updatedState.current_phase + \" DECLINED.\" : (auditPassed ? \"✅ Phase \" + updatedState.current_phase + \" PROMOTED from \" + state.current_phase + \".\" : \"❌ Phase \" + updatedState.current_phase + \" FAILED AUDIT.\");\n  if (auditPassed) {\n    updatedState.approval_gate = updatedState.approval_gate || {};\n    updatedState.approval_gate.pending = false;\n    updatedState.approval_gate.status = \"PROMOTED\";\n  }\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  \n  let finalFilePath = originalMeta.filePath || filePath;\n  \n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) { \n    finalFilePath = 'IGNORE'; \n  } else { \n    finalFilePath = finalFilePath.trim().replace(/^\\/+/, ''); \n  }\n  \n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  \n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  \n  return [{ json: {\n    audit_passed: auditPassed, \n    updated_state: updatedState, \n    notification_text: notificationText,\n    is_proposal: isProposal, \n    hbrId: rawHbrId || '', \n    buildId: buildId,\n    filePath: finalFilePath, \n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
-      },
-      "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
-      "name": "Automated Testing Suite",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        912,
-        1008
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-              "leftValue": "={{ $json.filePath }}",
-              "rightValue": "IGNORE",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals",
-                "name": "filter.operator.notEquals"
-              }
-            }
+/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
+import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
+import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
+
+class SuperadminDashboard extends ConsumerStatefulWidget {
+  const SuperadminDashboard({super.key});
+
+  @override
+  ConsumerState<SuperadminDashboard> createState() => _SuperadminDashboardState();
+}
+
+class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
+  int _selectedTenantIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final systemBus = ref.watch(systemAgentBusProvider);
+    final kaskflowBus = ref.watch(kaskflowAgentBusProvider);
+    final moonlitelyBus = ref.watch(moonlitelyAgentBusProvider);
+
+    return Scaffold(
+      backgroundColor: AdminColors.slateDarkest,
+      body: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Superadmin Dashboard',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _showTestInjectModal(context),
+                  icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+                  label: const Text('Test Inject'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.slateDark,
+                    foregroundColor: AdminColors.emeraldGreen,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    side: BorderSide(
+                      color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            
+            const SystemStatusBanner(),
+            const SizedBox(height: 40),
+            
+            // Tenant Selector Tabs for Agent Bus
+            Row(
+              children: [
+                _buildTab('SYSTEM', 0),
+                _buildTab('KASKFLOW', 1),
+                _buildTab('MOONLITELY', 2),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: AdminColors.borderDefault, height: 1),
+            const SizedBox(height: 16),
+            
+            // Unified Agent Bus List
+            Expanded(
+              child: _buildBusList(_selectedTenantIndex == 0 
+                  ? systemBus 
+                  : _selectedTenantIndex == 1 ? kaskflowBus : moonlitelyBus),
+            ),
           ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "f2e3d4c5-b6a7-4870-891a-c7d5b4e3f2a1",
-      "name": "Payload Filter",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1152,
-        912
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"systemInstruction\": { \"parts\": [ { \"text\": \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" } ] }, \"contents\": [ { \"parts\": [ { \"text\": \"File Path: \" + $json.filePath + \"\\n\\nReason: \" + $json.reason + \"\\n\\nCode:\\n\" + $json.fileContent } ] } ] } }}",
-        "options": {}
-      },
-      "id": "gemini-code-fixer-node",
-      "name": "Gemini Code Fixer",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1360,
-        800
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "NyCBf5o0sZZnldfu",
-          "name": "Gemini API Key"
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(String label, int index) {
+    final isSelected = _selectedTenantIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTenantIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? AdminColors.emeraldGreen : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AdminColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBusList(AsyncValue<List<Map<String, dynamic>>> busAsync) {
+    return busAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return const Center(
+            child: Text('No active bus traffic.', 
+                style: TextStyle(color: AdminColors.textSecondary)),
+          );
         }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const response = $input.first().json;\nlet rawCode = '';\ntry {\n  const candidates = Reflect.get(response, 'candidates');\n  if (candidates && candidates.length > 0) {\n    const content = Reflect.get(candidates[0], 'content');\n    if (content) {\n      const parts = Reflect.get(content, 'parts');\n      if (parts && parts.length > 0) {\n        rawCode = Reflect.get(parts[0], 'text') || '';\n      }\n    }\n  }\n} catch (e) {\n  // Silent fail, rawCode defaults to ''\n}\nrawCode = rawCode.replace(/^\\x60\\x60\\x60[a-z]*\\n/i, '').replace(/\\n\\x60\\x60\\x60$/i, '').trim();\nreturn [{ json: { ...$('Automated Testing Suite').first().json, fileContent: rawCode } }];"
+        return ListView.builder(
+          itemCount: items.length,
+          itemBuilder: (context, index) => _buildProposalCard(items[index]),
+        );
       },
-      "id": "extract-gemini-code-node",
-      "name": "Extract Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1552,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst extract = $('Extract Code').first().json;\nif (suite.filePath === 'IGNORE') return [];\nconst encodedContent = Buffer.from(extract.fileContent || '').toString('base64');\nconst commitMessage = 'feat(evolution): autonomous code mutation for phase ' + suite.updated_state.current_phase + ' [skip ci]';\nreturn [{ json: { ...extract, encodedContent, commitMessage } }];"
-      },
-      "id": "prepare-mutate-payload-node",
-      "name": "Prepare Mutate Payload",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1650,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Automated Testing Suite').first().json.filePath + '?ref=develop' }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "options": {}
-      },
-      "id": "get-logic-sha",
-      "name": "Get Logic SHA",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1760,
-        800
-      ],
-      "continueOnFail": true,
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Automated Testing Suite').first().json.filePath }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ Object.assign({ message: $('Prepare Mutate Payload').first().json.commitMessage, content: $('Prepare Mutate Payload').first().json.encodedContent, branch: 'develop' }, $('Get Logic SHA').first().json.sha ? { sha: $('Get Logic SHA').first().json.sha } : {}) }}",
-        "options": {}
-      },
-      "id": "mutate-logic-http",
-      "name": "GitHub: Mutate Logic",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        1960,
-        800
-      ],
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "amount": 2,
-        "unit": "seconds"
-      },
-      "id": "d6e7f8a9-b1c2-4870-891a-b3c5d4e2f1a6",
-      "name": "Sync Wait",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [
-        2160,
-        800
-      ],
-      "webhookId": "d8f6ca36-baf8-4b7d-8032-f4def3f04538"
-    },
-    {
-      "parameters": {
-        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst encodedContent = Buffer.from(JSON.stringify(suite.updated_state, null, 2)).toString('base64');\nconst commitMessage = 'chore(orchestration): promote phase ' + suite.updated_state.current_phase + ' to STABLE [skip ci]';\nreturn [{ json: { encodedContent, commitMessage } }];"
-      },
-      "id": "prepare-state-payload-node",
-      "name": "Prepare State Payload",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        2260,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=develop",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "options": {}
-      },
-      "id": "get-state-sha",
-      "name": "Get State SHA",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        2360,
-        800
-      ],
-      "continueOnFail": true,
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ Object.assign({ message: $('Prepare State Payload').first().json.commitMessage, content: $('Prepare State Payload').first().json.encodedContent, branch: 'develop' }, $('Get State SHA').first().json.sha ? { sha: $('Get State SHA').first().json.sha } : {}) }}",
-        "options": {}
-      },
-      "id": "update-state-http",
-      "name": "GitHub: Update State",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        2560,
-        800
-      ],
-      "credentials": {
-        "githubApi": {
-          "id": "6OSt2bN1T5JeIKvt",
-          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "rules": {
-          "values": [
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $('Automated Testing Suite').first().json.is_proposal }}",
-                    "rightValue": true,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "equals"
-                    }
-                  }
-                ]
+      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+      error: (e, _) => Center(child: Text('Bus Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+    );
+  }
+
+  Widget _buildProposalCard(Map<String, dynamic> data) {
+    final Map<String, dynamic> manifest = data['payload']?['manifest'] != null 
+        ? Map<String, dynamic>.from(data['payload']['manifest'])
+        : {};
+    final status = data['status'] ?? 'unknown';
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AdminColors.slateDarkest,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.hub_rounded, color: AdminColors.emeraldGreen, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  manifest['reason']?.toString() ?? 'Autonomous Proposal',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Target: ${manifest['targetPath']?.toString() ?? 'Unknown'}',
+                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                status.toString().toUpperCase(),
+                style: const TextStyle(
+                  color: AdminColors.emeraldGreen,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                data['correlation_id']?.toString() ?? '',
+                style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.5), fontSize: 10),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTestInjectModal(BuildContext context) {
+    final TextEditingController pathController = TextEditingController(text: 'lib/features/triage_hub/widgets/system_status_banner.dart');
+    final TextEditingController reasonController = TextEditingController(text: "Update status string to 'AWAITING TELEMETRY' and color to orangeAccent.");
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AdminColors.slateDark,
+        title: const Text('Manual Logic Injection', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: pathController,
+              decoration: const InputDecoration(labelText: 'Target Path', labelStyle: TextStyle(color: AdminColors.textSecondary)),
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Instructions', labelStyle: TextStyle(color: AdminColors.textSecondary)),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(superadminRepositoryProvider).injectTestPayload(
+                targetPath: pathController.text,
+                instructions: reasonController.text,
+              );
+              if (mounted) {
+                // ignore: use_build_context_synchronously
+                Navigator.pop(dialogContext);
               }
             },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "typeValidation": "strict"
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $('Automated Testing Suite').first().json.is_proposal }}",
-                    "rightValue": false,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "equals"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "e8f7a6b5-c4d3-4170-8b9a-e1f2d3c5b4a6",
-      "name": "Proposal Closure Check",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [
-        2760,
-        900
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\" }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"fields\": { \"status\": { \"stringValue\": \"PROMOTED\" }, \"hbrId\": { \"stringValue\": $('Automated Testing Suite').first().json.hbrId || \"\" }, \"buildId\": { \"stringValue\": $('Automated Testing Suite').first().json.buildId || \"\" }, \"phase\": { \"stringValue\": $('Automated Testing Suite').first().json.updated_state.current_phase || \"\" } } } }}",
-        "options": {}
-      },
-      "id": "c1d2e3f4-a5b6-4870-981a-b7c6d5e4f3a2",
-      "name": "Trigger Firestore Closure",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        2960,
-        800
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"text\": $('Automated Testing Suite').first().json.notification_text + \"\\nlocal2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop) ⮕ local2local-\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'prod' : 'dev') + \" (develop)\" } }}",
-        "options": {}
-      },
-      "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
-      "name": "Final Alert",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        3160,
-        900
-      ]
-    }
-  ],
-  "pinData": {
-    "Approval Listener": [
-      {
-        "json": {
-          "headers": {
-            "host": "local2local.app.n8n.cloud",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Mobile/15E148 Safari/604.1",
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "accept-encoding": "gzip, br",
-            "accept-language": "en-US,en;q=0.9",
-            "cdn-loop": "cloudflare; loops=1; subreqs=1",
-            "cf-connecting-ip": "2a09:bac3:13c0:2b4::45:10a",
-            "cf-ew-via": "15",
-            "cf-ipcountry": "CA",
-            "cf-ray": "9f2004269ecc5a49-YVR",
-            "cf-visitor": "{\"scheme\":\"https\"}",
-            "cf-worker": "n8n.cloud",
-            "priority": "u=0, i",
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "none",
-            "x-forwarded-for": "2a09:bac3:13c0:2b4::45:10a, 162.159.102.17",
-            "x-forwarded-host": "local2local.app.n8n.cloud",
-            "x-forwarded-port": "443",
-            "x-forwarded-proto": "https",
-            "x-forwarded-server": "traefik-prod-users-gwc-74-6649cf98c6-cf6pz",
-            "x-is-trusted": "yes",
-            "x-real-ip": "2a09:bac3:13c0:2b4::45:10a"
-          },
-          "params": {},
-          "query": {
-            "action": "approve",
-            "env": "develop",
-            "build_id": "24939616732",
-            "phase": "43.1.4",
-            "hbrId": "undefined"
-          },
-          "webhookUrl": "https://local2local.app.n8n.cloud/webhook/approve-promotion",
-          "executionMode": "production"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
-  "connections": {
-    "MCP Code Payload": {
-      "main": [
-        [
-          {
-            "node": "Fetch Main State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Main State": {
-      "main": [
-        [
-          {
-            "node": "State Manager",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "State Manager": {
-      "main": [
-        [
-          {
-            "node": "Fetch System Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch System Status": {
-      "main": [
-        [
-          {
-            "node": "Throttling Evaluator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttling Evaluator": {
-      "main": [
-        [
-          {
-            "node": "Throttle Switch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttle Switch": {
-      "main": [
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
+            child: const Text('INJECT'),
+          ),
         ],
-        [
-          {
-            "node": "Throttle Wait",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Blocked Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Throttle Wait": {
-      "main": [
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Approval Listener": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Proposal Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Proposal Data": {
-      "main": [
-        [
-          {
-            "node": "Log Scraper",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Scraper": {
-      "main": [
-        [
-          {
-            "node": "Fetch Latest State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Latest State": {
-      "main": [
-        [
-          {
-            "node": "Automated Testing Suite",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Automated Testing Suite": {
-      "main": [
-        [
-          {
-            "node": "Payload Filter",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Payload Filter": {
-      "main": [
-        [
-          {
-            "node": "Gemini Code Fixer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Prepare State Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini Code Fixer": {
-      "main": [
-        [
-          {
-            "node": "Extract Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Code": {
-      "main": [
-        [
-          {
-            "node": "Prepare Mutate Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Mutate Payload": {
-      "main": [
-        [
-          {
-            "node": "Get Logic SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Logic SHA": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Mutate Logic",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GitHub: Mutate Logic": {
-      "main": [
-        [
-          {
-            "node": "Sync Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sync Wait": {
-      "main": [
-        [
-          {
-            "node": "Prepare State Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare State Payload": {
-      "main": [
-        [
-          {
-            "node": "Get State SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get State SHA": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Update State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GitHub: Update State": {
-      "main": [
-        [
-          {
-            "node": "Proposal Closure Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Proposal Closure Check": {
-      "main": [
-        [
-          {
-            "node": "Trigger Firestore Closure",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Trigger Firestore Closure": {
-      "main": [
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error Trigger": {
-      "main": [
-        [
-          {
-            "node": "Error Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true
+      ),
+    );
   }
 }
 L2LAAF_BLOCK_END */

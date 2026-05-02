@@ -1,0 +1,12 @@
+Analyzing local2local...                                        
+
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/triage_hub/data/superadmin_repository.dart:34:68 • unnecessary_null_comparison
+warning • The operand can't be 'null', so the condition is always 'true' • lib/features/triage_hub/data/superadmin_repository.dart:49:40 • unnecessary_null_comparison
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/pages/superadmin_dashboard.dart:52:55 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/pages/superadmin_dashboard.dart:192:67 • deprecated_member_use
+   info • Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check • lib/features/triage_hub/pages/superadmin_dashboard.dart:235:42 • use_build_context_synchronously
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/widgets/system_status_banner.dart:23:26 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/widgets/system_status_banner.dart:24:45 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/widgets/system_status_banner.dart:47:38 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/triage_hub/widgets/system_status_banner.dart:61:32 • deprecated_member_use
+

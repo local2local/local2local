@@ -1,1 +1,1 @@
-43.1.36 - FIX(orchestration): Append [skip ci] to orchestrator commit messages to prevent recursive GitHub Actions pipeline triggers
+[ASSISTED] FEAT(superadmin): Phase 44 dashboard [BUMP: MAJOR]

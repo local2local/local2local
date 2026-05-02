@@ -1,268 +1,243 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
-import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
+import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
+import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
 
-final _agentBusProvider = StreamProvider.autoDispose.family<List<QueryDocumentSnapshot>, String>((ref, appId) {
-  return FirebaseFirestore.instance
-      .collection('artifacts')
-      .doc(appId)
-      .collection('public')
-      .doc('data')
-      .collection('agent_bus')
-      .snapshots()
-      .map((snapshot) => snapshot.docs);
-});
-
-class SuperadminDashboard extends ConsumerWidget {
+class SuperadminDashboard extends ConsumerStatefulWidget {
   const SuperadminDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final env = ref.watch(environmentProvider);
-    final busAsync = ref.watch(_agentBusProvider(env.projectId));
+  ConsumerState<SuperadminDashboard> createState() => _SuperadminDashboardState();
+}
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Superadmin Command Center',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-                  final doc = FirebaseFirestore.instance
-                      .collection('artifacts')
-                      .doc(env.projectId)
-                      .collection('public')
-                      .doc('data')
-                      .collection('agent_bus')
-                      .doc();
-                      
-                  final String currentBannerCode = r'''import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-
-class SystemStatusBanner extends ConsumerWidget {
-  const SystemStatusBanner({super.key});
+class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
+  int _selectedTenantIndex = 0;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // TODO: Connect to your actual StreamProvider for telemetry status
-    // For now, mocked to Green/Stable as requested in Phase 42 UI setup
-    const String status = 'STABLE'; 
-    const Color color = AdminColors.emeraldGreen;
+  Widget build(BuildContext context) {
+    final systemBus = ref.watch(systemAgentBusProvider);
+    final kaskflowBus = ref.watch(kaskflowAgentBusProvider);
+    final moonlitelyBus = ref.watch(moonlitelyAgentBusProvider);
 
+    return Scaffold(
+      backgroundColor: AdminColors.slateDarkest,
+      body: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Superadmin Dashboard',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _showTestInjectModal(context),
+                  icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+                  label: const Text('Test Inject'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AdminColors.slateDark,
+                    foregroundColor: AdminColors.emeraldGreen,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    side: BorderSide(
+                      color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            
+            const SystemStatusBanner(),
+            const SizedBox(height: 40),
+            
+            // Tenant Selector Tabs for Agent Bus
+            Row(
+              children: [
+                _buildTab('SYSTEM', 0),
+                _buildTab('KASKFLOW', 1),
+                _buildTab('MOONLITELY', 2),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: AdminColors.borderDefault, height: 1),
+            const SizedBox(height: 16),
+            
+            // Unified Agent Bus List
+            Expanded(
+              child: _buildBusList(_selectedTenantIndex == 0 
+                  ? systemBus 
+                  : _selectedTenantIndex == 1 ? kaskflowBus : moonlitelyBus),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(String label, int index) {
+    final isSelected = _selectedTenantIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTenantIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? AdminColors.emeraldGreen : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AdminColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBusList(AsyncValue<List<Map<String, dynamic>>> busAsync) {
+    return busAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return const Center(
+            child: Text('No active bus traffic.', 
+                style: TextStyle(color: AdminColors.textSecondary)),
+          );
+        }
+        return ListView.builder(
+          itemCount: items.length,
+          itemBuilder: (context, index) => _buildProposalCard(items[index]),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
+      error: (e, _) => Center(child: Text('Bus Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+    );
+  }
+
+  Widget _buildProposalCard(Map<String, dynamic> data) {
+    final Map<String, dynamic> manifest = data['payload']?['manifest'] != null 
+        ? Map<String, dynamic>.from(data['payload']['manifest'])
+        : {};
+    final status = data['status'] ?? 'unknown';
+    
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1), // Flutter 3.27 compliant
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(12),
+        color: AdminColors.slateDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle_rounded, color: color, size: 28),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AdminColors.slateDarkest,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.hub_rounded, color: AdminColors.emeraldGreen, size: 20),
+          ),
           const SizedBox(width: 16),
-          const Text(
-            'TELEMETRY HEALTH: $status',
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              letterSpacing: 1.2,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  manifest['reason']?.toString() ?? 'Autonomous Proposal',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Target: ${manifest['targetPath']?.toString() ?? 'Unknown'}',
+                  style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12),
+                ),
+              ],
             ),
           ),
-          const Spacer(),
-          Text(
-            'Code modifications permitted',
-            style: TextStyle(
-              color: color.withValues(alpha: 0.8),
-              fontSize: 12,
-            ),
-          )
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                status.toString().toUpperCase(),
+                style: const TextStyle(
+                  color: AdminColors.emeraldGreen,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                data['correlation_id']?.toString() ?? '',
+                style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.5), fontSize: 10),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
-}''';
-                  
-                  await doc.set({
-                    "status": "dispatched",
-                    "correlation_id": "TEST-LIVE-$timestamp",
-                    "payload": {
-                      "manifest": {
-                        "intent": "PROPOSE_LOGIC_CHANGE",
-                        "hbrId": "HBR-LIVE-$timestamp",
-                        "agentId": "TEST_BOT_ORCHESTRATOR",
-                        "reason": "Update the status string to 'AWAITING TELEMETRY', change the color variable to AdminColors.statusWarning, and change the icon to Icons.warning_rounded.",
-                        "proposedLogic": currentBannerCode,
-                        "targetPath": "lib/features/triage_hub/widgets/system_status_banner.dart"
-                      }
-                    }
-                  });
-                  
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Live UI Mutation Payload injected into Agent Bus!'),
-                        backgroundColor: AdminColors.emeraldGreen,
-                        behavior: SnackBarBehavior.floating,
-                      )
-                    );
-                  }
-                },
-                icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
-                label: const Text('Test Inject'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AdminColors.slateDark,
-                  foregroundColor: AdminColors.emeraldGreen,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  side: BorderSide(
-                    color: AdminColors.emeraldGreen.withValues(alpha: 0.5),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          const SystemStatusBanner(),
-          const SizedBox(height: 40),
-          const Text(
-            'AGENT BUS (ACTIVE PROPOSALS)',
-            style: TextStyle(
-              color: AdminColors.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: AdminColors.borderDefault, height: 1),
-          const SizedBox(height: 16),
-          Expanded(
-            child: busAsync.when(
-              data: (docs) {
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "No active proposals in the Agent Bus.", 
-                      style: TextStyle(color: AdminColors.textSecondary, fontSize: 16)
-                    )
-                  );
-                }
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    final correlationId = data['correlation_id'] ?? 'Unknown ID';
-                    final status = data['status'] ?? 'pending';
-                    final payload = data['payload'] as Map<String, dynamic>? ?? {};
-                    final manifest = payload['manifest'] as Map<String, dynamic>? ?? {};
-                    
-                    final intent = manifest['intent'] ?? 'UNKNOWN_INTENT';
-                    final reason = manifest['reason'] ?? 'No reason provided.';
-                    final targetPath = manifest['targetPath'] ?? 'N/A';
 
-                    final isPromoted = status.toString().toUpperCase() == 'PROMOTED';
-                    final accentColor = isPromoted ? AdminColors.emeraldGreen : AdminColors.statusInfo;
+  void _showTestInjectModal(BuildContext context) {
+    final TextEditingController pathController = TextEditingController(text: 'lib/features/triage_hub/widgets/system_status_banner.dart');
+    final TextEditingController reasonController = TextEditingController(text: "Update status string to 'AWAITING TELEMETRY' and color to orangeAccent.");
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AdminColors.slateDark,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isPromoted ? accentColor.withValues(alpha: 0.3) : AdminColors.borderDefault,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isPromoted ? Icons.check_circle : Icons.memory, 
-                                    color: accentColor,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    intent,
-                                    style: const TextStyle(color: AdminColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: accentColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: accentColor.withValues(alpha: 0.5),
-                                    width: 1,
-                                  )
-                                ),
-                                child: Text(
-                                  status.toString().toUpperCase(),
-                                  style: TextStyle(
-                                    color: accentColor,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(reason, style: const TextStyle(color: AdminColors.textSecondary, fontSize: 15, height: 1.4)),
-                          const SizedBox(height: 16),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: AdminColors.slateDarkest,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("ID: $correlationId", style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11, fontFamily: 'monospace')),
-                                const SizedBox(height: 4),
-                                Text("TARGET: $targetPath", style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12, fontFamily: 'monospace')),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-              error: (e, s) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AdminColors.slateDark,
+        title: const Text('Manual Logic Injection', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: pathController,
+              decoration: const InputDecoration(labelText: 'Target Path', labelStyle: TextStyle(color: AdminColors.textSecondary)),
+              style: const TextStyle(color: Colors.white),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Instructions', labelStyle: TextStyle(color: AdminColors.textSecondary)),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () async {
+              await ref.read(superadminRepositoryProvider).injectTestPayload(
+                targetPath: pathController.text,
+                instructions: reasonController.text,
+              );
+              if (mounted) {
+                // ignore: use_build_context_synchronously
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('INJECT'),
           ),
         ],
       ),
