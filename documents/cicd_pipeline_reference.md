@@ -277,3 +277,27 @@ The DEV orchestrator checks the system telemetry document before posting a HITL 
 | `RED` | Deployment blocked — `Blocked Chat Card` posted instead |
 
 Telemetry is written by the `telemetryAggregator` Cloud Function based on live error rates in `local2local-prod`.
+
+---
+
+## Automated Testing Suite
+
+The n8n orchestrator runs an automated testing suite after each deployment before presenting the HITL card. This runs as the `Automated Testing Suite` node in the DEV workflow and checks the following:
+
+### Log Scraper
+Queries Google Cloud Logs for `EXCEPTION` or `ERROR` strings in the `local2local-dev` project in the period immediately following deployment. If errors are found, they are surfaced in the HITL card's Throttle Evaluation field and can influence the gate decision. The Log Scraper does not block the HITL card from appearing — it informs the operator's decision.
+
+### Firestore Integrity
+Verifies that new documents in the `orders` collection follow the `snake_case` field naming convention. A naming violation is flagged in the audit output.
+
+### Auth Claims Check
+For changes that affect authentication or user roles, verifies that `superadmin: true` is present in the custom claims of the designated test user.
+
+### Evolution Engine Checks (Autonomous method only)
+When a change originates from an autonomous agent (`[AUTO]`), two additional checks run:
+
+- **Memory Check** — verifies that `COMMIT_PROPOSAL` successfully wrote to the `lessons_learned` collection in `local2local-internal`
+- **Mutex Verification** — confirms that `logic_locks` entries are automatically released after n8n confirms a successful deploy
+
+### Audit result
+The audit result flows into the `Action Gate` node. A passing audit routes to the HITL card. A failing audit is surfaced in the Throttle Evaluation field of the card — the operator can still promote or decline, but the card makes the audit result visible.
