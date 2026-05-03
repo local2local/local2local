@@ -16,6 +16,7 @@
         "go_router",
         "google_fonts",
         "http",
+        "intl",
         "provider",
         "url_launcher"
       ],
@@ -189,6 +190,15 @@
         "meta",
         "sky_engine",
         "vector_math"
+      ]
+    },
+    {
+      "name": "intl",
+      "version": "0.20.2",
+      "dependencies": [
+        "clock",
+        "meta",
+        "path"
       ]
     },
     {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/date_symbol_data_local.dart';
 import 'dart:convert';
 import 'package:local2local/core/app.dart';
 import 'package:local2local/firebase_options.dart';
@@ -34,6 +35,9 @@ Future<void> sendErrorToAgentBus(String error, String stackTrace, bool isFatal) 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize date formatting for intl package
+  await initializeDateFormatting();
 
   // --- L2LAAF GLOBAL ERROR CATCHERS ---
   // Catch synchronous Flutter framework errors
