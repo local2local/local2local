@@ -13,20 +13,23 @@ class SystemStatusBanner extends ConsumerWidget {
 
     return statusAsync.when(
       data: (status) {
-        final Color color = _getStatusColor(status);
-        final IconData icon = _getStatusIcon(status);
+        final statusColor = _getStatusColor(status);
+        final statusIcon = _getStatusIcon(status);
+        final backgroundColor = _getBackgroundColor(status);
+        final borderColor = _getBorderColor(status);
 
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-            borderRadius: BorderRadius.circular(12),
+            color: backgroundColor,
+            border: Border(
+              left: BorderSide(color: borderColor, width: 4),
+            ),
           ),
           child: Row(
             children: [
-              Icon(icon, color: color, size: 28),
+              Icon(statusIcon, color: statusColor, size: 28),
               const SizedBox(width: 16),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,7 +37,7 @@ class SystemStatusBanner extends ConsumerWidget {
                   Text(
                     'TELEMETRY HEALTH: $status',
                     style: TextStyle(
-                      color: color,
+                      color: statusColor,
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
                       letterSpacing: 1.2,
@@ -43,8 +46,8 @@ class SystemStatusBanner extends ConsumerWidget {
                   versionAsync.when(
                     data: (v) => Text(
                       'CORE VERSION: $v',
-                      style: TextStyle(
-                        color: color.withValues(alpha: 0.7),
+                      style: const TextStyle(
+                        color: AdminColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -56,12 +59,12 @@ class SystemStatusBanner extends ConsumerWidget {
               ),
               const Spacer(),
               Text(
-                status == 'RED' ? 'DEPLOYMENTS LOCKED' : 'Code modifications permitted',
+                _getStatusMessage(status),
                 style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
+                  color: statusColor,
                   fontSize: 12,
                 ),
-              )
+              ),
             ],
           ),
         );
@@ -76,24 +79,57 @@ class SystemStatusBanner extends ConsumerWidget {
       case 'GREEN':
         return AdminColors.emeraldGreen;
       case 'YELLOW':
-        return Colors.orangeAccent;
+        return AdminColors.statusWarning;
       case 'RED':
         return AdminColors.rubyRed;
       default:
-        return AdminColors.textSecondary;
+        return AdminColors.slateLight;
     }
   }
 
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'GREEN':
-        return Icons.check_circle_rounded;
+        return Icons.check_circle;
       case 'YELLOW':
-        return Icons.warning_rounded;
+        return Icons.warning;
       case 'RED':
-        return Icons.dangerous_rounded;
+        return Icons.error;
       default:
-        return Icons.help_outline_rounded;
+        return Icons.help_outline;
+    }
+  }
+
+  Color _getBackgroundColor(String status) {
+    if (status == 'RED') {
+      return AdminColors.rubyRed.withValues(alpha: 0.08);
+    }
+    return AdminColors.slateDark;
+  }
+
+  Color _getBorderColor(String status) {
+    switch (status) {
+      case 'GREEN':
+        return AdminColors.emeraldGreen;
+      case 'YELLOW':
+        return AdminColors.statusWarning;
+      case 'RED':
+        return AdminColors.rubyRed;
+      default:
+        return AdminColors.slateLight;
+    }
+  }
+
+  String _getStatusMessage(String status) {
+    switch (status) {
+      case 'GREEN':
+        return 'Code modifications permitted';
+      case 'YELLOW':
+        return 'System operating below standard — limit deployment change rate';
+      case 'RED':
+        return 'Code blocked by orchestrator — chat override required to bypass';
+      default:
+        return 'Status unknown';
     }
   }
 }

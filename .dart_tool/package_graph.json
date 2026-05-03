@@ -5,7 +5,7 @@
   "packages": [
     {
       "name": "local2local",
-      "version": "43.1.72",
+      "version": "44.0.0",
       "dependencies": [
         "cloud_firestore",
         "cupertino_icons",
