@@ -18,7 +18,8 @@ class AgentBusViewer extends ConsumerStatefulWidget {
   ConsumerState<AgentBusViewer> createState() => _AgentBusViewerState();
 }
 
-class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
+class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
+    with SingleTickerProviderStateMixin {
   int _selectedTenantIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -29,9 +30,36 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   String? _activeCorrelationId;
   final Set<String> _expandedCards = {};
 
+  // Streaming/Static mode state (per-tab)
+  final Map<int, bool> _isStreamingByTab = {0: true, 1: true, 2: true};
+  final Map<int, List<Map<String, dynamic>>> _snapshotByTab = {0: [], 1: [], 2: []};
+  final Map<int, int> _newDocsByTab = {0: 0, 1: 0, 2: 0};
+  final Map<int, int> _currentPageByTab = {0: 0, 1: 0, 2: 0};
+  static const int _pageSize = 50;
+
+  // Timestamp range filter (per-tab, only active in static mode)
+  final Map<int, DateTime?> _filterFromByTab = {0: null, 1: null, 2: null};
+  final Map<int, DateTime?> _filterToByTab = {0: null, 1: null, 2: null};
+  final Map<int, String?> _activeTimePresetByTab = {0: null, 1: null, 2: null};
+
+  // Animation controller for pulsing LIVE indicator
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(_pulseController);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -60,6 +88,22 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
       if (_matchCorrelationId && _activeCorrelationId != null) {
         final correlationId = item['correlation_id']?.toString() ?? '';
         if (correlationId != _activeCorrelationId) return false;
+      }
+
+      // Timestamp range filter (only in static mode)
+      final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+      final filterFrom = _filterFromByTab[_selectedTenantIndex];
+      final filterTo = _filterToByTab[_selectedTenantIndex];
+      if (!isStreaming && (filterFrom != null || filterTo != null)) {
+        final itemTimestamp = _extractItemTimestamp(item);
+        if (itemTimestamp == null) return false;
+        
+        if (filterFrom != null && itemTimestamp.isBefore(filterFrom)) {
+          return false;
+        }
+        if (filterTo != null && itemTimestamp.isAfter(filterTo)) {
+          return false;
+        }
       }
 
       // Search filter
@@ -133,6 +177,38 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
     });
 
     return filtered;
+  }
+
+  /// Extracts the timestamp from an item for filtering.
+  /// Uses telemetry.processed_at if present, otherwise created_at.
+  DateTime? _extractItemTimestamp(Map<String, dynamic> item) {
+    final telemetry = item['telemetry'] as Map<String, dynamic>? ?? {};
+    final processedAt = telemetry['processed_at'];
+    final createdAt = item['created_at'];
+
+    // Try processed_at first
+    if (processedAt != null) {
+      final dt = _parseTimestampValue(processedAt);
+      if (dt != null) return dt;
+    }
+
+    // Fall back to created_at
+    if (createdAt != null) {
+      return _parseTimestampValue(createdAt);
+    }
+
+    return null;
+  }
+
+  /// Parses a timestamp value to DateTime.
+  /// Handles Firestore Timestamp and ISO 8601 strings.
+  DateTime? _parseTimestampValue(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate();
+    } else if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
   }
 
   String _getTenantCollectionPath() {
@@ -313,6 +389,28 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   @override
   Widget build(BuildContext context) {
     final busAsync = _getCurrentBusProvider();
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    final staticSnapshot = _snapshotByTab[_selectedTenantIndex] ?? [];
+    final newDocsSinceSnapshot = _newDocsByTab[_selectedTenantIndex] ?? 0;
+
+    // Track new docs when in static mode (compare by list length)
+    if (!isStreaming && staticSnapshot.isNotEmpty) {
+      busAsync.whenData((liveItems) {
+        final newCount = liveItems.length > staticSnapshot.length
+            ? liveItems.length - staticSnapshot.length
+            : 0;
+        if (newCount != newDocsSinceSnapshot) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _newDocsByTab[_selectedTenantIndex] = newCount);
+          });
+        }
+      });
+    }
+
+    // Determine which data to use
+    final effectiveBusAsync = isStreaming
+        ? busAsync
+        : AsyncValue.data(staticSnapshot);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -342,7 +440,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
           
           // Content Area
           Expanded(
-            child: _buildContent(busAsync),
+            child: _buildContent(effectiveBusAsync),
           ),
         ],
       ),
@@ -352,7 +450,10 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   Widget _buildTenantTab(String label, int index) {
     final isSelected = _selectedTenantIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _selectedTenantIndex = index),
+      onTap: () => setState(() {
+        _selectedTenantIndex = index;
+        // Per-tab state is preserved; no need to reset _currentPage
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
@@ -377,9 +478,20 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   }
 
   Widget _buildToolbar() {
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Mode Control Row (above search bar)
+        _buildModeControlRow(),
+        const SizedBox(height: 12),
+        
+        // Timestamp Filter Row (only in static mode)
+        if (!isStreaming) ...[
+          _buildTimestampFilterRow(),
+          const SizedBox(height: 12),
+        ],
+        
         // Search Bar with Delete button
         Row(
           children: [
@@ -394,6 +506,534 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
         _buildFilterRow(),
       ],
     );
+  }
+
+  Widget _buildModeControlRow() {
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    final newDocsSinceSnapshot = _newDocsByTab[_selectedTenantIndex] ?? 0;
+    return Row(
+      children: [
+        // LIVE/PAUSED toggle button
+        _buildStreamingToggleButton(),
+        const SizedBox(width: 12),
+        // New docs badge and Refresh button (only visible when paused)
+        if (!isStreaming) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AdminColors.statusWarning.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              '$newDocsSinceSnapshot new since snapshot',
+              style: const TextStyle(
+                color: AdminColors.statusWarning,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: _refreshSnapshot,
+            icon: const Icon(Icons.refresh, size: 18),
+            color: AdminColors.statusWarning,
+            style: IconButton.styleFrom(
+              backgroundColor: AdminColors.statusWarning.withValues(alpha: 0.15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+                side: BorderSide(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
+              ),
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+            ),
+            tooltip: 'Refresh snapshot',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTimestampFilterRow() {
+    final filterFrom = _filterFromByTab[_selectedTenantIndex];
+    final filterTo = _filterToByTab[_selectedTenantIndex];
+    final hasActiveFilter = filterFrom != null || filterTo != null;
+    
+    return Row(
+      children: [
+        // Quick preset chips in horizontal scroll
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildTimePresetChip('Last 15 min', 'last15min', const Duration(minutes: 15)),
+                const SizedBox(width: 8),
+                _buildTimePresetChip('Last hour', 'lastHour', const Duration(hours: 1)),
+                const SizedBox(width: 8),
+                _buildTimePresetChip('Last 24h', 'last24h', const Duration(hours: 24)),
+                const SizedBox(width: 8),
+                _buildCustomTimeChip(),
+              ],
+            ),
+          ),
+        ),
+        // Clear button (only visible when filter is active)
+        if (hasActiveFilter) ...[
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: _clearTimestampFilter,
+            icon: const Icon(Icons.close, size: 18),
+            color: AdminColors.textMuted,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(32, 32),
+              padding: EdgeInsets.zero,
+            ),
+            tooltip: 'Clear filter',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTimePresetChip(String label, String presetKey, Duration duration) {
+    final activeTimePreset = _activeTimePresetByTab[_selectedTenantIndex];
+    final isActive = activeTimePreset == presetKey;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _filterFromByTab[_selectedTenantIndex] = DateTime.now().subtract(duration);
+          _filterToByTab[_selectedTenantIndex] = null;
+          _activeTimePresetByTab[_selectedTenantIndex] = presetKey;
+          _currentPageByTab[_selectedTenantIndex] = 0;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+              : AdminColors.slateDark,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isActive
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
+                : AdminColors.borderDefault,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomTimeChip() {
+    final activeTimePreset = _activeTimePresetByTab[_selectedTenantIndex];
+    final filterFrom = _filterFromByTab[_selectedTenantIndex];
+    final filterTo = _filterToByTab[_selectedTenantIndex];
+    final isActive = activeTimePreset == null && (filterFrom != null || filterTo != null);
+    return GestureDetector(
+      onTap: _showCustomTimeRangeDialog,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+              : AdminColors.slateDark,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isActive
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
+                : AdminColors.borderDefault,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.date_range,
+              size: 14,
+              color: isActive ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isActive ? _formatCustomRange() : 'Custom',
+              style: TextStyle(
+                color: isActive ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatCustomRange() {
+    final dateFormat = DateFormat('MM/dd HH:mm');
+    final filterFrom = _filterFromByTab[_selectedTenantIndex];
+    final filterTo = _filterToByTab[_selectedTenantIndex];
+    final fromStr = filterFrom != null ? dateFormat.format(filterFrom) : '—';
+    final toStr = filterTo != null ? dateFormat.format(filterTo) : 'now';
+    return '$fromStr - $toStr';
+  }
+
+  void _clearTimestampFilter() {
+    setState(() {
+      _filterFromByTab[_selectedTenantIndex] = null;
+      _filterToByTab[_selectedTenantIndex] = null;
+      _activeTimePresetByTab[_selectedTenantIndex] = null;
+      _currentPageByTab[_selectedTenantIndex] = 0;
+    });
+  }
+
+  void _showCustomTimeRangeDialog() {
+    DateTime? tempFrom = _filterFromByTab[_selectedTenantIndex];
+    DateTime? tempTo = _filterToByTab[_selectedTenantIndex];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: AdminColors.slateDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Custom Time Range',
+                    style: TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // From DateTime Picker
+                  _buildDateTimePickerField(
+                    label: 'From',
+                    value: tempFrom,
+                    onChanged: (dt) => setDialogState(() => tempFrom = dt),
+                  ),
+                  const SizedBox(height: 16),
+                  // To DateTime Picker
+                  _buildDateTimePickerField(
+                    label: 'To',
+                    value: tempTo,
+                    onChanged: (dt) => setDialogState(() => tempTo = dt),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: AdminColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          setState(() {
+                            _filterFromByTab[_selectedTenantIndex] = tempFrom;
+                            _filterToByTab[_selectedTenantIndex] = tempTo;
+                            _activeTimePresetByTab[_selectedTenantIndex] = null; // Clear preset when using custom
+                            _currentPageByTab[_selectedTenantIndex] = 0;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AdminColors.emeraldGreen,
+                          foregroundColor: AdminColors.slateDarkest,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Apply',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimePickerField({
+    required String label,
+    required DateTime? value,
+    required ValueChanged<DateTime?> onChanged,
+  }) {
+    final dateFormat = DateFormat('yyyy-MM-dd');
+    final timeFormat = DateFormat('HH:mm');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            // Date picker button
+            Expanded(
+              child: GestureDetector(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: value ?? DateTime.now(),
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now().add(const Duration(days: 1)),
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: AdminColors.emeraldGreen,
+                          onPrimary: AdminColors.slateDarkest,
+                          surface: AdminColors.slateDark,
+                          onSurface: AdminColors.textPrimary,
+                        ),
+                        dialogTheme: DialogThemeData(
+                          backgroundColor: AdminColors.slateDark,
+                        ),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (date != null) {
+                    final existingTime = value ?? DateTime.now();
+                    onChanged(DateTime(
+                      date.year,
+                      date.month,
+                      date.day,
+                      existingTime.hour,
+                      existingTime.minute,
+                    ));
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AdminColors.slateDarkest,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AdminColors.borderDefault),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 16, color: AdminColors.textMuted),
+                      const SizedBox(width: 8),
+                      Text(
+                        value != null ? dateFormat.format(value) : 'Select date',
+                        style: TextStyle(
+                          color: value != null ? AdminColors.textPrimary : AdminColors.textMuted,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Time picker button
+            GestureDetector(
+              onTap: () async {
+                final time = await showTimePicker(
+                  context: context,
+                  initialTime: value != null
+                      ? TimeOfDay.fromDateTime(value)
+                      : TimeOfDay.now(),
+                  builder: (context, child) => Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: const ColorScheme.dark(
+                        primary: AdminColors.emeraldGreen,
+                        onPrimary: AdminColors.slateDarkest,
+                        surface: AdminColors.slateDark,
+                        onSurface: AdminColors.textPrimary,
+                      ),
+                      dialogTheme: DialogThemeData(
+                        backgroundColor: AdminColors.slateDark,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (time != null) {
+                  final existingDate = value ?? DateTime.now();
+                  onChanged(DateTime(
+                    existingDate.year,
+                    existingDate.month,
+                    existingDate.day,
+                    time.hour,
+                    time.minute,
+                  ));
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AdminColors.slateDarkest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AdminColors.borderDefault),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.access_time, size: 16, color: AdminColors.textMuted),
+                    const SizedBox(width: 8),
+                    Text(
+                      value != null ? timeFormat.format(value) : '00:00',
+                      style: TextStyle(
+                        color: value != null ? AdminColors.textPrimary : AdminColors.textMuted,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Clear button for this field
+            if (value != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: () => onChanged(null),
+                icon: const Icon(Icons.close, size: 16),
+                color: AdminColors.textMuted,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(32, 32),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStreamingToggleButton() {
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    return GestureDetector(
+      onTap: _toggleStreamingMode,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isStreaming
+              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+              : AdminColors.statusWarning.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isStreaming
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
+                : AdminColors.statusWarning.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isStreaming)
+              AnimatedBuilder(
+                animation: _pulseAnimation,
+                builder: (context, child) => Opacity(
+                  opacity: _pulseAnimation.value,
+                  child: const Text(
+                    '●',
+                    style: TextStyle(
+                      color: AdminColors.emeraldGreen,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+            else
+              const Text(
+                '⏸',
+                style: TextStyle(
+                  color: AdminColors.statusWarning,
+                  fontSize: 14,
+                ),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isStreaming ? 'LIVE' : 'PAUSED',
+              style: TextStyle(
+                color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleStreamingMode() {
+    final busAsync = _getCurrentBusProvider();
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    setState(() {
+      if (isStreaming) {
+        // Switching from LIVE to PAUSED
+        _isStreamingByTab[_selectedTenantIndex] = false;
+        // Copy current live list into static snapshot
+        busAsync.whenData((items) {
+          _snapshotByTab[_selectedTenantIndex] = List<Map<String, dynamic>>.from(items);
+        });
+        _newDocsByTab[_selectedTenantIndex] = 0;
+        _currentPageByTab[_selectedTenantIndex] = 0;
+      } else {
+        // Switching from PAUSED to LIVE
+        _isStreamingByTab[_selectedTenantIndex] = true;
+        _snapshotByTab[_selectedTenantIndex] = [];
+        _newDocsByTab[_selectedTenantIndex] = 0;
+        _currentPageByTab[_selectedTenantIndex] = 0;
+        // Reset timestamp filter when switching to streaming mode
+        _filterFromByTab[_selectedTenantIndex] = null;
+        _filterToByTab[_selectedTenantIndex] = null;
+        _activeTimePresetByTab[_selectedTenantIndex] = null;
+      }
+    });
+  }
+
+  void _refreshSnapshot() {
+    final busAsync = _getCurrentBusProvider();
+    setState(() {
+      busAsync.whenData((items) {
+        _snapshotByTab[_selectedTenantIndex] = List<Map<String, dynamic>>.from(items);
+      });
+      _newDocsByTab[_selectedTenantIndex] = 0;
+      _currentPageByTab[_selectedTenantIndex] = 0;
+    });
   }
 
   Widget _buildSearchBar() {
@@ -416,14 +1056,20 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
                   icon: const Icon(Icons.close, color: AdminColors.textMuted, size: 18),
                   onPressed: () {
                     _searchController.clear();
-                    setState(() => _searchQuery = '');
+                    setState(() {
+                      _searchQuery = '';
+                      _currentPageByTab[_selectedTenantIndex] = 0;
+                    });
                   },
                 )
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-        onChanged: (value) => setState(() => _searchQuery = value),
+        onChanged: (value) => setState(() {
+          _searchQuery = value;
+          _currentPageByTab[_selectedTenantIndex] = 0;
+        }),
       ),
     );
   }
@@ -481,7 +1127,10 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
           ],
           onChanged: (value) {
             if (value != null) {
-              setState(() => _sortField = value);
+              setState(() {
+                _sortField = value;
+                _currentPageByTab[_selectedTenantIndex] = 0;
+              });
             }
           },
         ),
@@ -527,7 +1176,10 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   Widget _buildStatusButton(String label, AgentBusStatusFilter filter) {
     final isActive = _statusFilter == filter;
     return GestureDetector(
-      onTap: () => setState(() => _statusFilter = filter),
+      onTap: () => setState(() {
+        _statusFilter = filter;
+        _currentPageByTab[_selectedTenantIndex] = 0;
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -637,6 +1289,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   }
 
   Widget _buildContent(AsyncValue<List<Map<String, dynamic>>> busAsync) {
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    final currentPage = _currentPageByTab[_selectedTenantIndex] ?? 0;
     return busAsync.when(
       data: (items) {
         final filteredItems = _filterAndSortItems(items);
@@ -648,12 +1302,44 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
             ),
           );
         }
-        return ListView.builder(
-          itemCount: filteredItems.length,
-          itemBuilder: (context, index) {
-            final item = filteredItems[index];
-            return _buildBusCard(item);
-          },
+
+        // In streaming mode, show all items without pagination
+        if (isStreaming) {
+          return ListView.builder(
+            itemCount: filteredItems.length,
+            itemBuilder: (context, index) {
+              final item = filteredItems[index];
+              return _buildBusCard(item);
+            },
+          );
+        }
+
+        // In static mode, apply pagination
+        final totalItems = filteredItems.length;
+        final totalPages = (totalItems / _pageSize).ceil();
+        final startIndex = currentPage * _pageSize;
+        final endIndex = (startIndex + _pageSize).clamp(0, totalItems);
+        final paginatedItems = filteredItems.sublist(startIndex, endIndex);
+
+        return Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                itemCount: paginatedItems.length,
+                itemBuilder: (context, index) {
+                  final item = paginatedItems[index];
+                  return _buildBusCard(item);
+                },
+              ),
+            ),
+            _buildPaginationRow(
+              currentPage: currentPage,
+              totalPages: totalPages,
+              startIndex: startIndex,
+              endIndex: endIndex,
+              totalItems: totalItems,
+            ),
+          ],
         );
       },
       loading: () => const Center(
@@ -664,6 +1350,74 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
           'Bus Error: $e',
           style: const TextStyle(color: AdminColors.rubyRed),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationRow({
+    required int currentPage,
+    required int totalPages,
+    required int startIndex,
+    required int endIndex,
+    required int totalItems,
+  }) {
+    final isFirstPage = currentPage == 0;
+    final isLastPage = currentPage >= totalPages - 1;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: AdminColors.borderDefault),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Previous button
+          IconButton(
+            onPressed: isFirstPage
+                ? null
+                : () => setState(() => _currentPageByTab[_selectedTenantIndex] = currentPage - 1),
+            icon: const Icon(Icons.chevron_left, size: 20),
+            color: AdminColors.textSecondary,
+            disabledColor: AdminColors.textMuted.withValues(alpha: 0.4),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            tooltip: 'Previous page',
+          ),
+          const SizedBox(width: 12),
+          // Page N of M
+          Text(
+            'Page ${currentPage + 1} of $totalPages',
+            style: const TextStyle(
+              color: AdminColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Next button
+          IconButton(
+            onPressed: isLastPage
+                ? null
+                : () => setState(() => _currentPageByTab[_selectedTenantIndex] = currentPage + 1),
+            icon: const Icon(Icons.chevron_right, size: 20),
+            color: AdminColors.textSecondary,
+            disabledColor: AdminColors.textMuted.withValues(alpha: 0.4),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            tooltip: 'Next page',
+          ),
+          const SizedBox(width: 24),
+          // Showing X-Y of Z results
+          Text(
+            'Showing ${startIndex + 1}–$endIndex of $totalItems results',
+            style: const TextStyle(
+              color: AdminColors.textMuted,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -956,9 +1710,9 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer> {
   Widget _buildExpandedContent(Map<String, dynamic> item) {
     final payload = item['payload'];
     final hasPayload = payload != null && 
-        (payload is! Map || (payload as Map).isNotEmpty) &&
-        (payload is! List || (payload as List).isNotEmpty) &&
-        (payload is! String || (payload as String).isNotEmpty);
+        (payload is! Map || (payload).isNotEmpty) &&
+        (payload is! List || (payload).isNotEmpty) &&
+        (payload is! String || (payload).isNotEmpty);
 
     if (!hasPayload) {
       return Container(

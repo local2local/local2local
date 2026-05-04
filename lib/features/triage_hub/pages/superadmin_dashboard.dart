@@ -17,14 +17,35 @@ class SuperadminDashboard extends ConsumerStatefulWidget {
   ConsumerState<SuperadminDashboard> createState() => _SuperadminDashboardState();
 }
 
-class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
+class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
+    with SingleTickerProviderStateMixin {
   int _selectedPhaseHistoryIndex = 0;
   final TextEditingController _phaseSearchController = TextEditingController();
   String _phaseSearchQuery = '';
 
+  // Phase History streaming/static mode state (per-tab: 0=PROMOTED, 1=ABANDONED)
+  final Map<int, bool> _phaseStreamingByTab = {0: true, 1: true};
+  final Map<int, List<Map<String, dynamic>>> _phaseSnapshotByTab = {0: [], 1: []};
+  final Map<int, int> _newPhasesByTab = {0: 0, 1: 0};
+
+  // Animation controller for pulsing LIVE indicator
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(_pulseController);
+  }
+
   @override
   void dispose() {
     _phaseSearchController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -94,14 +115,7 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Phase History',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          _buildPhaseHistoryHeader(),
                           const SizedBox(height: 16),
                           // Phase History Search Bar
                           _buildPhaseSearchBar(),
@@ -198,8 +212,32 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
   }
 
   Widget _buildPromotedPhasesList() {
+    const tabIndex = 0;
     final promotedAsync = ref.watch(promotedPhasesProvider);
-    return promotedAsync.when(
+    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
+    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
+
+    // Track new phases when in static mode
+    if (!isStreaming && snapshot.isNotEmpty) {
+      promotedAsync.whenData((liveItems) {
+        int newCount = 0;
+        if (liveItems.length > snapshot.length) {
+          newCount = liveItems.length - snapshot.length;
+        }
+        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
+          });
+        }
+      });
+    }
+
+    // Determine which data to use
+    final effectiveAsync = isStreaming
+        ? promotedAsync
+        : AsyncValue.data(snapshot);
+
+    return effectiveAsync.when(
       data: (phases) {
         if (phases.isEmpty) {
           return const Center(
@@ -226,8 +264,32 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
   }
 
   Widget _buildAbandonedPhasesList() {
+    const tabIndex = 1;
     final abandonedAsync = ref.watch(abandonedPhasesProvider);
-    return abandonedAsync.when(
+    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
+    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
+
+    // Track new phases when in static mode
+    if (!isStreaming && snapshot.isNotEmpty) {
+      abandonedAsync.whenData((liveItems) {
+        int newCount = 0;
+        if (liveItems.length > snapshot.length) {
+          newCount = liveItems.length - snapshot.length;
+        }
+        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
+          });
+        }
+      });
+    }
+
+    // Determine which data to use
+    final effectiveAsync = isStreaming
+        ? abandonedAsync
+        : AsyncValue.data(snapshot);
+
+    return effectiveAsync.when(
       data: (phases) {
         if (phases.isEmpty) {
           return const Center(
@@ -525,6 +587,128 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
     } catch (e) {
       return timestamp.toString();
     }
+  }
+
+  Widget _buildPhaseHistoryHeader() {
+    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
+    final newCount = _newPhasesByTab[_selectedPhaseHistoryIndex] ?? 0;
+
+    return Row(
+      children: [
+        const Text(
+          'Phase History',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const Spacer(),
+        _buildPhaseHistoryStreamingToggle(),
+        if (!isStreaming && newCount > 0) ...[
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AdminColors.statusWarning.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              '$newCount new since snapshot',
+              style: const TextStyle(
+                color: AdminColors.statusWarning,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPhaseHistoryStreamingToggle() {
+    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
+
+    return GestureDetector(
+      onTap: _togglePhaseHistoryStreamingMode,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isStreaming
+              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+              : AdminColors.statusWarning.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isStreaming
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
+                : AdminColors.statusWarning.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isStreaming)
+              AnimatedBuilder(
+                animation: _pulseAnimation,
+                builder: (context, child) => Opacity(
+                  opacity: _pulseAnimation.value,
+                  child: const Text(
+                    '●',
+                    style: TextStyle(
+                      color: AdminColors.emeraldGreen,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+            else
+              const Text(
+                '⏸',
+                style: TextStyle(
+                  color: AdminColors.statusWarning,
+                  fontSize: 14,
+                ),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              isStreaming ? 'LIVE' : 'PAUSED',
+              style: TextStyle(
+                color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _togglePhaseHistoryStreamingMode() {
+    final tabIndex = _selectedPhaseHistoryIndex;
+    final isCurrentlyStreaming = _phaseStreamingByTab[tabIndex] ?? true;
+
+    setState(() {
+      if (isCurrentlyStreaming) {
+        // Switching from LIVE to PAUSED for this tab
+        _phaseStreamingByTab[tabIndex] = false;
+        // Copy current live list into snapshot for this tab
+        final provider = tabIndex == 0 ? promotedPhasesProvider : abandonedPhasesProvider;
+        final asyncValue = ref.read(provider);
+        asyncValue.whenData((items) {
+          _phaseSnapshotByTab[tabIndex] = List<Map<String, dynamic>>.from(items);
+        });
+        _newPhasesByTab[tabIndex] = 0;
+      } else {
+        // Switching from PAUSED to LIVE for this tab
+        _phaseStreamingByTab[tabIndex] = true;
+        _phaseSnapshotByTab[tabIndex] = [];
+        _newPhasesByTab[tabIndex] = 0;
+      }
+    });
   }
 
   void _showTestInjectModal(BuildContext context) {
