@@ -26,6 +26,19 @@ final moonlitelyAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((r
   return ref.watch(superadminRepositoryProvider).watchAgentBus('moonlitely');
 });
 
+/// Shadow Bus Providers
+final systemShadowBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('system_status', shadow: true);
+});
+
+final kaskflowShadowBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('kaskflow', shadow: true);
+});
+
+final moonlitelyShadowBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('moonlitely', shadow: true);
+});
+
 /// Phase History Providers
 final promotedPhasesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   return ref.watch(superadminRepositoryProvider).watchPhaseHistory('promoted_phases');

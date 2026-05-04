@@ -42,6 +42,9 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
   final Map<int, DateTime?> _filterToByTab = {0: null, 1: null, 2: null};
   final Map<int, String?> _activeTimePresetByTab = {0: null, 1: null, 2: null};
 
+  // Shadow Bus toggle (per-tab)
+  final Map<int, bool> _showShadowBusByTab = {0: false, 1: false, 2: false};
+
   // Animation controller for pulsing LIVE indicator
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -64,15 +67,29 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
   }
 
   AsyncValue<List<Map<String, dynamic>>> _getCurrentBusProvider() {
-    switch (_selectedTenantIndex) {
-      case 0:
-        return ref.watch(systemAgentBusProvider);
-      case 1:
-        return ref.watch(kaskflowAgentBusProvider);
-      case 2:
-        return ref.watch(moonlitelyAgentBusProvider);
-      default:
-        return ref.watch(systemAgentBusProvider);
+    final showShadow = _showShadowBusByTab[_selectedTenantIndex] ?? false;
+    if (showShadow) {
+      switch (_selectedTenantIndex) {
+        case 0:
+          return ref.watch(systemShadowBusProvider);
+        case 1:
+          return ref.watch(kaskflowShadowBusProvider);
+        case 2:
+          return ref.watch(moonlitelyShadowBusProvider);
+        default:
+          return ref.watch(systemShadowBusProvider);
+      }
+    } else {
+      switch (_selectedTenantIndex) {
+        case 0:
+          return ref.watch(systemAgentBusProvider);
+        case 1:
+          return ref.watch(kaskflowAgentBusProvider);
+        case 2:
+          return ref.watch(moonlitelyAgentBusProvider);
+        default:
+          return ref.watch(systemAgentBusProvider);
+      }
     }
   }
 
@@ -211,16 +228,37 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     return null;
   }
 
+  /// Formats a timestamp value to "yyyy-MM-dd HH:mm MT" format.
+  /// Returns "—" if the value is absent or invalid.
+  String _formatTimestamp(dynamic value) {
+    if (value == null) return '—';
+    try {
+      DateTime dateTime;
+      if (value is Timestamp) {
+        dateTime = value.toDate();
+      } else if (value is String) {
+        dateTime = DateTime.parse(value);
+      } else {
+        return '—';
+      }
+      return '${DateFormat('yyyy-MM-dd HH:mm').format(dateTime)} MT';
+    } catch (e) {
+      return '—';
+    }
+  }
+
   String _getTenantCollectionPath() {
+    final showShadow = _showShadowBusByTab[_selectedTenantIndex] ?? false;
+    final collection = showShadow ? 'shadow_bus' : 'agent_bus';
     switch (_selectedTenantIndex) {
       case 0:
-        return 'artifacts/system_status/public/data/agent_bus';
+        return 'artifacts/system_status/public/data/$collection';
       case 1:
-        return 'artifacts/local2local_kaskflow/public/data/agent_bus';
+        return 'artifacts/local2local-kaskflow/public/data/$collection';
       case 2:
-        return 'artifacts/local2local_moonlitely/public/data/agent_bus';
+        return 'artifacts/local2local-moonlitely/public/data/$collection';
       default:
-        return 'artifacts/system_status/public/data/agent_bus';
+        return 'artifacts/system_status/public/data/$collection';
     }
   }
 
@@ -511,6 +549,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
   Widget _buildModeControlRow() {
     final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
     final newDocsSinceSnapshot = _newDocsByTab[_selectedTenantIndex] ?? 0;
+    final showShadow = _showShadowBusByTab[_selectedTenantIndex] ?? false;
     return Row(
       children: [
         // LIVE/PAUSED toggle button
@@ -551,6 +590,66 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
             tooltip: 'Refresh snapshot',
           ),
         ],
+        const Spacer(),
+        // AGENT BUS / SHADOW BUS segmented button
+        SegmentedButton<bool>(
+          segments: [
+            ButtonSegment<bool>(
+              value: false,
+              label: Text(
+                'AGENT BUS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: !showShadow ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+                ),
+              ),
+            ),
+            ButtonSegment<bool>(
+              value: true,
+              label: Text(
+                'SHADOW BUS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: showShadow ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
+          selected: {showShadow},
+          onSelectionChanged: (Set<bool> newSelection) {
+            setState(() {
+              _showShadowBusByTab[_selectedTenantIndex] = newSelection.first;
+              // Reset state when switching bus type (same as switching tabs)
+              _snapshotByTab[_selectedTenantIndex] = [];
+              _newDocsByTab[_selectedTenantIndex] = 0;
+              _currentPageByTab[_selectedTenantIndex] = 0;
+              _filterFromByTab[_selectedTenantIndex] = null;
+              _filterToByTab[_selectedTenantIndex] = null;
+              _activeTimePresetByTab[_selectedTenantIndex] = null;
+            });
+          },
+          showSelectedIcon: false,
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return AdminColors.emeraldGreen.withValues(alpha: 0.15);
+              }
+              return Colors.transparent;
+            }),
+            side: WidgetStateProperty.all(
+              const BorderSide(color: AdminColors.borderDefault),
+            ),
+            shape: WidgetStateProperty.all(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
       ],
     );
   }
@@ -1473,6 +1572,10 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
             
             // Row 4: Processed timestamp
             _buildCardRow4(processedAt),
+            const SizedBox(height: 8),
+            
+            // Row 5: Timestamp row (Created, Processed, Updated)
+            _buildTimestampRow(item),
             
             // Expanded content
             if (isExpanded) ...[
@@ -1620,6 +1723,49 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
         Flexible(
           child: _buildHighlightedText(formattedTime, baseStyle: baseStyle),
         ),
+      ],
+    );
+  }
+
+  Widget _buildTimestampRow(Map<String, dynamic> item) {
+    final createdAt = item['created_at'];
+    final telemetry = item['telemetry'] as Map<String, dynamic>? ?? {};
+    final processedAt = telemetry['processed_at'];
+    final lastUpdated = item['last_updated'];
+
+    const labelStyle = TextStyle(
+      color: AdminColors.textMuted,
+      fontSize: 10,
+    );
+    const valueStyle = TextStyle(
+      color: AdminColors.textSecondary,
+      fontSize: 10,
+      fontFamily: 'monospace',
+    );
+
+    return Row(
+      children: [
+        const Text('Created:', style: labelStyle),
+        const SizedBox(width: 4),
+        Text(_formatTimestamp(createdAt), style: valueStyle),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          width: 1,
+          height: 12,
+          color: AdminColors.borderDefault,
+        ),
+        const Text('Processed:', style: labelStyle),
+        const SizedBox(width: 4),
+        Text(_formatTimestamp(processedAt), style: valueStyle),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          width: 1,
+          height: 12,
+          color: AdminColors.borderDefault,
+        ),
+        const Text('Updated:', style: labelStyle),
+        const SizedBox(width: 4),
+        Text(_formatTimestamp(lastUpdated), style: valueStyle),
       ],
     );
   }

@@ -36,24 +36,21 @@ class SuperadminRepository {
 
   /// Streams agent bus entries from a specific tenant.
   /// Tenant values: 'system_status' | 'kaskflow' | 'moonlitely'
-  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
-
+  /// If [shadow] is true, streams from shadow_bus instead of agent_bus.
+  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant, {bool shadow = false}) {
     final artifactId = switch (tenant) {
       'kaskflow' => 'local2local-kaskflow',
       'moonlitely' => 'local2local-moonlitely',
       _ => tenant,
     };
-    final path = 'artifacts/$artifactId/public/data/agent_bus';
+    final collection = shadow ? 'shadow_bus' : 'agent_bus';
+    final path = 'artifacts/$artifactId/public/data/$collection';
     debugPrint('[AgentBus] Watching: $path');
     return _firestore
         .collection(path)
         .limit(50)
         .snapshots()
         .map((snapshot) {
-          debugPrint('[AgentBus] $tenant: ${snapshot.docs.length} docs');
-          for (final doc in snapshot.docs) {
-            debugPrint('[AgentBus] Doc ${doc.id}: ${doc.data().keys.toList()}');
-          }
           return snapshot.docs.map((doc) {
             final data = Map<String, dynamic>.from(doc.data());
             data['id'] = doc.id;
