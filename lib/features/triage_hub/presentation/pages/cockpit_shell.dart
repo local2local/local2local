@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/cockpit_header.dart';
 import 'package:local2local/features/triage_hub/presentation/widgets/hbr_lock_indicator.dart';
 import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
@@ -185,7 +186,7 @@ class _CockpitShellState extends ConsumerState<CockpitShell> {
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent)
+      SnackBar(content: Text(msg, style: const TextStyle(color: AdminColors.rubyRed)), backgroundColor: Colors.redAccent)
     );
   }
 

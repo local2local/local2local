@@ -18,12 +18,12 @@ final systemAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) 
 
 /// Unified stream for the Kaskflow Agent Bus
 final kaskflowAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_kaskflow');
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('kaskflow');
 });
 
 /// Unified stream for the Moonlitely Agent Bus
 final moonlitelyAgentBusProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return ref.watch(superadminRepositoryProvider).watchAgentBus('local2local_moonlitely');
+  return ref.watch(superadminRepositoryProvider).watchAgentBus('moonlitely');
 });
 
 /// Phase History Providers

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/admin_theme.dart';
 import '../widgets/system_status_banner.dart';
 
 final agentBusProvider = StreamProvider.autoDispose<List<QueryDocumentSnapshot>>((ref) {
@@ -165,9 +166,9 @@ class SuperadminDashboard extends ConsumerWidget {
           
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Test Payload injected into Agent Bus! Check Google Chat.'),
-                backgroundColor: Colors.green,
+              SnackBar(
+                content: const Text('Test Payload injected into Agent Bus! Check Google Chat.', style: TextStyle(color: AdminColors.emeraldGreen)),
+                backgroundColor: AdminColors.slateMedium,
                 behavior: SnackBarBehavior.floating,
               )
             );

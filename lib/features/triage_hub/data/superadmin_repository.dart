@@ -37,6 +37,7 @@ class SuperadminRepository {
   /// Streams agent bus entries from a specific tenant.
   /// Tenant values: 'system_status' | 'kaskflow' | 'moonlitely'
   Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
+
     final artifactId = switch (tenant) {
       'kaskflow' => 'local2local-kaskflow',
       'moonlitely' => 'local2local-moonlitely',

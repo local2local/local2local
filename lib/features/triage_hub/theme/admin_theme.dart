@@ -104,4 +104,24 @@ final adminDarkTheme = ThemeData(
     labelSmall: TextStyle(
         color: AdminColors.textMuted, fontSize: 11, letterSpacing: 0.5),
   ),
+
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: AdminColors.slateDark,
+    hintStyle: const TextStyle(color: AdminColors.textMuted, fontSize: 14),
+    labelStyle: const TextStyle(color: AdminColors.textSecondary, fontSize: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: AdminColors.borderDefault),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: AdminColors.borderDefault),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: AdminColors.emeraldGreen, width: 2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  ),
 );
