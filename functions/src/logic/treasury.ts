@@ -1,4 +1,5 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
@@ -14,8 +15,8 @@ export const treasuryWorkerV2 = onDocumentUpdated({
     const data = event.data?.after.data();
     if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "TREASURY_WORKER") return;
 
-    const client = new AgentBusClient({ 
-        agentId: "TREASURY_WORKER", capabilities: ["treasury_management", "payout_authorization", "reconciliation"], 
+    const client = new AgentBusClient({
+        agentId: "TREASURY_WORKER", capabilities: ["treasury_management", "payout_authorization", "reconciliation"],
         jurisdictions: ["AB"], substances: ["FINANCE"], role: "WORKER", domain: "FINANCE"
     });
     await client.register();
@@ -46,18 +47,17 @@ export const treasuryWorkerV2 = onDocumentUpdated({
                 });
             }
 
+            const now = admin.firestore.FieldValue.serverTimestamp();
             const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
             await busRef.add({
                 correlation_id: data.correlation_id,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "TREASURY_WORKER", receiver_id: "STRIPE_PROVISIONER_WORKER" },
-                payload: {
-                    manifest: {
-                        intent: "CAPTURE_FUNDS",
-                        orderId
-                    }
-                }
+                payload: { manifest: { intent: "CAPTURE_FUNDS", orderId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
 
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
@@ -72,26 +72,22 @@ export const treasuryWorkerV2 = onDocumentUpdated({
             const orderSnap = await orderRef.get();
             if (!orderSnap.exists) throw new Error("ORDER_NOT_FOUND");
 
-            // 1. Update Internal Order with the reconciliation reference
             await orderRef.update({
                 reconciliationStatus: "pending_ledger_sync",
                 "telemetry.stripe_transfer_id": stripeTransferId
             });
 
-            // 2. Chain to Xero Sync Worker to Authorize/Pay the Invoice
+            const now = admin.firestore.FieldValue.serverTimestamp();
             const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
             await busRef.add({
                 correlation_id: `reconcile-${data.correlation_id}`,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "TREASURY_WORKER", receiver_id: "XERO_SYNC_WORKER" },
-                payload: {
-                    manifest: {
-                        intent: "AUTHORIZE_INVOICE",
-                        orderId,
-                        paymentReference: stripeTransferId
-                    }
-                }
+                payload: { manifest: { intent: "AUTHORIZE_INVOICE", orderId, paymentReference: stripeTransferId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
 
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, {

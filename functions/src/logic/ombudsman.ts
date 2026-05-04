@@ -1,10 +1,11 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
 /**
  * 1. OMBUDS WORKER (Step 9.2: Dispute Triage)
- * Scans user feedback for sentiment and urgency. 
+ * Scans user feedback for sentiment and urgency.
  * Escalates high-risk issues to the Intervention Queue.
  */
 export const ombudsWorkerV2 = onDocumentUpdated({
@@ -14,8 +15,8 @@ export const ombudsWorkerV2 = onDocumentUpdated({
     const data = event.data?.after.data();
     if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "OMBUDS_WORKER") return;
 
-    const client = new AgentBusClient({ 
-        agentId: "OMBUDS_WORKER", capabilities: ["sentiment_analysis", "dispute_triage"], 
+    const client = new AgentBusClient({
+        agentId: "OMBUDS_WORKER", capabilities: ["sentiment_analysis", "dispute_triage"],
         jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "SECURITY"
     });
     await client.register();
@@ -27,11 +28,10 @@ export const ombudsWorkerV2 = onDocumentUpdated({
         if (intent === "PROCESS_FEEDBACK") {
             const angerKeywords = ["stole", "scam", "wrong", "broken", "angry", "never", "payout", "money"];
             const lowerText = (feedbackText || "").toLowerCase();
-            
             const isUrgent = angerKeywords.some(keyword => lowerText.includes(keyword)) || category === "financial";
 
             if (isUrgent) {
-                // Autonomous Escalation to Safety Worker for Intervention creation
+                const now = admin.firestore.FieldValue.serverTimestamp();
                 const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
                 await busRef.add({
                     correlation_id: data.correlation_id,
@@ -44,7 +44,10 @@ export const ombudsWorkerV2 = onDocumentUpdated({
                             severity: "critical",
                             details: `URGENT FEEDBACK from ${userId}: ${feedbackText}`
                         }
-                    }
+                    },
+                    created_at: now,
+                    last_updated: now,
+                    telemetry: { processed_at: now },
                 });
 
                 return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
@@ -53,7 +56,6 @@ export const ombudsWorkerV2 = onDocumentUpdated({
                 });
             }
 
-            // Normal Log for non-urgent feedback
             await db.collection(`artifacts/${appId}/public/data/platform_feedback`).add({
                 userId,
                 category,

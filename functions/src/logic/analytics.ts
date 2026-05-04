@@ -1,4 +1,5 @@
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
 import { db } from "../config";
 import { AgentBusClient } from "../agentBusClient";
 
@@ -11,15 +12,15 @@ export const evolutionTimelineWorkerV2 = onDocumentCreated({
     const runData = event.data?.data();
     if (!runData) return;
     const { appId } = event.params;
-    
+
     try {
         return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
             type: runData.status === "validated" ? "LOGIC_VALIDATION_SUCCESS" : "LOGIC_VALIDATION_FAILURE",
             agentId: runData.agentId,
             correlationId: runData.correlation_id,
             timestamp: runData.timestamp || new Date().toISOString(),
-            details: runData.status === "validated" 
-                ? `Agent ${runData.agentId} passed integrity checks.` 
+            details: runData.status === "validated"
+                ? `Agent ${runData.agentId} passed integrity checks.`
                 : `Critical mismatch detected in ${runData.agentId} reasoning.`,
             isAutonomous: true,
             source: "evolution_engine"
@@ -51,7 +52,7 @@ export const logisticsTimelineWorkerV2 = onDocumentUpdated({
             jobId: jobId,
             orderId: newData.orderId,
             timestamp: new Date().toISOString(),
-            details: sobrietyTriggered 
+            details: sobrietyTriggered
                 ? `Safety Protocol: Sobriety check enabled for Order ${newData.orderId}.`
                 : `Logistics Job ${jobId} transitioned to ${newData.status}.`,
             isAutonomous: false,
@@ -101,16 +102,15 @@ export const profitAnalysisWorkerV2 = onDocumentWritten({
 }, async (event) => {
     const data = event.data?.after.data();
     const prev = event.data?.before.data();
-    
-    // GUARD: Only trigger when status TRANSITIONS to dispatched
+
     if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
     if (data.provenance?.receiver_id !== "ANALYTICS_WORKER" || data.control?.type !== "REQUEST") return;
 
-    const client = new AgentBusClient({ 
-        agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"], 
-        jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "FINANCE" 
+    const client = new AgentBusClient({
+        agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"],
+        jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "FINANCE"
     }, event.params.appId);
-    
+
     await client.register();
 
     try {
@@ -122,26 +122,26 @@ export const profitAnalysisWorkerV2 = onDocumentWritten({
             const ordersSnap = await db.collection(`artifacts/${event.params.appId}/public/data/orders`).where("status", "==", "completed").get();
             let totalGMVCents = 0;
             ordersSnap.docs.forEach(doc => { totalGMVCents += (doc.data().totalCents || 0); });
-            return client.sendResponse(data.correlation_id, data.provenance.sender_id, { 
-                reportType: "PROFIT_SUMMARY", 
-                orderCount: ordersSnap.docs.length, 
-                totalGMV: (totalGMVCents / 100).toFixed(2), 
-                totalPlatformRevenue: ((totalGMVCents * 0.10) / 100).toFixed(2), 
-                currency: "CAD", 
-                timestamp: new Date().toISOString() 
+            return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                reportType: "PROFIT_SUMMARY",
+                orderCount: ordersSnap.docs.length,
+                totalGMV: (totalGMVCents / 100).toFixed(2),
+                totalPlatformRevenue: ((totalGMVCents * 0.10) / 100).toFixed(2),
+                currency: "CAD",
+                timestamp: new Date().toISOString()
             });
         }
-    } catch (error: any) { 
-        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, { 
-            code: "ANALYTICS_ERROR", 
-            message: error.message 
-        }); 
+    } catch (error: any) {
+        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, {
+            code: "ANALYTICS_ERROR",
+            message: error.message
+        });
     }
 });
 
 /**
  * 5. EFFICACY AUDIT WORKER
- * Fixed: Now uses onDocumentWritten with transition guard to support manual testing 
+ * Fixed: Now uses onDocumentWritten with transition guard to support manual testing
  * without re-triggering loops.
  */
 export const efficacyAuditWorkerV2 = onDocumentWritten({
@@ -150,13 +150,12 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
 }, async (event) => {
     const data = event.data?.after.data();
     const prev = event.data?.before.data();
-    
-    // Transition Guard: Only audit when the status HAS CHANGED to 'dispatched'
+
     if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
-    
+
     const type = data.control?.type;
     if (type !== "RESPONSE" && type !== "ERROR") return;
-    
+
     if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
     if (data.correlation_id?.startsWith("healing-")) return;
 
@@ -166,9 +165,9 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
 
     const getTime = (val: any) => {
         if (!val) return NaN;
-        if (val.toDate && typeof val.toDate === 'function') return val.toDate().getTime();
-        if (typeof val === 'string') {
-            const dateStr = val.endsWith('Z') ? val : val + 'Z';
+        if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime();
+        if (typeof val === "string") {
+            const dateStr = val.endsWith("Z") ? val : val + "Z";
             return Date.parse(dateStr);
         }
         return NaN;
@@ -197,7 +196,9 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
         const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
 
         await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
-            agentId, timestamp: new Date().toISOString(), latencyMs, performanceScore: perfScore, complianceScore, totalEfficacy, correlation_id: data.correlation_id
+            agentId, timestamp: new Date().toISOString(), latencyMs,
+            performanceScore: perfScore, complianceScore, totalEfficacy,
+            correlation_id: data.correlation_id
         });
 
         const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
@@ -209,12 +210,16 @@ export const efficacyAuditWorkerV2 = onDocumentWritten({
 
         if (totalEfficacy < 90) {
             console.log(`[SELF-HEALING_TRIGGER] Efficacy drop to ${totalEfficacy.toFixed(1)}% for ${agentId}.`);
+            const now = admin.firestore.FieldValue.serverTimestamp();
             await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "ANALYTICS_WORKER", receiver_id: "INFRASTRUCTURE_WORKER" },
-                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } }
+                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
         }
     } catch (error: any) {

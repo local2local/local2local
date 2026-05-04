@@ -1,7 +1,31 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.efficacyAuditWorkerV2 = exports.profitAnalysisWorkerV2 = exports.interventionTimelineWorkerV2 = exports.logisticsTimelineWorkerV2 = exports.evolutionTimelineWorkerV2 = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
+const admin = __importStar(require("firebase-admin"));
 const config_1 = require("../config");
 const agentBusClient_1 = require("../agentBusClient");
 exports.evolutionTimelineWorkerV2 = (0, firestore_1.onDocumentCreated)({
@@ -144,10 +168,10 @@ exports.efficacyAuditWorkerV2 = (0, firestore_1.onDocumentWritten)({
     const getTime = (val) => {
         if (!val)
             return NaN;
-        if (val.toDate && typeof val.toDate === 'function')
+        if (val.toDate && typeof val.toDate === "function")
             return val.toDate().getTime();
-        if (typeof val === 'string') {
-            const dateStr = val.endsWith('Z') ? val : val + 'Z';
+        if (typeof val === "string") {
+            const dateStr = val.endsWith("Z") ? val : val + "Z";
             return Date.parse(dateStr);
         }
         return NaN;
@@ -174,7 +198,9 @@ exports.efficacyAuditWorkerV2 = (0, firestore_1.onDocumentWritten)({
         }
         const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
         await config_1.db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
-            agentId, timestamp: new Date().toISOString(), latencyMs, performanceScore: perfScore, complianceScore, totalEfficacy, correlation_id: data.correlation_id
+            agentId, timestamp: new Date().toISOString(), latencyMs,
+            performanceScore: perfScore, complianceScore, totalEfficacy,
+            correlation_id: data.correlation_id
         });
         const registryRef = config_1.db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
         await registryRef.update({
@@ -184,12 +210,16 @@ exports.efficacyAuditWorkerV2 = (0, firestore_1.onDocumentWritten)({
         });
         if (totalEfficacy < 90) {
             console.log(`[SELF-HEALING_TRIGGER] Efficacy drop to ${totalEfficacy.toFixed(1)}% for ${agentId}.`);
+            const now = admin.firestore.FieldValue.serverTimestamp();
             await config_1.db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
                 correlation_id: `healing-${data.correlation_id}`,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "ANALYTICS_WORKER", receiver_id: "INFRASTRUCTURE_WORKER" },
-                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } }
+                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
         }
     }

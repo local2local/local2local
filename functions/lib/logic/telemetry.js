@@ -36,11 +36,9 @@ exports.ingestWebError = (0, https_1.onRequest)({ cors: true }, async (req, res)
     }
     try {
         const errorData = req.body;
+        const now = admin.firestore.FieldValue.serverTimestamp();
         const payload = {
             correlation_id: `ERR-WEB-${Date.now()}`,
-            telemetry: {
-                processed_at: new Date().toISOString()
-            },
             status: "dispatched",
             provenance: {
                 sender_id: "FLUTTER_CLIENT",
@@ -60,7 +58,10 @@ exports.ingestWebError = (0, https_1.onRequest)({ cors: true }, async (req, res)
                     platform: errorData.platform || "web",
                     client_timestamp: errorData.timestamp || new Date().toISOString()
                 }
-            }
+            },
+            created_at: now,
+            last_updated: now,
+            telemetry: { processed_at: now },
         };
         const appId = errorData.appId || "local2local-kaskflow";
         await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
@@ -79,11 +80,9 @@ exports.ingestGCPErrors = (0, pubsub_1.onMessagePublished)({
         const pubSubPayload = event.data.message.json;
         const details = pubSubPayload.textPayload || pubSubPayload.jsonPayload?.message || "Unknown GCP Error";
         const severity = pubSubPayload.severity || "ERROR";
+        const now = admin.firestore.FieldValue.serverTimestamp();
         const payload = {
             correlation_id: `ERR-GCP-${Date.now()}`,
-            telemetry: {
-                processed_at: new Date().toISOString()
-            },
             status: "dispatched",
             provenance: {
                 sender_id: "GCP_LOG_ROUTER",
@@ -104,7 +103,10 @@ exports.ingestGCPErrors = (0, pubsub_1.onMessagePublished)({
                     client_timestamp: pubSubPayload.timestamp || new Date().toISOString(),
                     resource: pubSubPayload.resource?.type || "unknown_resource"
                 }
-            }
+            },
+            created_at: now,
+            last_updated: now,
+            telemetry: { processed_at: now },
         };
         const appId = "local2local-kaskflow";
         await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
@@ -149,7 +151,7 @@ exports.telemetryAggregatorV2 = (0, scheduler_1.onSchedule)({
         else if (warningCount > 5) {
             status = "YELLOW";
         }
-        await db.doc(`artifacts/system_status/public/data/telemetry/current`).set({
+        await db.doc(`artifacts/system_status/public/data/telemetry/last_heartbeat`).set({
             status: status,
             metrics: {
                 critical_errors_5m: fatalCount,
@@ -160,7 +162,8 @@ exports.telemetryAggregatorV2 = (0, scheduler_1.onSchedule)({
                 red: "fatal > 0",
                 yellow: "warnings > 5"
             },
-            is_overridden: false
+            is_overridden: false,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
         console.log(`[SLS UPDATED] System Status is now ${status}.`);
     }

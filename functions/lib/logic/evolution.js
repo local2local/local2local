@@ -59,6 +59,7 @@ exports.ingestWebErrorV2 = (0, https_1.onRequest)({ cors: true, memory: "256MiB"
             return;
         }
         const targetAppId = appId || "local2local-kaskflow";
+        const now = admin.firestore.FieldValue.serverTimestamp();
         await db.collection("artifacts/" + targetAppId + "/public/data/agent_bus").add({
             correlation_id: "ERR-" + Date.now(),
             status: "dispatched",
@@ -71,7 +72,10 @@ exports.ingestWebErrorV2 = (0, https_1.onRequest)({ cors: true, memory: "256MiB"
                     stackTrace,
                     platform
                 }
-            }
+            },
+            created_at: now,
+            last_updated: now,
+            telemetry: { processed_at: now },
         });
         res.status(200).send({ status: "ingested" });
     }
@@ -122,11 +126,15 @@ exports.autonomousFixerV2 = (0, firestore_1.onDocumentWritten)({ document: "arti
     if (!state || state.approval_gate?.status !== "FAILED_AUDIT")
         return;
     const { appId } = event.params;
+    const now = admin.firestore.FieldValue.serverTimestamp();
     await db.collection("artifacts/" + appId + "/public/data/agent_bus").doc((0, uuid_1.v4)()).set({
         status: "dispatched",
         correlation_id: "FIX-" + Date.now(),
         provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
-        payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", details: "Self-healing protocol initiated." }
+        payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", details: "Self-healing protocol initiated." },
+        created_at: now,
+        last_updated: now,
+        telemetry: { processed_at: now },
     });
 });
 exports.evolutionProposalFinalizerV2 = (0, firestore_1.onDocumentWritten)({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event) => {

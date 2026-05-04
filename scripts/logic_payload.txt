@@ -1,121 +1,804 @@
-L2LAAF_BLOCK_START(code:repository:lib/features/triage_hub/data/superadmin_repository.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+L2LAAF_BLOCK_START(code:agentBusClient:functions/src/agentBusClient.ts)
+import * as admin from "firebase-admin";
+import { v4 as uuidv4 } from "uuid";
+const db = admin.firestore();
 
-/// Repository for Phase 44 SuperAdmin capabilities.
-/// Handles multi-tenant telemetry, versioning, and agent bus streams.
-///
-/// Firestore structure (local2local-dev):
-///   artifacts/system_status/public/data/telemetry/last_heartbeat
-///     - status: "GREEN" | "YELLOW" | "RED"
-///     - version: "vX.X.X"
-///     - bridge: string
-///     - timestamp: Timestamp
-///   artifacts/system_status/public/data/abandoned_phases/{auto-id}
-///   artifacts/system_status/public/data/promoted_phases/{auto-id}
-class SuperadminRepository {
-  final FirebaseFirestore _firestore;
+export interface AgentConfig {
+  agentId: string;
+  capabilities: string[];
+  jurisdictions: string[];
+  substances: string[];
+  role: "ORCHESTRATOR" | "WORKER";
+  domain: "COMPLIANCE" | "FINANCE" | "MARKET_DEV" | "OPS" | "INSIGHTS" | "SECURITY";
+}
 
-  SuperadminRepository(this._firestore);
+export interface AgentError {
+  code: string;
+  message: string;
+}
 
-  /// Streams the current system telemetry status (GREEN | YELLOW | RED).
-  Stream<String> watchSystemStatus() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
+export interface DispatchParams {
+  correlationId: string;
+  receiverId: string;
+  payload: Record<string, any>;
+  priority?: "normal" | "urgent" | "high" | "critical";
+  status?: "pending" | "dispatched";
+}
+
+export class AgentBusClient {
+  private config: AgentConfig;
+  private appId: string;
+
+  constructor(config: AgentConfig, tenantId?: string) {
+    this.config = config;
+    this.appId = tenantId || process.env.GCLOUD_PROJECT || "local2local-kaskflow";
   }
 
-  /// Streams the current version from the telemetry heartbeat document.
-  Stream<String> watchCurrentVersion() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['version'] as String? ?? '–');
+  async register() {
+    const registryRef = db.doc(`artifacts/${this.appId}/public/data/agent_registry/${this.config.agentId}`);
+    await registryRef.set({
+      agent_id: this.config.agentId,
+      status: { health: "green", last_heartbeat: admin.firestore.FieldValue.serverTimestamp() }
+    }, { merge: true });
   }
 
-  /// Streams agent bus entries from a specific tenant.
-  /// Tenant values: 'system_status' | 'kaskflow' | 'moonlitely'
-  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant) {
-    final artifactId = switch (tenant) {
-      'kaskflow' => 'local2local-kaskflow',
-      'moonlitely' => 'local2local-moonlitely',
-      _ => tenant,
-    };
-    final path = 'artifacts/$artifactId/public/data/agent_bus';
-    debugPrint('[AgentBus] Watching: $path');
-    return _firestore
-        .collection(path)
-        .limit(50)
-        .snapshots()
-        .map((snapshot) {
-          debugPrint('[AgentBus] $tenant: ${snapshot.docs.length} docs');
-          for (final doc in snapshot.docs) {
-            debugPrint('[AgentBus] Doc ${doc.id}: ${doc.data().keys.toList()}');
-          }
-          return snapshot.docs.map((doc) {
-            final data = Map<String, dynamic>.from(doc.data());
-            data['id'] = doc.id;
-            return data;
-          }).toList();
-        });
-  }
-
-  /// Streams phase history (promoted or abandoned).
-  /// promoted_phases sorts by promoted_at, abandoned_phases by abandoned_at.
-  Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
-    final sortField =
-        collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
-    return _firestore
-        .collection('artifacts/system_status/public/data/$collection')
-        .orderBy(sortField, descending: true)
-        .limit(10)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Map<String, dynamic>.from(doc.data()))
-            .toList());
-  }
-
-  /// Manual Payload Injection for test sequences.
-  /// Writes created_at, last_updated, and telemetry.processed_at on every write.
-  Future<void> injectTestPayload({
-    required String targetPath,
-    required String instructions,
-  }) async {
-    final timestamp = DateTime.now().toIso8601String();
-    final now = FieldValue.serverTimestamp();
-    await _firestore
-        .collection('artifacts/local2local-dev/public/data/agent_bus')
-        .add({
-      'status': 'dispatched',
-      'correlation_id':
-          'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
-      'created_at': now,
-      'last_updated': now,
-      'telemetry': {
-        'processed_at': now,
+  /// Sends a RESPONSE or ERROR message back to the originating agent.
+  /// Adds created_at, last_updated, and telemetry timestamps on every write.
+  async sendResponse(correlationId: string, receiverId: string, payload: any, error?: AgentError) {
+    const messageId = uuidv4();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection(`artifacts/${this.appId}/public/data/agent_bus`).doc(messageId).set({
+      message_id: messageId,
+      correlation_id: correlationId,
+      provenance: { sender_id: this.config.agentId, receiver_id: receiverId, app_id: this.appId },
+      control: { type: error ? "ERROR" : "RESPONSE", priority: "normal" },
+      payload: error ? { error } : { result: payload },
+      status: "intercepted",
+      created_at: now,
+      last_updated: now,
+      telemetry: {
+        processed_at: now,
+        completed_at: now,
       },
-      'payload': {
-        'manifest': {
-          'intent': 'PROPOSE_LOGIC_CHANGE',
-          'hbrId': 'HBR-DASHBOARD-TEST',
-          'agentId': 'SUPERADMIN_UI',
-          'reason': instructions,
-          'targetPath': targetPath,
-          'proposedLogic':
-              '// Manual trigger from dashboard at $timestamp',
-        }
-      }
+    });
+  }
+
+  /// Dispatches a new REQUEST message to a target agent.
+  /// Use this instead of direct Firestore writes for all outbound requests.
+  /// Adds created_at, last_updated, and telemetry timestamps on every write.
+  async dispatch(params: DispatchParams): Promise<void> {
+    const messageId = uuidv4();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await db.collection(`artifacts/${this.appId}/public/data/agent_bus`).doc(messageId).set({
+      message_id: messageId,
+      correlation_id: params.correlationId,
+      provenance: {
+        sender_id: this.config.agentId,
+        receiver_id: params.receiverId,
+        app_id: this.appId,
+      },
+      control: { type: "REQUEST", priority: params.priority || "normal" },
+      payload: params.payload,
+      status: params.status || "pending",
+      created_at: now,
+      last_updated: now,
+      telemetry: { processed_at: now },
     });
   }
 }
+L2LAAF_BLOCK_END
 
-final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
-  return SuperadminRepository(FirebaseFirestore.instance);
+L2LAAF_BLOCK_START(code:treasury:functions/src/logic/treasury.ts)
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import { db } from "../config";
+import { AgentBusClient } from "../agentBusClient";
+
+/**
+ * 1. TREASURY WORKER (Phase 11: Financial Operations)
+ * Manages the final release of funds and ledger reconciliation.
+ * Implements "Management by Exception" for high-value payouts and auto-ledgering.
+ */
+export const treasuryWorkerV2 = onDocumentUpdated({
+  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
+  memory: "512MiB"
+}, async (event) => {
+    const data = event.data?.after.data();
+    if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "TREASURY_WORKER") return;
+
+    const client = new AgentBusClient({
+        agentId: "TREASURY_WORKER", capabilities: ["treasury_management", "payout_authorization", "reconciliation"],
+        jurisdictions: ["AB"], substances: ["FINANCE"], role: "WORKER", domain: "FINANCE"
+    });
+    await client.register();
+
+    try {
+        const { intent, orderId, amountCents, stripeTransferId } = data.payload.manifest;
+        const { appId } = event.params;
+
+        // --- STEP 11.1: PAYOUT AUTHORIZATION ---
+        if (intent === "INITIATE_PAYOUT") {
+            const PAYOUT_THRESHOLD_CENTS = 100000; // $1,000.00 CAD
+
+            if (amountCents >= PAYOUT_THRESHOLD_CENTS) {
+                const interventionRef = db.collection(`artifacts/${appId}/public/data/interventions`).doc();
+                await interventionRef.set({
+                    type: "PAYOUT_APPROVAL_REQUIRED",
+                    severity: "high",
+                    orderId,
+                    amountCents,
+                    status: "active",
+                    details: `High-value payout ($${(amountCents / 100).toFixed(2)}) requires human sign-off.`,
+                    createdAt: new Date().toISOString()
+                });
+
+                return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                    status: "intervention_triggered",
+                    message: "Payout exceeds autonomous limit. Escalating to Triage Hub for human approval."
+                });
+            }
+
+            const now = admin.firestore.FieldValue.serverTimestamp();
+            const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
+            await busRef.add({
+                correlation_id: data.correlation_id,
+                status: "pending",
+                control: { type: "REQUEST", priority: "normal" },
+                provenance: { sender_id: "TREASURY_WORKER", receiver_id: "STRIPE_PROVISIONER_WORKER" },
+                payload: { manifest: { intent: "CAPTURE_FUNDS", orderId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
+            });
+
+            return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                status: "payout_initiated",
+                message: "Autonomous payout threshold met. Processing capture."
+            });
+        }
+
+        // --- STEP 11.2: AUTONOMOUS RECONCILIATION ---
+        if (intent === "RECONCILE_LEDGER") {
+            const orderRef = db.doc(`artifacts/${appId}/public/data/orders/${orderId}`);
+            const orderSnap = await orderRef.get();
+            if (!orderSnap.exists) throw new Error("ORDER_NOT_FOUND");
+
+            await orderRef.update({
+                reconciliationStatus: "pending_ledger_sync",
+                "telemetry.stripe_transfer_id": stripeTransferId
+            });
+
+            const now = admin.firestore.FieldValue.serverTimestamp();
+            const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
+            await busRef.add({
+                correlation_id: `reconcile-${data.correlation_id}`,
+                status: "pending",
+                control: { type: "REQUEST", priority: "normal" },
+                provenance: { sender_id: "TREASURY_WORKER", receiver_id: "XERO_SYNC_WORKER" },
+                payload: { manifest: { intent: "AUTHORIZE_INVOICE", orderId, paymentReference: stripeTransferId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
+            });
+
+            return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                status: "reconciliation_dispatched",
+                message: "Stripe transfer reference linked. Xero ledger sync initiated."
+            });
+        }
+
+        throw new Error(`UNSUPPORTED_INTENT: ${intent}`);
+    } catch (error: any) {
+        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, {
+            code: "TREASURY_ERROR", message: error.message
+        });
+    }
+});
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(code:ombudsman:functions/src/logic/ombudsman.ts)
+import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import { db } from "../config";
+import { AgentBusClient } from "../agentBusClient";
+
+/**
+ * 1. OMBUDS WORKER (Step 9.2: Dispute Triage)
+ * Scans user feedback for sentiment and urgency.
+ * Escalates high-risk issues to the Intervention Queue.
+ */
+export const ombudsWorkerV2 = onDocumentUpdated({
+  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
+  memory: "512MiB"
+}, async (event) => {
+    const data = event.data?.after.data();
+    if (!data || data.status !== "dispatched" || data.provenance.receiver_id !== "OMBUDS_WORKER") return;
+
+    const client = new AgentBusClient({
+        agentId: "OMBUDS_WORKER", capabilities: ["sentiment_analysis", "dispute_triage"],
+        jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "SECURITY"
+    });
+    await client.register();
+
+    try {
+        const { intent, userId, category, feedbackText } = data.payload.manifest;
+        const { appId } = event.params;
+
+        if (intent === "PROCESS_FEEDBACK") {
+            const angerKeywords = ["stole", "scam", "wrong", "broken", "angry", "never", "payout", "money"];
+            const lowerText = (feedbackText || "").toLowerCase();
+            const isUrgent = angerKeywords.some(keyword => lowerText.includes(keyword)) || category === "financial";
+
+            if (isUrgent) {
+                const now = admin.firestore.FieldValue.serverTimestamp();
+                const busRef = db.collection(`artifacts/${appId}/public/data/agent_bus`);
+                await busRef.add({
+                    correlation_id: data.correlation_id,
+                    status: "pending",
+                    control: { type: "REQUEST", priority: "urgent" },
+                    provenance: { sender_id: "OMBUDS_WORKER", receiver_id: "SAFETY_WORKER" },
+                    payload: {
+                        manifest: {
+                            intent: "LOG_SAFETY_VIOLATION",
+                            severity: "critical",
+                            details: `URGENT FEEDBACK from ${userId}: ${feedbackText}`
+                        }
+                    },
+                    created_at: now,
+                    last_updated: now,
+                    telemetry: { processed_at: now },
+                });
+
+                return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                    status: "escalated",
+                    message: "High urgency detected. Human intervention requested."
+                });
+            }
+
+            await db.collection(`artifacts/${appId}/public/data/platform_feedback`).add({
+                userId,
+                category,
+                text: feedbackText,
+                sentiment: "neutral",
+                createdAt: new Date().toISOString()
+            });
+
+            return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                status: "logged",
+                message: "Feedback archived for review."
+            });
+        }
+
+        throw new Error(`UNSUPPORTED_INTENT: ${intent}`);
+    } catch (error: any) {
+        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, {
+            code: "OMBUDS_ERROR", message: error.message
+        });
+    }
+});
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(code:analytics:functions/src/logic/analytics.ts)
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import { db } from "../config";
+import { AgentBusClient } from "../agentBusClient";
+
+/**
+ * 1. EVOLUTION TIMELINE WORKER
+ */
+export const evolutionTimelineWorkerV2 = onDocumentCreated({
+  document: "artifacts/{appId}/public/data/shadow_runs/{runId}",
+}, async (event) => {
+    const runData = event.data?.data();
+    if (!runData) return;
+    const { appId } = event.params;
+
+    try {
+        return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
+            type: runData.status === "validated" ? "LOGIC_VALIDATION_SUCCESS" : "LOGIC_VALIDATION_FAILURE",
+            agentId: runData.agentId,
+            correlationId: runData.correlation_id,
+            timestamp: runData.timestamp || new Date().toISOString(),
+            details: runData.status === "validated"
+                ? `Agent ${runData.agentId} passed integrity checks.`
+                : `Critical mismatch detected in ${runData.agentId} reasoning.`,
+            isAutonomous: true,
+            source: "evolution_engine"
+        });
+    } catch (error) {
+        console.error(`[TIMELINE_ERROR] Shadow write failed:`, error);
+    }
+});
+
+/**
+ * 2. LOGISTICS TIMELINE WORKER
+ */
+export const logisticsTimelineWorkerV2 = onDocumentUpdated({
+    document: "artifacts/{appId}/public/data/logistics_jobs/{jobId}"
+}, async (event) => {
+    const newData = event.data?.after.data();
+    const oldData = event.data?.before.data();
+    if (!newData || !oldData) return;
+
+    const statusChanged = newData.status !== oldData.status;
+    const sobrietyTriggered = newData.requiresSobrietyCheck && !oldData.requiresSobrietyCheck;
+
+    if (!statusChanged && !sobrietyTriggered) return;
+    const { appId, jobId } = event.params;
+
+    try {
+        return db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add({
+            type: sobrietyTriggered ? "REGULATORY_CHECK_ENABLED" : "LOGISTICS_MILESTONE",
+            jobId: jobId,
+            orderId: newData.orderId,
+            timestamp: new Date().toISOString(),
+            details: sobrietyTriggered
+                ? `Safety Protocol: Sobriety check enabled for Order ${newData.orderId}.`
+                : `Logistics Job ${jobId} transitioned to ${newData.status}.`,
+            isAutonomous: false,
+            source: "logistics_orchestrator"
+        });
+    } catch (error) {
+        console.error(`[TIMELINE_ERROR] Logistics write failed:`, error);
+    }
+});
+
+/**
+ * 3. INTERVENTION TIMELINE WORKER
+ */
+export const interventionTimelineWorkerV2 = onDocumentCreated({
+    document: "artifacts/{appId}/public/data/interventions/{interventionId}"
+}, async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const { appId, interventionId } = event.params;
+
+    try {
+        const payload = {
+            type: "CRITICAL_INTERVENTION_REQUIRED",
+            interventionId: interventionId,
+            timestamp: data.createdAt || new Date().toISOString(),
+            details: data.details || "No details provided.",
+            severity: data.severity || "high",
+            isAutonomous: false,
+            source: "safety_worker",
+            correlation_id: data.correlation_id || "N/A"
+        };
+
+        await db.collection(`artifacts/${appId}/public/data/evolution_timeline`).add(payload);
+    } catch (error: any) {
+        console.error(`[TIMELINE_ERROR] Failed during intervention log:`, error.message);
+    }
+});
+
+/**
+ * 4. PROFIT ANALYSIS WORKER
+ * Hardened: Added state-transition guard to prevent infinite loops.
+ */
+export const profitAnalysisWorkerV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
+  memory: "512MiB"
+}, async (event) => {
+    const data = event.data?.after.data();
+    const prev = event.data?.before.data();
+
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+    if (data.provenance?.receiver_id !== "ANALYTICS_WORKER" || data.control?.type !== "REQUEST") return;
+
+    const client = new AgentBusClient({
+        agentId: "ANALYTICS_WORKER", capabilities: ["financial_reporting"],
+        jurisdictions: ["AB"], substances: ["DATA"], role: "WORKER", domain: "FINANCE"
+    }, event.params.appId);
+
+    await client.register();
+
+    try {
+        const manifest = data.payload?.manifest;
+        if (!manifest) throw new Error("MISSING_MANIFEST");
+
+        const { intent } = manifest;
+        if (intent === "GENERATE_PROFIT_REPORT") {
+            const ordersSnap = await db.collection(`artifacts/${event.params.appId}/public/data/orders`).where("status", "==", "completed").get();
+            let totalGMVCents = 0;
+            ordersSnap.docs.forEach(doc => { totalGMVCents += (doc.data().totalCents || 0); });
+            return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
+                reportType: "PROFIT_SUMMARY",
+                orderCount: ordersSnap.docs.length,
+                totalGMV: (totalGMVCents / 100).toFixed(2),
+                totalPlatformRevenue: ((totalGMVCents * 0.10) / 100).toFixed(2),
+                currency: "CAD",
+                timestamp: new Date().toISOString()
+            });
+        }
+    } catch (error: any) {
+        return client.sendResponse(data.correlation_id, data.provenance.sender_id, null, {
+            code: "ANALYTICS_ERROR",
+            message: error.message
+        });
+    }
+});
+
+/**
+ * 5. EFFICACY AUDIT WORKER
+ * Fixed: Now uses onDocumentWritten with transition guard to support manual testing
+ * without re-triggering loops.
+ */
+export const efficacyAuditWorkerV2 = onDocumentWritten({
+  document: "artifacts/{appId}/public/data/agent_bus/{messageId}",
+  memory: "512MiB"
+}, async (event) => {
+    const data = event.data?.after.data();
+    const prev = event.data?.before.data();
+
+    if (!data || data.status !== "dispatched" || prev?.status === "dispatched") return;
+
+    const type = data.control?.type;
+    if (type !== "RESPONSE" && type !== "ERROR") return;
+
+    if (!data.telemetry?.completed_at || !data.telemetry?.processed_at) return;
+    if (data.correlation_id?.startsWith("healing-")) return;
+
+    const { appId } = event.params;
+    const agentId = data.provenance?.sender_id;
+    if (!agentId || agentId === "ANALYTICS_WORKER") return;
+
+    const getTime = (val: any) => {
+        if (!val) return NaN;
+        if (val.toDate && typeof val.toDate === "function") return val.toDate().getTime();
+        if (typeof val === "string") {
+            const dateStr = val.endsWith("Z") ? val : val + "Z";
+            return Date.parse(dateStr);
+        }
+        return NaN;
+    };
+
+    const end = getTime(data.telemetry?.completed_at);
+    const start = getTime(data.telemetry?.processed_at);
+
+    if (isNaN(start) || isNaN(end)) return;
+    const latencyMs = end - start;
+
+    try {
+        const BASELINE_MS = 5000;
+        let perfScore = 1.0;
+        if (latencyMs > BASELINE_MS) perfScore = Math.max(0, 1 - (latencyMs - BASELINE_MS) / 15000);
+
+        let complianceScore = 1.0;
+        const errorData = data.payload?.error;
+        if (errorData) {
+            const trace = (errorData.trace || "").toLowerCase();
+            const msg = (errorData.message || "").toLowerCase();
+            if (trace.length < 20) complianceScore = 0.5;
+            if (msg.includes("unexpected") || msg.includes("unknown")) complianceScore = 0.2;
+        }
+
+        const totalEfficacy = ((complianceScore * 0.7) + (perfScore * 0.3)) * 100;
+
+        await db.collection(`artifacts/${appId}/public/data/efficacy_audit`).add({
+            agentId, timestamp: new Date().toISOString(), latencyMs,
+            performanceScore: perfScore, complianceScore, totalEfficacy,
+            correlation_id: data.correlation_id
+        });
+
+        const registryRef = db.doc(`artifacts/${appId}/public/data/agent_registry/${agentId}`);
+        await registryRef.update({
+            "status.latency_ms": latencyMs,
+            "status.current_efficacy": Number(totalEfficacy.toFixed(1)),
+            "status.last_heartbeat": new Date().toISOString()
+        });
+
+        if (totalEfficacy < 90) {
+            console.log(`[SELF-HEALING_TRIGGER] Efficacy drop to ${totalEfficacy.toFixed(1)}% for ${agentId}.`);
+            const now = admin.firestore.FieldValue.serverTimestamp();
+            await db.collection(`artifacts/${appId}/public/data/agent_bus`).add({
+                correlation_id: `healing-${data.correlation_id}`,
+                status: "pending",
+                control: { type: "REQUEST", priority: "normal" },
+                provenance: { sender_id: "ANALYTICS_WORKER", receiver_id: "INFRASTRUCTURE_WORKER" },
+                payload: { manifest: { intent: "FOLD_CONTEXT", correlationId: data.correlation_id, targetAgentId: agentId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
+            });
+        }
+    } catch (error: any) {
+        console.error("[AUDIT_ERROR]", error.message);
+    }
+});
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(code:telemetry:functions/src/logic/telemetry.ts)
+import { onRequest } from "firebase-functions/v2/https";
+import { onMessagePublished } from "firebase-functions/v2/pubsub";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import * as admin from "firebase-admin";
+
+const db = admin.firestore();
+
+export const ingestWebError = onRequest({ cors: true }, async (req, res): Promise<void> => {
+  if (req.method !== "POST") {
+    res.status(405).send({ error: "Method Not Allowed" });
+    return;
+  }
+
+  try {
+    const errorData = req.body;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const payload = {
+      correlation_id: `ERR-WEB-${Date.now()}`,
+      status: "dispatched",
+      provenance: {
+        sender_id: "FLUTTER_CLIENT",
+        receiver_id: "AUTONOMOUS_FIXER"
+      },
+      control: {
+        priority: errorData.isFatal ? "critical" : "high",
+        type: "REQUEST"
+      },
+      payload: {
+        manifest: {
+          intent: "LOG_RUNTIME_ERROR",
+          context: "RUNTIME_CRASH",
+          severity: errorData.isFatal ? "critical" : "high",
+          details: errorData.error || "Unknown Error",
+          stackTrace: errorData.stackTrace || "No stack trace provided",
+          platform: errorData.platform || "web",
+          client_timestamp: errorData.timestamp || new Date().toISOString()
+        }
+      },
+      created_at: now,
+      last_updated: now,
+      telemetry: { processed_at: now },
+    };
+
+    const appId = errorData.appId || "local2local-kaskflow";
+    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
+
+    res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
+  } catch (err: any) {
+    console.error("Failed to ingest web error:", err);
+    res.status(500).send({ error: "Internal Server Error" });
+  }
+});
+
+export const ingestGCPErrors = onMessagePublished({
+  topic: "l2laaf-gcp-errors",
+  memory: "256MiB"
+}, async (event) => {
+  try {
+    const pubSubPayload = event.data.message.json;
+    const details = pubSubPayload.textPayload || pubSubPayload.jsonPayload?.message || "Unknown GCP Error";
+    const severity = pubSubPayload.severity || "ERROR";
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const payload = {
+      correlation_id: `ERR-GCP-${Date.now()}`,
+      status: "dispatched",
+      provenance: {
+        sender_id: "GCP_LOG_ROUTER",
+        receiver_id: "AUTONOMOUS_FIXER"
+      },
+      control: {
+        priority: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
+        type: "REQUEST"
+      },
+      payload: {
+        manifest: {
+          intent: "LOG_RUNTIME_ERROR",
+          context: "BACKEND_CRASH",
+          severity: (severity === "CRITICAL" || severity === "EMERGENCY") ? "critical" : "high",
+          details: details,
+          stackTrace: pubSubPayload.textPayload ? pubSubPayload.textPayload : JSON.stringify(pubSubPayload.jsonPayload),
+          platform: "gcp_backend",
+          client_timestamp: pubSubPayload.timestamp || new Date().toISOString(),
+          resource: pubSubPayload.resource?.type || "unknown_resource"
+        }
+      },
+      created_at: now,
+      last_updated: now,
+      telemetry: { processed_at: now },
+    };
+
+    const appId = "local2local-kaskflow";
+    await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
+
+    console.log("Successfully ingested GCP error to Agent Bus.");
+  } catch (err: any) {
+    console.error("Failed to ingest GCP error:", err);
+  }
+});
+
+export const telemetryAggregatorV2 = onSchedule({
+  schedule: "every 1 minutes",
+  memory: "256MiB"
+}, async (event) => {
+  const now = new Date();
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000).toISOString();
+
+  try {
+    const kaskflowErrors = await db.collection(`artifacts/local2local-kaskflow/public/data/agent_bus`)
+      .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
+      .where("telemetry.processed_at", ">=", fiveMinutesAgo)
+      .get();
+
+    const moonlitelyErrors = await db.collection(`artifacts/local2local-moonlitely/public/data/agent_bus`)
+      .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
+      .where("telemetry.processed_at", ">=", fiveMinutesAgo)
+      .get();
+
+    let fatalCount = 0;
+    let warningCount = 0;
+
+    [kaskflowErrors, moonlitelyErrors].forEach(snap => {
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (data.payload?.manifest?.severity === "critical") {
+          fatalCount++;
+        } else {
+          warningCount++;
+        }
+      });
+    });
+
+    let status = "GREEN";
+    if (fatalCount > 0) {
+      status = "RED";
+    } else if (warningCount > 5) {
+      status = "YELLOW";
+    }
+
+    // FIX: Write to last_heartbeat (was incorrectly writing to /current).
+    // The SuperAdmin dashboard repository watches last_heartbeat.
+    await db.doc(`artifacts/system_status/public/data/telemetry/last_heartbeat`).set({
+      status: status,
+      metrics: {
+        critical_errors_5m: fatalCount,
+        warnings_5m: warningCount,
+        last_evaluated_at: now.toISOString()
+      },
+      thresholds: {
+        red: "fatal > 0",
+        yellow: "warnings > 5"
+      },
+      is_overridden: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log(`[SLS UPDATED] System Status is now ${status}.`);
+  } catch (error) {
+    console.error("Failed to aggregate telemetry:", error);
+  }
+});
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(code:evolution:functions/src/logic/evolution.ts)
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onRequest } from "firebase-functions/v2/https";
+import type { FirestoreEvent, Change, DocumentSnapshot } from "firebase-functions/v2/firestore";
+import * as admin from "firebase-admin";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+
+const db = admin.firestore();
+type L2LWrittenEvent = FirestoreEvent<Change<DocumentSnapshot> | undefined, { appId: string; [key: string]: string }>;
+
+async function signalOrchestrator(payload: any, eventType: string = "DEPLOYMENT_COMPLETE") {
+  const N8N_WEBHOOK_URL = "https://local2local.app.n8n.cloud/webhook/l2laaf-payload-trigger";
+  try {
+    await axios.post(N8N_WEBHOOK_URL, {
+      build_id: payload.correlation_id || ("EVO-" + Date.now()),
+      summary: payload.manifest?.reason || payload.manifest?.error || payload.summary || "Autonomous logic update.",
+      event: eventType,
+      filePath: payload.manifest?.targetPath || "functions/src/logic/evolution.ts",
+      fileContent: payload.manifest?.proposedLogic || null,
+      stackTrace: payload.manifest?.stackTrace || null,
+      platform: payload.manifest?.platform || null,
+      branch: "develop"
+    });
+  } catch (error) { console.error("❌ ORCHESTRATOR: Failed to signal [" + eventType + "]"); }
+}
+
+export const ingestWebErrorV2 = onRequest({ cors: true, memory: "256MiB" }, async (req, res) => {
+    try {
+        const { error, stackTrace, isFatal, appId, platform } = req.body;
+
+        if (!error) {
+            res.status(400).send({ status: "error", message: "Missing error field" });
+            return;
+        }
+
+        const targetAppId = appId || "local2local-kaskflow";
+        const now = admin.firestore.FieldValue.serverTimestamp();
+
+        await db.collection("artifacts/" + targetAppId + "/public/data/agent_bus").add({
+            correlation_id: "ERR-" + Date.now(),
+            status: "dispatched",
+            provenance: { sender_id: "TELEMETRY_CLIENT", receiver_id: "EVOLUTION_WORKER" },
+            control: { type: "REQUEST", priority: isFatal ? "urgent" : "high" },
+            payload: {
+                manifest: {
+                    intent: "AUTONOMOUS_REMEDIATION",
+                    error,
+                    stackTrace,
+                    platform
+                }
+            },
+            created_at: now,
+            last_updated: now,
+            telemetry: { processed_at: now },
+        });
+
+        res.status(200).send({ status: "ingested" });
+    } catch (err: any) {
+        console.error("Failed to ingest error:", err);
+        res.status(500).send({ status: "error", message: err.message });
+    }
+});
+
+export const evolutionOrchestratorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}", memory: "512MiB" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "dispatched") return;
+
+  const intent = data.payload?.manifest?.intent;
+  if (intent !== "PROPOSE_LOGIC_CHANGE" && intent !== "AUTONOMOUS_REMEDIATION") return;
+
+  const { appId } = event.params;
+  const manifest = data.payload.manifest;
+  const correlationId = data.correlation_id || event.params.messageId;
+
+  try {
+    if (intent === "PROPOSE_LOGIC_CHANGE") {
+        const lockRef = db.collection("artifacts/" + appId + "/public/data/logic_locks").doc(manifest.hbrId || "UNKNOWN_HBR");
+        await db.runTransaction(async (transaction) => {
+          const lockSnap = await transaction.get(lockRef);
+          if (lockSnap.exists) throw new Error("COLLISION: HBR " + manifest.hbrId + " locked.");
+          transaction.set(lockRef, { agentId: manifest.agentId, lockedAt: admin.firestore.FieldValue.serverTimestamp(), correlation_id: correlationId });
+        });
+        const shadowRef = db.collection("artifacts/" + appId + "/public/data/shadow_runs").doc(correlationId);
+        await shadowRef.set({ status: "INITIALIZING", proposal_id: manifest.hbrId || "UNKNOWN", agent_id: manifest.agentId, started_at: admin.firestore.FieldValue.serverTimestamp() });
+        await signalOrchestrator(data, "PROPOSAL_SUBMITTED");
+
+    } else if (intent === "AUTONOMOUS_REMEDIATION") {
+        await signalOrchestrator(data, "REMEDIATION_REQUESTED");
+    }
+  } catch (e) { throw e; }
+});
+
+export const ombudsmanValidatorV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/shadow_runs/{runId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "VALIDATED") return;
+  await signalOrchestrator({ correlation_id: event.params.runId, summary: "⚖️ Ombudsman validated shadow run: " + event.params.runId }, "SHADOW_VALIDATED");
+});
+
+export const autonomousFixerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/system_state/state" }, async (event) => {
+  const state = event.data?.after.data();
+  if (!state || state.approval_gate?.status !== "FAILED_AUDIT") return;
+  const { appId } = event.params;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  await db.collection("artifacts/" + appId + "/public/data/agent_bus").doc(uuidv4()).set({
+    status: "dispatched",
+    correlation_id: "FIX-" + Date.now(),
+    provenance: { sender_id: "AUTONOMOUS_FIXER", receiver_id: "EVOLUTION_ENGINE" },
+    payload: { intent: "REQUEST_REASONING", context: "AUDIT_FAILURE", details: "Self-healing protocol initiated." },
+    created_at: now,
+    last_updated: now,
+    telemetry: { processed_at: now },
+  });
+});
+
+export const evolutionProposalFinalizerV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/logic_proposals/{proposalId}" }, async (event: L2LWrittenEvent) => {
+  const data = event.data?.after.data();
+  if (!data || data.status !== "PROMOTED") return;
+  if (data.hbrId) {
+    await db.doc("artifacts/" + event.params.appId + "/public/data/logic_locks/" + data.hbrId).delete();
+  }
+  await db.collection("artifacts/" + event.params.appId + "/public/data/lessons_learned").add({ ...data, archived_at: admin.firestore.FieldValue.serverTimestamp() });
 });
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
-[ASSISTED] FEAT(superadmin): Add last_updated and telemetry.processed_at fields to agent bus test inject
+[ASSISTED] FEAT(telemetry): Add created_at and last_updated to all agent bus writes, add AgentBusClient.dispatch method, fix telemetryAggregatorV2 writing to wrong Firestore document
 L2LAAF_BLOCK_END

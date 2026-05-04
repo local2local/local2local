@@ -43,6 +43,7 @@ class AgentBusClient {
     }
     async sendResponse(correlationId, receiverId, payload, error) {
         const messageId = (0, uuid_1.v4)();
+        const now = admin.firestore.FieldValue.serverTimestamp();
         await db.collection(`artifacts/${this.appId}/public/data/agent_bus`).doc(messageId).set({
             message_id: messageId,
             correlation_id: correlationId,
@@ -50,7 +51,31 @@ class AgentBusClient {
             control: { type: error ? "ERROR" : "RESPONSE", priority: "normal" },
             payload: error ? { error } : { result: payload },
             status: "intercepted",
-            telemetry: { completed_at: new Date().toISOString() }
+            created_at: now,
+            last_updated: now,
+            telemetry: {
+                processed_at: now,
+                completed_at: now,
+            },
+        });
+    }
+    async dispatch(params) {
+        const messageId = (0, uuid_1.v4)();
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        await db.collection(`artifacts/${this.appId}/public/data/agent_bus`).doc(messageId).set({
+            message_id: messageId,
+            correlation_id: params.correlationId,
+            provenance: {
+                sender_id: this.config.agentId,
+                receiver_id: params.receiverId,
+                app_id: this.appId,
+            },
+            control: { type: "REQUEST", priority: params.priority || "normal" },
+            payload: params.payload,
+            status: params.status || "pending",
+            created_at: now,
+            last_updated: now,
+            telemetry: { processed_at: now },
         });
     }
 }

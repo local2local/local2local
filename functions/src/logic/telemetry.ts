@@ -13,13 +13,10 @@ export const ingestWebError = onRequest({ cors: true }, async (req, res): Promis
 
   try {
     const errorData = req.body;
-    
-    // Package the error for the Agent Bus matching the strict schema
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
     const payload = {
       correlation_id: `ERR-WEB-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
-      },
       status: "dispatched",
       provenance: {
         sender_id: "FLUTTER_CLIENT",
@@ -39,12 +36,15 @@ export const ingestWebError = onRequest({ cors: true }, async (req, res): Promis
           platform: errorData.platform || "web",
           client_timestamp: errorData.timestamp || new Date().toISOString()
         }
-      }
+      },
+      created_at: now,
+      last_updated: now,
+      telemetry: { processed_at: now },
     };
 
     const appId = errorData.appId || "local2local-kaskflow";
     await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
+
     res.status(200).send({ success: true, message: "Telemetry ingested to Agent Bus." });
   } catch (err: any) {
     console.error("Failed to ingest web error:", err);
@@ -58,16 +58,12 @@ export const ingestGCPErrors = onMessagePublished({
 }, async (event) => {
   try {
     const pubSubPayload = event.data.message.json;
-    
-    // GCP Log Router payloads contain textPayload or jsonPayload
     const details = pubSubPayload.textPayload || pubSubPayload.jsonPayload?.message || "Unknown GCP Error";
     const severity = pubSubPayload.severity || "ERROR";
-    
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
     const payload = {
       correlation_id: `ERR-GCP-${Date.now()}`,
-      telemetry: {
-        processed_at: new Date().toISOString()
-      },
       status: "dispatched",
       provenance: {
         sender_id: "GCP_LOG_ROUTER",
@@ -88,13 +84,15 @@ export const ingestGCPErrors = onMessagePublished({
           client_timestamp: pubSubPayload.timestamp || new Date().toISOString(),
           resource: pubSubPayload.resource?.type || "unknown_resource"
         }
-      }
+      },
+      created_at: now,
+      last_updated: now,
+      telemetry: { processed_at: now },
     };
 
-    // Assuming local2local-kaskflow as the primary orchestration bus for backend crashes
     const appId = "local2local-kaskflow";
     await db.collection(`artifacts/${appId}/public/data/agent_bus`).add(payload);
-    
+
     console.log("Successfully ingested GCP error to Agent Bus.");
   } catch (err: any) {
     console.error("Failed to ingest GCP error:", err);
@@ -106,16 +104,14 @@ export const telemetryAggregatorV2 = onSchedule({
   memory: "256MiB"
 }, async (event) => {
   const now = new Date();
-  // Look back over the last 5 minutes
   const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000).toISOString();
 
   try {
-    // 1. Query recent errors from both marketplace agent_buses
     const kaskflowErrors = await db.collection(`artifacts/local2local-kaskflow/public/data/agent_bus`)
       .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
       .where("telemetry.processed_at", ">=", fiveMinutesAgo)
       .get();
-      
+
     const moonlitelyErrors = await db.collection(`artifacts/local2local-moonlitely/public/data/agent_bus`)
       .where("payload.manifest.intent", "==", "LOG_RUNTIME_ERROR")
       .where("telemetry.processed_at", ">=", fiveMinutesAgo)
@@ -135,7 +131,6 @@ export const telemetryAggregatorV2 = onSchedule({
       });
     });
 
-    // 2. Evaluate Service Level Status (SLS)
     let status = "GREEN";
     if (fatalCount > 0) {
       status = "RED";
@@ -143,8 +138,9 @@ export const telemetryAggregatorV2 = onSchedule({
       status = "YELLOW";
     }
 
-    // 3. Write to the clean global system_status tenant
-    await db.doc(`artifacts/system_status/public/data/telemetry/current`).set({
+    // FIX: Write to last_heartbeat (was incorrectly writing to /current).
+    // The SuperAdmin dashboard repository watches last_heartbeat.
+    await db.doc(`artifacts/system_status/public/data/telemetry/last_heartbeat`).set({
       status: status,
       metrics: {
         critical_errors_5m: fatalCount,
@@ -155,7 +151,8 @@ export const telemetryAggregatorV2 = onSchedule({
         red: "fatal > 0",
         yellow: "warnings > 5"
       },
-      is_overridden: false
+      is_overridden: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
     console.log(`[SLS UPDATED] System Status is now ${status}.`);

@@ -1,7 +1,31 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.treasuryWorkerV2 = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
+const admin = __importStar(require("firebase-admin"));
 const config_1 = require("../config");
 const agentBusClient_1 = require("../agentBusClient");
 exports.treasuryWorkerV2 = (0, firestore_1.onDocumentUpdated)({
@@ -37,18 +61,17 @@ exports.treasuryWorkerV2 = (0, firestore_1.onDocumentUpdated)({
                     message: "Payout exceeds autonomous limit. Escalating to Triage Hub for human approval."
                 });
             }
+            const now = admin.firestore.FieldValue.serverTimestamp();
             const busRef = config_1.db.collection(`artifacts/${appId}/public/data/agent_bus`);
             await busRef.add({
                 correlation_id: data.correlation_id,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "TREASURY_WORKER", receiver_id: "STRIPE_PROVISIONER_WORKER" },
-                payload: {
-                    manifest: {
-                        intent: "CAPTURE_FUNDS",
-                        orderId
-                    }
-                }
+                payload: { manifest: { intent: "CAPTURE_FUNDS", orderId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
                 status: "payout_initiated",
@@ -64,19 +87,17 @@ exports.treasuryWorkerV2 = (0, firestore_1.onDocumentUpdated)({
                 reconciliationStatus: "pending_ledger_sync",
                 "telemetry.stripe_transfer_id": stripeTransferId
             });
+            const now = admin.firestore.FieldValue.serverTimestamp();
             const busRef = config_1.db.collection(`artifacts/${appId}/public/data/agent_bus`);
             await busRef.add({
                 correlation_id: `reconcile-${data.correlation_id}`,
                 status: "pending",
                 control: { type: "REQUEST", priority: "normal" },
                 provenance: { sender_id: "TREASURY_WORKER", receiver_id: "XERO_SYNC_WORKER" },
-                payload: {
-                    manifest: {
-                        intent: "AUTHORIZE_INVOICE",
-                        orderId,
-                        paymentReference: stripeTransferId
-                    }
-                }
+                payload: { manifest: { intent: "AUTHORIZE_INVOICE", orderId, paymentReference: stripeTransferId } },
+                created_at: now,
+                last_updated: now,
+                telemetry: { processed_at: now },
             });
             return client.sendResponse(data.correlation_id, data.provenance.sender_id, {
                 status: "reconciliation_dispatched",
