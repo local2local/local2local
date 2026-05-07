@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -712,48 +714,847 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
   }
 
   void _showTestInjectModal(BuildContext context) {
-    final TextEditingController pathController = TextEditingController(text: 'lib/features/triage_hub/widgets/system_status_banner.dart');
-    final TextEditingController reasonController = TextEditingController(text: "Update status string to 'AWAITING TELEMETRY' and color to orangeAccent.");
-
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => Dialog(
         backgroundColor: AdminColors.slateDark,
-        title: const Text('Manual Logic Injection', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: pathController,
-              decoration: const InputDecoration(labelText: 'Target Path', labelStyle: TextStyle(color: AdminColors.textSecondary)),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Instructions', labelStyle: TextStyle(color: AdminColors.textSecondary)),
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
+          child: _AgentBusInjectionModal(ref: ref),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
-          ElevatedButton(
-            onPressed: () async {
-              await ref.read(superadminRepositoryProvider).injectTestPayload(
-                targetPath: pathController.text,
-                instructions: reasonController.text,
-              );
-              if (mounted) {
-                // ignore: use_build_context_synchronously
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: const Text('INJECT'),
+      ),
+    );
+  }
+}
+
+class _AgentBusInjectionModal extends StatefulWidget {
+  final WidgetRef ref;
+  
+  const _AgentBusInjectionModal({required this.ref});
+
+  @override
+  State<_AgentBusInjectionModal> createState() => _AgentBusInjectionModalState();
+}
+
+class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
+  String _tenant = 'kaskflow';
+  bool _shadow = false;
+  int _selectedTab = 0;
+  bool _isInjecting = false;
+
+  // Structured form controllers
+  late TextEditingController _correlationIdController;
+  late TextEditingController _senderIdController;
+  late TextEditingController _receiverIdController;
+  late TextEditingController _hbrIdController;
+  late TextEditingController _targetPathController;
+  late TextEditingController _detailsController;
+  late TextEditingController _rawJsonController;
+
+  // Structured form state
+  String _status = 'dispatched';
+  String _messageType = 'REQUEST';
+  String _priority = 'normal';
+  String _intent = 'PROPOSE_LOGIC_CHANGE';
+
+  static const _tenantOptions = [
+    ('SYSTEM', 'system_status'),
+    ('KASKFLOW', 'kaskflow'),
+    ('MOONLITELY', 'moonlitely'),
+  ];
+
+  static const _busTypeOptions = [
+    ('AGENT BUS', false),
+    ('SHADOW BUS', true),
+  ];
+
+  static const _tabs = ['RAW JSON', 'STRUCTURED', 'TEMPLATES'];
+
+  static const _statusOptions = ['dispatched', 'pending', 'intercepted'];
+  
+  static const _intentOptions = [
+    'PROPOSE_LOGIC_CHANGE',
+    'AUTONOMOUS_REMEDIATION',
+    'LOG_RUNTIME_ERROR',
+    'LOG_SAFETY_VIOLATION',
+    'GET_FLEET_STATE',
+    'GENERATE_PROFIT_REPORT',
+    'PROCESS_FEEDBACK',
+    'INITIATE_PAYOUT',
+    'RECONCILE_LEDGER',
+    'FOLD_CONTEXT',
+  ];
+
+  static const _receiverChips = [
+    'EVOLUTION_WORKER',
+    'SAFETY_WORKER',
+    'ANALYTICS_WORKER',
+    'INFRASTRUCTURE_WORKER',
+    'TREASURY_WORKER',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    _correlationIdController = TextEditingController(text: 'INJECT-$timestamp');
+    _senderIdController = TextEditingController(text: 'SUPERADMIN_UI');
+    _receiverIdController = TextEditingController(text: 'EVOLUTION_WORKER');
+    _hbrIdController = TextEditingController(text: 'HBR-TEST-001');
+    _targetPathController = TextEditingController();
+    _detailsController = TextEditingController();
+    _rawJsonController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _correlationIdController.dispose();
+    _senderIdController.dispose();
+    _receiverIdController.dispose();
+    _hbrIdController.dispose();
+    _targetPathController.dispose();
+    _detailsController.dispose();
+    _rawJsonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedPath = widget.ref
+        .read(superadminRepositoryProvider)
+        .resolveCollectionPath(_tenant, shadow: _shadow);
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Agent Bus Injection',
+                style: TextStyle(
+                  color: AdminColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, color: AdminColors.textSecondary),
+                splashRadius: 20,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Target selector row
+          Row(
+            children: [
+              // Tenant dropdown
+              Expanded(child: _buildTenantDropdown()),
+              const SizedBox(width: 16),
+              // Bus type dropdown
+              Expanded(child: _buildBusTypeDropdown()),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Resolved path display
+          Text(
+            resolvedPath,
+            style: const TextStyle(
+              color: AdminColors.textMuted,
+              fontSize: 11,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 20),
+          
+          // Tab bar
+          _buildTabBar(),
+          const SizedBox(height: 16),
+          
+          // Tab content
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AdminColors.slateDarkest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _buildTabContent(),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Footer row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'CANCEL',
+                  style: TextStyle(color: AdminColors.textSecondary),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: _isInjecting ? null : _handleInject,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.emeraldGreen,
+                  foregroundColor: AdminColors.slateDarkest,
+                  disabledBackgroundColor: AdminColors.emeraldGreen.withValues(alpha: 0.3),
+                  disabledForegroundColor: AdminColors.textMuted,
+                ),
+                child: _isInjecting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AdminColors.textMuted,
+                        ),
+                      )
+                    : const Text('INJECT'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+
+  Widget _buildTenantDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDarkest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _tenant,
+          isExpanded: true,
+          dropdownColor: AdminColors.slateDark,
+          icon: const Icon(Icons.arrow_drop_down, color: AdminColors.textSecondary),
+          style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+          items: _tenantOptions.map((option) {
+            return DropdownMenuItem<String>(
+              value: option.$2,
+              child: Text(option.$1),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) setState(() => _tenant = value);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBusTypeDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDarkest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<bool>(
+          value: _shadow,
+          isExpanded: true,
+          dropdownColor: AdminColors.slateDark,
+          icon: const Icon(Icons.arrow_drop_down, color: AdminColors.textSecondary),
+          style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+          items: _busTypeOptions.map((option) {
+            return DropdownMenuItem<bool>(
+              value: option.$2,
+              child: Text(option.$1),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) setState(() => _shadow = value);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Row(
+      children: List.generate(_tabs.length, (index) {
+        final isSelected = _selectedTab == index;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedTab = index),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isSelected ? AdminColors.emeraldGreen : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Text(
+              _tabs[index],
+              style: TextStyle(
+                color: isSelected ? AdminColors.textPrimary : AdminColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_selectedTab) {
+      case 0:
+        return _buildRawJsonTab();
+      case 1:
+        return _buildStructuredTab();
+      case 2:
+        return _buildTemplatesTab();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildRawJsonTab() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: TextField(
+        controller: _rawJsonController,
+        maxLines: null,
+        expands: true,
+        style: const TextStyle(
+          color: AdminColors.textPrimary,
+          fontSize: 13,
+          fontFamily: 'monospace',
+        ),
+        decoration: InputDecoration(
+          hintText: '{\n  "status": "dispatched",\n  "payload": { ... }\n}',
+          hintStyle: TextStyle(color: AdminColors.textMuted.withValues(alpha: 0.5)),
+          filled: true,
+          fillColor: AdminColors.slateDark,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AdminColors.borderDefault),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AdminColors.borderDefault),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: AdminColors.emeraldGreen, width: 2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStructuredTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Correlation ID
+          _buildFormLabel('Correlation ID'),
+          const SizedBox(height: 6),
+          _buildTextField(_correlationIdController),
+          const SizedBox(height: 16),
+
+          // Status dropdown
+          _buildFormLabel('Status'),
+          const SizedBox(height: 6),
+          _buildDropdown(
+            value: _status,
+            items: _statusOptions,
+            onChanged: (v) => setState(() => _status = v!),
+          ),
+          const SizedBox(height: 16),
+
+          // Sender ID
+          _buildFormLabel('Sender ID'),
+          const SizedBox(height: 6),
+          _buildTextField(_senderIdController),
+          const SizedBox(height: 16),
+
+          // Receiver ID with quick-select chips
+          _buildFormLabel('Receiver ID'),
+          const SizedBox(height: 6),
+          _buildTextField(_receiverIdController),
+          const SizedBox(height: 8),
+          _buildReceiverChips(),
+          const SizedBox(height: 16),
+
+          // Type segmented button
+          _buildFormLabel('Type'),
+          const SizedBox(height: 6),
+          _buildSegmentedButton(
+            value: _messageType,
+            options: const ['REQUEST', 'RESPONSE', 'ERROR'],
+            onChanged: (v) => setState(() => _messageType = v),
+          ),
+          const SizedBox(height: 16),
+
+          // Priority segmented button
+          _buildFormLabel('Priority'),
+          const SizedBox(height: 6),
+          _buildSegmentedButton(
+            value: _priority,
+            options: const ['normal', 'urgent', 'high', 'critical'],
+            onChanged: (v) => setState(() => _priority = v),
+          ),
+          const SizedBox(height: 16),
+
+          // Intent dropdown
+          _buildFormLabel('Intent'),
+          const SizedBox(height: 6),
+          _buildDropdown(
+            value: _intent,
+            items: _intentOptions,
+            onChanged: (v) => setState(() => _intent = v!),
+          ),
+          const SizedBox(height: 16),
+
+          // HBR ID (conditional)
+          if (_intent == 'PROPOSE_LOGIC_CHANGE') ...[
+            _buildFormLabel('HBR ID'),
+            const SizedBox(height: 6),
+            _buildTextField(_hbrIdController),
+            const SizedBox(height: 16),
+
+            // Target Path (conditional)
+            _buildFormLabel('Target Path'),
+            const SizedBox(height: 6),
+            _buildTextField(_targetPathController),
+            const SizedBox(height: 16),
+          ],
+
+          // Details / Instructions
+          _buildFormLabel('Details / Instructions'),
+          const SizedBox(height: 6),
+          _buildTextField(_detailsController, maxLines: 3),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTemplatesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: _templates.map((template) => _buildTemplateCard(template)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTemplateCard(_InjectionTemplate template) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDarkest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  template.name,
+                  style: const TextStyle(
+                    color: AdminColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  template.description,
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton(
+            onPressed: () => _useTemplate(template),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AdminColors.emeraldGreen,
+              side: const BorderSide(color: AdminColors.emeraldGreen),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            child: const Text(
+              'USE TEMPLATE',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _useTemplate(_InjectionTemplate template) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final json = template.jsonTemplate.replaceAll('<timestamp>', timestamp.toString());
+    
+    setState(() {
+      _rawJsonController.text = json;
+      _selectedTab = 0; // Switch to RAW JSON tab
+    });
+  }
+
+  static final List<_InjectionTemplate> _templates = [
+    _InjectionTemplate(
+      name: 'Propose Logic Change',
+      description: 'Submit an autonomous code change proposal to the Evolution Worker',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "EVOLUTION_WORKER" },
+  "control": { "type": "REQUEST", "priority": "normal" },
+  "payload": { "manifest": { "intent": "PROPOSE_LOGIC_CHANGE", "agentId": "SUPERADMIN_UI", "hbrId": "HBR-TEST-001", "targetPath": "functions/src/logic/evolution.ts", "proposedLogic": "// proposed changes here" } }
+}''',
+    ),
+    _InjectionTemplate(
+      name: 'Autonomous Remediation',
+      description: 'Trigger self-healing protocol for a detected runtime error',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "EVOLUTION_WORKER" },
+  "control": { "type": "REQUEST", "priority": "urgent" },
+  "payload": { "manifest": { "intent": "AUTONOMOUS_REMEDIATION", "error": "Describe the error here", "stackTrace": "", "platform": "web" } }
+}''',
+    ),
+    _InjectionTemplate(
+      name: 'Log Safety Violation',
+      description: 'Report a critical safety event to the Safety Worker',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "SAFETY_WORKER" },
+  "control": { "type": "REQUEST", "priority": "urgent" },
+  "payload": { "manifest": { "intent": "LOG_SAFETY_VIOLATION", "severity": "critical", "details": "Describe the violation here" } }
+}''',
+    ),
+    _InjectionTemplate(
+      name: 'Generate Profit Report',
+      description: 'Request a profit summary from the Analytics Worker',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "ANALYTICS_WORKER" },
+  "control": { "type": "REQUEST", "priority": "normal" },
+  "payload": { "manifest": { "intent": "GENERATE_PROFIT_REPORT" } }
+}''',
+    ),
+    _InjectionTemplate(
+      name: 'Get Fleet State',
+      description: 'Request current fleet status from the Dispatch Worker',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "DISPATCH_WORKER" },
+  "control": { "type": "REQUEST", "priority": "normal" },
+  "payload": { "manifest": { "intent": "GET_FLEET_STATE", "filterJurisdiction": "AB" } }
+}''',
+    ),
+    _InjectionTemplate(
+      name: 'Fold Context',
+      description: 'Trigger context folding for an underperforming agent',
+      jsonTemplate: '''{
+  "correlation_id": "INJECT-<timestamp>",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "INFRASTRUCTURE_WORKER" },
+  "control": { "type": "REQUEST", "priority": "normal" },
+  "payload": { "manifest": { "intent": "FOLD_CONTEXT", "targetAgentId": "AGENT_ID_HERE", "correlationId": "" } }
+}''',
+    ),
+  ];
+
+  Widget _buildFormLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AdminColors.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, {int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: AdminColors.slateDark,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: AdminColors.borderDefault),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: AdminColors.borderDefault),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: const BorderSide(color: AdminColors.emeraldGreen, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDark,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: AdminColors.slateDark,
+          icon: const Icon(Icons.arrow_drop_down, color: AdminColors.textSecondary),
+          style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+          items: items.map((item) {
+            return DropdownMenuItem<String>(
+              value: item,
+              child: Text(item),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSegmentedButton({
+    required String value,
+    required List<String> options,
+    required void Function(String) onChanged,
+  }) {
+    return Row(
+      children: options.map((option) {
+        final isSelected = value == option;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => onChanged(option),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+                    : AdminColors.slateDark,
+                border: Border.all(
+                  color: isSelected
+                      ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
+                      : AdminColors.borderDefault,
+                ),
+                borderRadius: BorderRadius.horizontal(
+                  left: option == options.first ? const Radius.circular(6) : Radius.zero,
+                  right: option == options.last ? const Radius.circular(6) : Radius.zero,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  option.toUpperCase(),
+                  style: TextStyle(
+                    color: isSelected ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildReceiverChips() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _receiverChips.map((receiver) {
+        final isActive = _receiverIdController.text == receiver;
+        return GestureDetector(
+          onTap: () => setState(() => _receiverIdController.text = receiver),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
+                  : AdminColors.slateMedium,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              receiver,
+              style: TextStyle(
+                color: isActive ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Future<void> _handleInject() async {
+    setState(() => _isInjecting = true);
+
+    try {
+      Map<String, dynamic> payload;
+
+      if (_selectedTab == 0) {
+        // RAW JSON tab
+        final jsonText = _rawJsonController.text.trim();
+        if (jsonText.isEmpty) {
+          _showSnackbar('Please enter JSON payload', isError: true);
+          return;
+        }
+        try {
+          payload = _parseJson(jsonText);
+        } catch (e) {
+          _showSnackbar('Invalid JSON: $e', isError: true);
+          return;
+        }
+      } else if (_selectedTab == 1) {
+        // STRUCTURED tab
+        payload = _buildStructuredPayload();
+      } else {
+        // TEMPLATES tab - not implemented yet
+        _showSnackbar('Templates not yet implemented', isError: true);
+        return;
+      }
+
+      await widget.ref.read(superadminRepositoryProvider).injectPayload(
+        tenant: _tenant,
+        shadow: _shadow,
+        payload: payload,
+      );
+
+      if (mounted) {
+        _showSnackbar('Payload injected successfully');
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackbar('Injection failed: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isInjecting = false);
+      }
+    }
+  }
+
+  Map<String, dynamic> _parseJson(String jsonText) {
+    final decoded = jsonDecode(jsonText);
+    if (decoded is! Map) {
+      throw const FormatException('JSON must be an object');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  Map<String, dynamic> _buildStructuredPayload() {
+    final manifest = <String, dynamic>{
+      'intent': _intent,
+      'agentId': _senderIdController.text,
+    };
+
+    // Add conditional fields for PROPOSE_LOGIC_CHANGE
+    if (_intent == 'PROPOSE_LOGIC_CHANGE') {
+      manifest['hbrId'] = _hbrIdController.text;
+      if (_targetPathController.text.isNotEmpty) {
+        manifest['targetPath'] = _targetPathController.text;
+      }
+    }
+
+    // Add details if provided
+    if (_detailsController.text.isNotEmpty) {
+      manifest['details'] = _detailsController.text;
+    }
+
+    return {
+      'correlation_id': _correlationIdController.text,
+      'status': _status,
+      'sender_id': _senderIdController.text,
+      'receiver_id': _receiverIdController.text,
+      'type': _messageType,
+      'priority': _priority,
+      'payload': {
+        'manifest': manifest,
+      },
+    };
+  }
+
+  void _showSnackbar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: TextStyle(
+            color: isError ? AdminColors.rubyRed : AdminColors.emeraldGreen,
+          ),
+        ),
+        backgroundColor: AdminColors.slateMedium,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: isError ? 4 : 2),
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+}
+
+class _InjectionTemplate {
+  final String name;
+  final String description;
+  final String jsonTemplate;
+
+  const _InjectionTemplate({
+    required this.name,
+    required this.description,
+    required this.jsonTemplate,
+  });
 }
