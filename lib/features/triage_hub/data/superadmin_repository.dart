@@ -74,8 +74,42 @@ class SuperadminRepository {
             .toList());
   }
 
-  /// Manual Payload Injection for test sequences.
-  /// Writes created_at, last_updated, and telemetry.processed_at on every write.
+  /// Resolves the Firestore collection path for a given tenant and bus type.
+  String resolveCollectionPath(String tenant, {bool shadow = false}) {
+    final artifactId = switch (tenant) {
+      'kaskflow' => 'local2local-kaskflow',
+      'moonlitely' => 'local2local-moonlitely',
+      _ => tenant,
+    };
+    final collection = shadow ? 'shadow_bus' : 'agent_bus';
+    return 'artifacts/$artifactId/public/data/$collection';
+  }
+
+  /// Injects an arbitrary payload into any tenant bus collection.
+  /// Automatically enriches the document with created_at, last_updated,
+  /// and telemetry.processed_at server timestamps.
+  /// The caller provides the full payload structure — no hardcoded fields.
+  Future<void> injectPayload({
+    required String tenant,
+    required bool shadow,
+    required Map<String, dynamic> payload,
+  }) async {
+    final path = resolveCollectionPath(tenant, shadow: shadow);
+    final now = FieldValue.serverTimestamp();
+    final enriched = <String, dynamic>{
+      ...payload,
+      'created_at': now,
+      'last_updated': now,
+      'telemetry': <String, dynamic>{
+        ...(payload['telemetry'] as Map<String, dynamic>? ?? {}),
+        'processed_at': now,
+      },
+    };
+    await _firestore.collection(path).add(enriched);
+  }
+
+  /// Legacy test injection — kept for backward compatibility.
+  /// Prefer injectPayload for new injection UI.
   Future<void> injectTestPayload({
     required String targetPath,
     required String instructions,
