@@ -85,8 +85,12 @@ class AdminShell extends ConsumerWidget {
                 label: Text('Diagnostics'),
               ),
               const NavigationRailDestination(
-                icon: Icon(Icons.admin_panel_settings_rounded),
-                label: Text('Superadmin'),
+                icon: Icon(Icons.timeline_rounded),
+                label: Text('Phases'),
+              ),
+              const NavigationRailDestination(
+                icon: Icon(Icons.storage_rounded),
+                label: Text('Data'),
               ),
             ],
           ),

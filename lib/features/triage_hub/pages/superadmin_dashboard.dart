@@ -21,14 +21,38 @@ class SuperadminDashboard extends ConsumerStatefulWidget {
 
 class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
     with SingleTickerProviderStateMixin {
-  int _selectedPhaseHistoryIndex = 0;
-  final TextEditingController _phaseSearchController = TextEditingController();
-  String _phaseSearchQuery = '';
+  // Data Browser state
+  String _browserTenant = 'kaskflow';
+  String _browserCollection = '';
+  bool _dataBrowserExpanded = false;
+  Future<List<Map<String, dynamic>>>? _browserFuture;
+  List<Map<String, dynamic>> _browserDocuments = [];
+  final Set<String> _browserExpandedCards = {};
+  final TextEditingController _browserCollectionController = TextEditingController();
+  final TextEditingController _browserSearchController = TextEditingController();
+  String _browserSearchQuery = '';
+  Map<String, String> _browserFieldFilters = {};
 
-  // Phase History streaming/static mode state (per-tab: 0=PROMOTED, 1=ABANDONED)
-  final Map<int, bool> _phaseStreamingByTab = {0: true, 1: true};
-  final Map<int, List<Map<String, dynamic>>> _phaseSnapshotByTab = {0: [], 1: []};
-  final Map<int, int> _newPhasesByTab = {0: 0, 1: 0};
+  static const List<String> _knownCollections = [
+    'activity',
+    'agent_bus',
+    'agent_registry',
+    'carriers',
+    'efficacy_audit',
+    'evolution_timeline',
+    'facilities',
+    'interventions',
+    'jobs',
+    'lessons_learned',
+    'logic_locks',
+    'logic_proposals',
+    'logistics_jobs',
+    'orders',
+    'platform_feedback',
+    'shadow_runs',
+    'system_state',
+    'telemetry',
+  ];
 
   // Animation controller for pulsing LIVE indicator
   late AnimationController _pulseController;
@@ -46,7 +70,8 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
 
   @override
   void dispose() {
-    _phaseSearchController.dispose();
+    _browserCollectionController.dispose();
+    _browserSearchController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -65,7 +90,7 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Superadmin Dashboard',
+                  'Data',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,
@@ -95,7 +120,7 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
             const SystemStatusBanner(),
             const SizedBox(height: 24),
             
-            // Side-by-side panels
+            // Main content area - Side-by-side panels (Agent Bus + Data Browser)
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -105,42 +130,9 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
                   
                   const SizedBox(width: 24),
                   
-                  // Right Panel: Phase History
+                  // Right Panel: Data Browser
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AdminColors.slateDark.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AdminColors.borderDefault),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildPhaseHistoryHeader(),
-                          const SizedBox(height: 16),
-                          // Phase History Search Bar
-                          _buildPhaseSearchBar(),
-                          const SizedBox(height: 16),
-                          // Phase History Tabs
-                          Row(
-                            children: [
-                              _buildPhaseHistoryTab('PROMOTED', 0),
-                              _buildPhaseHistoryTab('ABANDONED', 1),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          const Divider(color: AdminColors.borderDefault, height: 1),
-                          const SizedBox(height: 16),
-                          // Phase History List with independent scrolling
-                          Expanded(
-                            child: _selectedPhaseHistoryIndex == 0
-                                ? _buildPromotedPhasesList()
-                                : _buildAbandonedPhasesList(),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: _buildDataBrowserFullPanel(),
                   ),
                 ],
               ),
@@ -151,7 +143,650 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
     );
   }
 
-  Widget _buildPhaseSearchBar() {
+  Widget _buildDataBrowserFullPanel() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDark.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Icon(
+                Icons.storage_rounded,
+                color: AdminColors.emeraldGreen,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Data Browser',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Content
+          Expanded(
+            child: _buildDataBrowserFullContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataBrowserFullContent() {
+    final resolvedPath = ref.read(superadminRepositoryProvider).resolveCollectionPath(_browserTenant);
+    final fullPath = _browserCollection.isNotEmpty 
+        ? resolvedPath.replaceAll('agent_bus', _browserCollection)
+        : resolvedPath.replaceAll('/agent_bus', '');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Selector row
+        Row(
+          children: [
+            // Tenant dropdown
+            Expanded(
+              flex: 1,
+              child: _buildBrowserTenantDropdown(),
+            ),
+            const SizedBox(width: 16),
+            // Collection autocomplete
+            Expanded(
+              flex: 2,
+              child: _buildCollectionAutocomplete(),
+            ),
+            const SizedBox(width: 12),
+            // Browse button
+            IconButton(
+              onPressed: _browserCollection.isNotEmpty ? _executeBrowseQuery : null,
+              icon: const Icon(Icons.search),
+              color: AdminColors.emeraldGreen,
+              disabledColor: AdminColors.textMuted,
+              style: IconButton.styleFrom(
+                backgroundColor: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                disabledBackgroundColor: AdminColors.slateDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: _browserCollection.isNotEmpty 
+                        ? AdminColors.emeraldGreen.withValues(alpha: 0.5) 
+                        : AdminColors.borderDefault,
+                  ),
+                ),
+                minimumSize: const Size(44, 44),
+              ),
+              tooltip: 'Browse collection',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Resolved path display
+        Text(
+          _browserCollection.isNotEmpty ? fullPath : '${resolvedPath.replaceAll('/agent_bus', '')}/<collection>',
+          style: const TextStyle(
+            color: AdminColors.textMuted,
+            fontSize: 11,
+            fontFamily: 'monospace',
+          ),
+        ),
+        
+        // Document list (only shown after query)
+        if (_browserFuture != null) ...[
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.borderDefault, height: 1),
+          const SizedBox(height: 16),
+          Expanded(child: _buildBrowserDocumentListFull()),
+        ] else
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.folder_open_rounded,
+                    size: 48,
+                    color: AdminColors.textMuted.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Select a collection to browse',
+                    style: TextStyle(
+                      color: AdminColors.textMuted,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBrowserDocumentListFull() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _browserFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
+          );
+        }
+        
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: AdminColors.rubyRed, fontSize: 13),
+            ),
+          );
+        }
+        
+        final allDocuments = _browserDocuments.isNotEmpty ? _browserDocuments : (snapshot.data ?? []);
+        
+        if (allDocuments.isEmpty) {
+          return const Center(
+            child: Text(
+              'No documents found.',
+              style: TextStyle(color: AdminColors.textMuted, fontSize: 13),
+            ),
+          );
+        }
+        
+        // Extract all unique top-level field names across all documents
+        final allFieldNames = <String>{};
+        for (final doc in allDocuments) {
+          for (final key in doc.keys) {
+            if (key != '__docId__') {
+              allFieldNames.add(key);
+            }
+          }
+        }
+        final sortedFieldNames = allFieldNames.toList()..sort();
+        
+        // Apply filters
+        final filteredDocuments = _filterBrowserDocuments(allDocuments);
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Search bar
+            _buildBrowserSearchBar(),
+            const SizedBox(height: 12),
+            
+            // Field filter chips
+            _buildBrowserFieldFilterChips(sortedFieldNames),
+            
+            // Active field filter inputs
+            if (_browserFieldFilters.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildBrowserActiveFilters(),
+            ],
+            
+            const SizedBox(height: 16),
+            
+            // Document count badge and refresh button
+            Row(
+              children: [
+                Text(
+                  '${filteredDocuments.length} of ${allDocuments.length} documents',
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _executeBrowseQuery,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  color: AdminColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Document cards in a scrollable area
+            if (filteredDocuments.isEmpty)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'No documents match the current filters.',
+                    style: const TextStyle(color: AdminColors.textMuted, fontSize: 13),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filteredDocuments.length,
+                  itemBuilder: (context, index) {
+                    return _buildBrowserDocumentCard(filteredDocuments[index]);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDataBrowserPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AdminColors.slateDark.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header row
+          InkWell(
+            onTap: () => setState(() => _dataBrowserExpanded = !_dataBrowserExpanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Text(
+                    'Data Browser',
+                    style: TextStyle(
+                      color: AdminColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => setState(() => _dataBrowserExpanded = !_dataBrowserExpanded),
+                    icon: Icon(
+                      _dataBrowserExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: AdminColors.textSecondary,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Expanded content
+          if (_dataBrowserExpanded) ...[
+            const Divider(color: AdminColors.borderDefault, height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildDataBrowserContent(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataBrowserContent() {
+    final resolvedPath = ref.read(superadminRepositoryProvider).resolveCollectionPath(_browserTenant);
+    final fullPath = _browserCollection.isNotEmpty 
+        ? resolvedPath.replaceAll('agent_bus', _browserCollection)
+        : resolvedPath.replaceAll('/agent_bus', '');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Selector row
+        Row(
+          children: [
+            // Tenant dropdown
+            Expanded(
+              flex: 1,
+              child: _buildBrowserTenantDropdown(),
+            ),
+            const SizedBox(width: 16),
+            // Collection autocomplete
+            Expanded(
+              flex: 2,
+              child: _buildCollectionAutocomplete(),
+            ),
+            const SizedBox(width: 12),
+            // Browse button
+            IconButton(
+              onPressed: _browserCollection.isNotEmpty ? _executeBrowseQuery : null,
+              icon: const Icon(Icons.search),
+              color: AdminColors.emeraldGreen,
+              disabledColor: AdminColors.textMuted,
+              style: IconButton.styleFrom(
+                backgroundColor: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+                disabledBackgroundColor: AdminColors.slateDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: _browserCollection.isNotEmpty 
+                        ? AdminColors.emeraldGreen.withValues(alpha: 0.5) 
+                        : AdminColors.borderDefault,
+                  ),
+                ),
+                minimumSize: const Size(44, 44),
+              ),
+              tooltip: 'Browse collection',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Resolved path display
+        Text(
+          _browserCollection.isNotEmpty ? fullPath : '${resolvedPath.replaceAll('/agent_bus', '')}/<collection>',
+          style: const TextStyle(
+            color: AdminColors.textMuted,
+            fontSize: 11,
+            fontFamily: 'monospace',
+          ),
+        ),
+        
+        // Document list (only shown after query)
+        if (_browserFuture != null) ...[
+          const SizedBox(height: 16),
+          const Divider(color: AdminColors.borderDefault, height: 1),
+          const SizedBox(height: 16),
+          _buildBrowserDocumentList(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBrowserTenantDropdown() {
+    const tenantOptions = [
+      ('SYSTEM', 'system_status'),
+      ('KASKFLOW', 'kaskflow'),
+      ('MOONLITELY', 'moonlitely'),
+    ];
+    
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AdminColors.slateDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdminColors.borderDefault),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _browserTenant,
+          isExpanded: true,
+          dropdownColor: AdminColors.slateDark,
+          icon: const Icon(Icons.arrow_drop_down, color: AdminColors.textSecondary),
+          style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+          items: tenantOptions.map((option) {
+            return DropdownMenuItem<String>(
+              value: option.$2,
+              child: Text(option.$1),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _browserTenant = value;
+                _browserFuture = null; // Reset results when tenant changes
+                _browserExpandedCards.clear();
+                _browserDocuments = [];
+                _browserSearchQuery = '';
+                _browserSearchController.clear();
+                _browserFieldFilters = {};
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollectionAutocomplete() {
+    return Autocomplete<String>(
+      optionsBuilder: (textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return _knownCollections;
+        }
+        return _knownCollections.where((collection) =>
+            collection.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+      },
+      onSelected: (selection) {
+        setState(() {
+          _browserCollection = selection;
+          _browserCollectionController.text = selection;
+        });
+      },
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        // Sync controller text on first build
+        if (controller.text.isEmpty && _browserCollection.isNotEmpty) {
+          controller.text = _browserCollection;
+        }
+        return Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: AdminColors.slateDark,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AdminColors.borderDefault),
+          ),
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
+            decoration: const InputDecoration(
+              hintText: 'Collection name...',
+              hintStyle: TextStyle(color: AdminColors.textMuted, fontSize: 14),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            onChanged: (value) {
+              setState(() => _browserCollection = value);
+            },
+            onSubmitted: (_) {
+              if (_browserCollection.isNotEmpty) {
+                _executeBrowseQuery();
+              }
+            },
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 8,
+            color: AdminColors.slateDark,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 300),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      option,
+                      style: const TextStyle(
+                        color: AdminColors.textPrimary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    onTap: () => onSelected(option),
+                    hoverColor: AdminColors.emeraldGreen.withValues(alpha: 0.1),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _executeBrowseQuery() {
+    if (_browserCollection.isEmpty) return;
+    
+    final basePath = ref.read(superadminRepositoryProvider).resolveCollectionPath(_browserTenant);
+    final collectionPath = basePath.replaceAll('agent_bus', _browserCollection);
+    
+    setState(() {
+      _browserExpandedCards.clear();
+      _browserSearchQuery = '';
+      _browserSearchController.clear();
+      _browserFieldFilters = {};
+      _browserDocuments = [];
+      _browserFuture = FirebaseFirestore.instance
+          .collection(collectionPath)
+          .limit(50)
+          .get()
+          .then((snapshot) {
+            final docs = snapshot.docs.map((doc) {
+              final data = Map<String, dynamic>.from(doc.data());
+              data['__docId__'] = doc.id;
+              return data;
+            }).toList();
+            // Store documents for client-side filtering
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _browserDocuments = docs);
+            });
+            return docs;
+          });
+    });
+  }
+
+  Widget _buildBrowserDocumentList() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _browserFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(color: AdminColors.emeraldGreen),
+            ),
+          );
+        }
+        
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: AdminColors.rubyRed, fontSize: 13),
+            ),
+          );
+        }
+        
+        final allDocuments = _browserDocuments.isNotEmpty ? _browserDocuments : (snapshot.data ?? []);
+        
+        if (allDocuments.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'No documents found.',
+              style: TextStyle(color: AdminColors.textMuted, fontSize: 13),
+            ),
+          );
+        }
+        
+        // Extract all unique top-level field names across all documents
+        final allFieldNames = <String>{};
+        for (final doc in allDocuments) {
+          for (final key in doc.keys) {
+            if (key != '__docId__') {
+              allFieldNames.add(key);
+            }
+          }
+        }
+        final sortedFieldNames = allFieldNames.toList()..sort();
+        
+        // Apply filters
+        final filteredDocuments = _filterBrowserDocuments(allDocuments);
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Search bar
+            _buildBrowserSearchBar(),
+            const SizedBox(height: 12),
+            
+            // Field filter chips
+            _buildBrowserFieldFilterChips(sortedFieldNames),
+            
+            // Active field filter inputs
+            if (_browserFieldFilters.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildBrowserActiveFilters(),
+            ],
+            
+            const SizedBox(height: 16),
+            
+            // Document count badge and refresh button
+            Row(
+              children: [
+                Text(
+                  '${filteredDocuments.length} of ${allDocuments.length} documents',
+                  style: const TextStyle(
+                    color: AdminColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _executeBrowseQuery,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  color: AdminColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Document cards in a constrained scrollable area
+            if (filteredDocuments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'No documents match the current filters.',
+                  style: const TextStyle(color: AdminColors.textMuted, fontSize: 13),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 400),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: filteredDocuments.length,
+                  itemBuilder: (context, index) {
+                    return _buildBrowserDocumentCard(filteredDocuments[index]);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBrowserSearchBar() {
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -160,557 +795,568 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
         border: Border.all(color: AdminColors.borderDefault),
       ),
       child: TextField(
-        controller: _phaseSearchController,
+        controller: _browserSearchController,
         style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
         decoration: InputDecoration(
-          hintText: 'Search by summary...',
+          hintText: 'Search documents...',
           hintStyle: const TextStyle(color: AdminColors.textMuted, fontSize: 14),
           prefixIcon: const Icon(Icons.search, color: AdminColors.textMuted, size: 20),
-          suffixIcon: _phaseSearchQuery.isNotEmpty
+          suffixIcon: _browserSearchQuery.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.close, color: AdminColors.textMuted, size: 18),
                   onPressed: () {
-                    _phaseSearchController.clear();
-                    setState(() => _phaseSearchQuery = '');
+                    _browserSearchController.clear();
+                    setState(() => _browserSearchQuery = '');
                   },
                 )
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-        onChanged: (value) => setState(() => _phaseSearchQuery = value),
+        onChanged: (value) => setState(() => _browserSearchQuery = value),
       ),
     );
   }
 
-  Widget _buildPhaseHistoryTab(String label, int index) {
-    final isSelected = _selectedPhaseHistoryIndex == index;
-    final isPromoted = index == 0;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPhaseHistoryIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected 
-                  ? (isPromoted ? AdminColors.emeraldGreen : AdminColors.statusWarning) 
-                  : Colors.transparent,
-              width: 2,
+  Widget _buildBrowserFieldFilterChips(List<String> fieldNames) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: fieldNames.map((field) {
+        final isSelected = _browserFieldFilters.containsKey(field);
+        return FilterChip(
+          label: Text(
+            field,
+            style: TextStyle(
+              color: isSelected ? AdminColors.emeraldGreen : AdminColors.textSecondary,
+              fontSize: 12,
             ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AdminColors.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              if (selected) {
+                _browserFieldFilters[field] = '';
+              } else {
+                _browserFieldFilters.remove(field);
+              }
+            });
+          },
+          selectedColor: AdminColors.emeraldGreen.withValues(alpha: 0.15),
+          backgroundColor: AdminColors.slateDark,
+          side: BorderSide(
+            color: isSelected 
+                ? AdminColors.emeraldGreen.withValues(alpha: 0.5) 
+                : AdminColors.borderDefault,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPromotedPhasesList() {
-    const tabIndex = 0;
-    final promotedAsync = ref.watch(promotedPhasesProvider);
-    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
-
-    // Track new phases when in static mode
-    if (!isStreaming && snapshot.isNotEmpty) {
-      promotedAsync.whenData((liveItems) {
-        int newCount = 0;
-        if (liveItems.length > snapshot.length) {
-          newCount = liveItems.length - snapshot.length;
-        }
-        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
-          });
-        }
-      });
-    }
-
-    // Determine which data to use
-    final effectiveAsync = isStreaming
-        ? promotedAsync
-        : AsyncValue.data(snapshot);
-
-    return effectiveAsync.when(
-      data: (phases) {
-        if (phases.isEmpty) {
-          return const Center(
-            child: Text('No history yet.', style: TextStyle(color: AdminColors.textSecondary)),
-          );
-        }
-        final filteredPhases = _filterPhases(phases);
-        if (filteredPhases.isEmpty && _phaseSearchQuery.isNotEmpty) {
-          return Center(
-            child: Text(
-              'No results for "$_phaseSearchQuery"',
-              style: const TextStyle(color: AdminColors.textSecondary),
-            ),
-          );
-        }
-        return ListView.builder(
-          itemCount: filteredPhases.length,
-          itemBuilder: (context, index) => _buildPromotedPhaseCard(filteredPhases[index]),
+          showCheckmark: false,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+      }).toList(),
     );
   }
 
-  Widget _buildAbandonedPhasesList() {
-    const tabIndex = 1;
-    final abandonedAsync = ref.watch(abandonedPhasesProvider);
-    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
-
-    // Track new phases when in static mode
-    if (!isStreaming && snapshot.isNotEmpty) {
-      abandonedAsync.whenData((liveItems) {
-        int newCount = 0;
-        if (liveItems.length > snapshot.length) {
-          newCount = liveItems.length - snapshot.length;
-        }
-        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
-          });
-        }
-      });
-    }
-
-    // Determine which data to use
-    final effectiveAsync = isStreaming
-        ? abandonedAsync
-        : AsyncValue.data(snapshot);
-
-    return effectiveAsync.when(
-      data: (phases) {
-        if (phases.isEmpty) {
-          return const Center(
-            child: Text('No history yet.', style: TextStyle(color: AdminColors.textSecondary)),
-          );
-        }
-        final filteredPhases = _filterPhases(phases);
-        if (filteredPhases.isEmpty && _phaseSearchQuery.isNotEmpty) {
-          return Center(
-            child: Text(
-              'No results for "$_phaseSearchQuery"',
-              style: const TextStyle(color: AdminColors.textSecondary),
-            ),
-          );
-        }
-        return ListView.builder(
-          itemCount: filteredPhases.length,
-          itemBuilder: (context, index) => _buildAbandonedPhaseCard(filteredPhases[index]),
+  Widget _buildBrowserActiveFilters() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _browserFieldFilters.entries.map((entry) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AdminColors.slateDark,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            children: [
+              Text(
+                '${entry.key}  =  ',
+                style: const TextStyle(
+                  color: AdminColors.emeraldGreen,
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  style: const TextStyle(color: AdminColors.textPrimary, fontSize: 13),
+                  decoration: const InputDecoration(
+                    hintText: 'value',
+                    hintStyle: TextStyle(color: AdminColors.textMuted, fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _browserFieldFilters[entry.key] = value;
+                    });
+                  },
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _browserFieldFilters.remove(entry.key);
+                  });
+                },
+                icon: const Icon(Icons.close, size: 16),
+                color: AdminColors.textMuted,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                tooltip: 'Remove filter',
+              ),
+            ],
+          ),
         );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.statusWarning)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
+      }).toList(),
     );
   }
 
-  List<Map<String, dynamic>> _filterPhases(List<Map<String, dynamic>> phases) {
-    if (_phaseSearchQuery.isEmpty) return phases;
-    final query = _phaseSearchQuery.toLowerCase();
-    return phases.where((phase) {
-      final summary = (phase['summary']?.toString() ?? '').toLowerCase();
-      return summary.contains(query);
+  List<Map<String, dynamic>> _filterBrowserDocuments(List<Map<String, dynamic>> documents) {
+    return documents.where((doc) {
+      // Apply search query filter (shallow, top-level fields only, case-insensitive)
+      if (_browserSearchQuery.isNotEmpty) {
+        final query = _browserSearchQuery.toLowerCase();
+        bool matchesSearch = false;
+        for (final entry in doc.entries) {
+          if (entry.key == '__docId__') continue;
+          final value = entry.value;
+          String stringValue;
+          if (value is Timestamp) {
+            stringValue = value.toDate().toIso8601String();
+          } else {
+            stringValue = value?.toString() ?? '';
+          }
+          if (stringValue.toLowerCase().contains(query)) {
+            matchesSearch = true;
+            break;
+          }
+        }
+        if (!matchesSearch) return false;
+      }
+      
+      // Apply field filters (AND-combined)
+      for (final filter in _browserFieldFilters.entries) {
+        final fieldName = filter.key;
+        final filterValue = filter.value.toLowerCase();
+        
+        // Skip empty filter values
+        if (filterValue.isEmpty) continue;
+        
+        if (!doc.containsKey(fieldName)) return false;
+        
+        final docValue = doc[fieldName];
+        String stringValue;
+        if (docValue is Timestamp) {
+          stringValue = docValue.toDate().toIso8601String();
+        } else {
+          stringValue = docValue?.toString() ?? '';
+        }
+        
+        if (!stringValue.toLowerCase().contains(filterValue)) {
+          return false;
+        }
+      }
+      
+      return true;
     }).toList();
   }
 
-  Widget _buildPromotedPhaseCard(Map<String, dynamic> data) {
-    final phase = data['phase']?.toString() ?? 'Unknown';
-    final originator = data['originator']?.toString() ?? 'UNKNOWN';
-    final summary = data['summary']?.toString() ?? 'No summary provided.';
-    final promotedAt = data['promoted_at'];
-    final status = data['status']?.toString() ?? 'ACTIVE';
-    final commitSha = data['commit_sha']?.toString() ?? '';
-
+  Widget _buildBrowserDocumentCard(Map<String, dynamic> document) {
+    final docId = document['__docId__'] as String? ?? '';
+    final isExpanded = _browserExpandedCards.contains(docId);
+    
+    // Create a display copy without the internal __docId__ field
+    final displayDoc = Map<String, dynamic>.from(document)..remove('__docId__');
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AdminColors.slateDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.3)),
+        border: Border.all(color: AdminColors.borderDefault),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'Phase $phase',
-                style: const TextStyle(
-                  color: AdminColors.emeraldGreen,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          // Top row: document ID, copy button, JSON modal button, delete button, expand/collapse
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    docId,
+                    style: const TextStyle(
+                      color: AdminColors.emeraldGreen,
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: docId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Copied!', style: TextStyle(color: AdminColors.emeraldGreen)),
+                        backgroundColor: AdminColors.slateMedium,
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 14),
+                  color: AdminColors.textMuted,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Copy document ID',
+                ),
+                IconButton(
+                  onPressed: () => _showBrowserJsonModal(docId, displayDoc),
+                  icon: const Icon(Icons.data_object, size: 16),
+                  color: AdminColors.textMuted,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'View full JSON',
+                ),
+                IconButton(
+                  onPressed: () => _showDeleteDocumentDialog(docId),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  color: AdminColors.textMuted,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Delete document',
+                ),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      if (isExpanded) {
+                        _browserExpandedCards.remove(docId);
+                      } else {
+                        _browserExpandedCards.add(docId);
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                  ),
+                  color: AdminColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: isExpanded ? 'Collapse' : 'Expand',
+                ),
+              ],
+            ),
+          ),
+          
+          // Expanded content: formatted JSON
+          if (isExpanded) ...[
+            const Divider(color: AdminColors.borderDefault, height: 1),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AdminColors.slateDarkest,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
                 ),
               ),
-              if (commitSha.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                _buildCommitShaBadge(commitSha),
-              ],
-              const SizedBox(width: 12),
-              _buildOriginatorBadge(originator),
-              const Spacer(),
-              _buildStatusChip(status, isPromoted: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            summary,
-            style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Promoted at: ${_formatTimestamp(promotedAt)}',
-            style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11),
-          ),
+              child: _buildBrowserSyntaxHighlightedJson(
+                const JsonEncoder.withIndent('  ').convert(_sanitizeBrowserForJson(displayDoc)),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildAbandonedPhaseCard(Map<String, dynamic> data) {
-    final phase = data['phase']?.toString() ?? 'Unknown';
-    final originator = data['originator']?.toString() ?? 'UNKNOWN';
-    final summary = data['summary']?.toString() ?? 'No summary provided.';
-    final abandonedAt = data['abandoned_at'];
-    final reason = data['reason']?.toString() ?? 'KEEP_IN_DEV';
-    final commitSha = data['commit_sha']?.toString() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Phase $phase',
-                style: const TextStyle(
-                  color: AdminColors.statusWarning,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (commitSha.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                _buildCommitShaBadge(commitSha),
-              ],
-              const SizedBox(width: 12),
-              _buildOriginatorBadge(originator),
-              const Spacer(),
-              _buildReasonChip(reason),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            summary,
-            style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Abandoned at: ${_formatTimestamp(abandonedAt)}',
-            style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOriginatorBadge(String originator) {
-    Color badgeColor;
-    switch (originator.toUpperCase()) {
-      case 'MANUAL':
-        badgeColor = AdminColors.statusInfo;
-        break;
-      case 'ASSISTED':
-        badgeColor = AdminColors.emeraldGreen;
-        break;
-      case 'AUTO':
-        badgeColor = AdminColors.statusWarning;
-        break;
-      case 'DREAM':
-        badgeColor = const Color(0xFFA855F7); // Purple for dream
-        break;
-      default:
-        badgeColor = AdminColors.textSecondary;
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        originator.toUpperCase(),
-        style: TextStyle(
-          color: badgeColor,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCommitShaBadge(String fullSha) {
-    final shortSha = fullSha.length >= 7 ? fullSha.substring(0, 7) : fullSha;
-    
-    return Tooltip(
-      message: 'Click to copy SHA hash: $fullSha',
-      child: InkWell(
-        onTap: () async {
-          await Clipboard.setData(ClipboardData(text: fullSha));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Copied!', style: TextStyle(color: AdminColors.emeraldGreen)),
-                backgroundColor: AdminColors.slateMedium,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 1),
-                margin: const EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            );
-          }
-        },
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          decoration: BoxDecoration(
-            color: AdminColors.slateDarkest,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: AdminColors.borderDefault),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'SHA ',
-                style: TextStyle(
-                  color: AdminColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                shortSha,
-                style: const TextStyle(
-                  color: AdminColors.textSecondary,
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.copy, size: 12, color: AdminColors.textMuted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status, {required bool isPromoted}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: const TextStyle(
-          color: AdminColors.emeraldGreen,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReasonChip(String reason) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AdminColors.textMuted.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.textMuted.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        reason.toUpperCase(),
-        style: const TextStyle(
-          color: AdminColors.textMuted,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'Unknown';
-    try {
-      DateTime dt;
-      if (timestamp is DateTime) {
-        dt = timestamp.toUtc();
-      } else if (timestamp is Timestamp) {
-        // Handle Firestore Timestamp - convert to UTC first
-        dt = timestamp.toDate().toUtc();
-      } else {
-        return timestamp.toString();
-      }
-      // Convert to Mountain Daylight Time (UTC-6 for MDT)
-      // Alberta permanent MDT
-      final mountainTime = dt.subtract(const Duration(hours: 6));
-      return '${DateFormat('yyyy-MM-dd HH:mm').format(mountainTime)} MT';
-    } catch (e) {
-      return timestamp.toString();
-    }
-  }
-
-  Widget _buildPhaseHistoryHeader() {
-    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
-    final newCount = _newPhasesByTab[_selectedPhaseHistoryIndex] ?? 0;
-
-    return Row(
-      children: [
-        const Text(
-          'Phase History',
+  void _showDeleteDocumentDialog(String docId) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AdminColors.slateDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text(
+          'Delete Document',
           style: TextStyle(
-            color: Colors.white,
+            color: AdminColors.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
-        const Spacer(),
-        _buildPhaseHistoryStreamingToggle(),
-        if (!isStreaming && newCount > 0) ...[
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AdminColors.statusWarning.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
+        content: Text(
+          'Delete document $docId from $_browserCollection? This cannot be undone.',
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: AdminColors.textSecondary),
             ),
-            child: Text(
-              '$newCount new since snapshot',
-              style: const TextStyle(
-                color: AdminColors.statusWarning,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _deleteDocument(docId);
+            },
+            child: const Text(
+              'DELETE',
+              style: TextStyle(color: AdminColors.rubyRed, fontWeight: FontWeight.bold),
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
-  Widget _buildPhaseHistoryStreamingToggle() {
-    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
-
-    return GestureDetector(
-      onTap: _togglePhaseHistoryStreamingMode,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isStreaming
-              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
-              : AdminColors.statusWarning.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isStreaming
-                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
-                : AdminColors.statusWarning.withValues(alpha: 0.5),
+  Future<void> _deleteDocument(String docId) async {
+    final basePath = ref.read(superadminRepositoryProvider).resolveCollectionPath(_browserTenant);
+    final collectionPath = basePath.replaceAll('agent_bus', _browserCollection);
+    
+    try {
+      await FirebaseFirestore.instance.collection(collectionPath).doc(docId).delete();
+      
+      // Remove from local list immediately
+      setState(() {
+        _browserDocuments.removeWhere((doc) => doc['__docId__'] == docId);
+        _browserExpandedCards.remove(docId);
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Document $docId deleted.',
+              style: const TextStyle(color: AdminColors.emeraldGreen),
+            ),
+            backgroundColor: AdminColors.slateMedium,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isStreaming)
-              AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (context, child) => Opacity(
-                  opacity: _pulseAnimation.value,
-                  child: const Text(
-                    '●',
-                    style: TextStyle(
-                      color: AdminColors.emeraldGreen,
-                      fontSize: 14,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Delete failed: $e',
+              style: const TextStyle(color: AdminColors.rubyRed),
+            ),
+            backgroundColor: AdminColors.slateMedium,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showBrowserJsonModal(String docId, Map<String, dynamic> document) {
+    final sanitized = _sanitizeBrowserForJson(document);
+    final prettyJson = const JsonEncoder.withIndent('  ').convert(sanitized);
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: AdminColors.slateDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 500),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Document JSON',
+                            style: TextStyle(
+                              color: AdminColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            docId,
+                            style: const TextStyle(
+                              color: AdminColors.emeraldGreen,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: prettyJson));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Copied!', style: TextStyle(color: AdminColors.emeraldGreen)),
+                            duration: Duration(seconds: 1),
+                            backgroundColor: AdminColors.slateMedium,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy, size: 18),
+                      color: AdminColors.textSecondary,
+                      tooltip: 'Copy to clipboard',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // JSON content
+                Flexible(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AdminColors.slateDarkest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: SingleChildScrollView(
+                      child: _buildBrowserSyntaxHighlightedJson(prettyJson),
                     ),
                   ),
                 ),
-              )
-            else
-              const Text(
-                '⏸',
-                style: TextStyle(
-                  color: AdminColors.statusWarning,
-                  fontSize: 14,
+                const SizedBox(height: 16),
+                // Close button
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text(
+                      'Close',
+                      style: TextStyle(
+                        color: AdminColors.emeraldGreen,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            const SizedBox(width: 6),
-            Text(
-              isStreaming ? 'LIVE' : 'PAUSED',
-              style: TextStyle(
-                color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  void _togglePhaseHistoryStreamingMode() {
-    final tabIndex = _selectedPhaseHistoryIndex;
-    final isCurrentlyStreaming = _phaseStreamingByTab[tabIndex] ?? true;
+  /// Recursively converts Timestamp objects to ISO 8601 strings for JSON serialization
+  dynamic _sanitizeBrowserForJson(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().toIso8601String();
+    } else if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), _sanitizeBrowserForJson(v)));
+    } else if (value is List) {
+      return value.map(_sanitizeBrowserForJson).toList();
+    }
+    return value;
+  }
 
-    setState(() {
-      if (isCurrentlyStreaming) {
-        // Switching from LIVE to PAUSED for this tab
-        _phaseStreamingByTab[tabIndex] = false;
-        // Copy current live list into snapshot for this tab
-        final provider = tabIndex == 0 ? promotedPhasesProvider : abandonedPhasesProvider;
-        final asyncValue = ref.read(provider);
-        asyncValue.whenData((items) {
-          _phaseSnapshotByTab[tabIndex] = List<Map<String, dynamic>>.from(items);
-        });
-        _newPhasesByTab[tabIndex] = 0;
-      } else {
-        // Switching from PAUSED to LIVE for this tab
-        _phaseStreamingByTab[tabIndex] = true;
-        _phaseSnapshotByTab[tabIndex] = [];
-        _newPhasesByTab[tabIndex] = 0;
+  /// Builds syntax-highlighted JSON widget
+  Widget _buildBrowserSyntaxHighlightedJson(String jsonString) {
+    final spans = <TextSpan>[];
+    
+    const keyColor = Color(0xFF7DD3FC);       // Light blue for keys
+    const stringColor = Color(0xFF86EFAC);    // Light green for string values
+    const numberColor = Color(0xFFFCD34D);    // Yellow for numbers
+    const boolColor = Color(0xFFF472B6);      // Pink for booleans
+    const nullColor = Color(0xFFA78BFA);      // Purple for null
+    const punctuationColor = Color(0xFF94A3B8); // Slate for brackets/punctuation
+    
+    const baseStyle = TextStyle(
+      fontSize: 12,
+      fontFamily: 'monospace',
+    );
+    
+    final keyPattern = RegExp(r'"([^"\\]|\\.)*"\s*:');
+    final stringPattern = RegExp(r'"([^"\\]|\\.)*"');
+    final numberPattern = RegExp(r'-?\d+\.?\d*([eE][+-]?\d+)?');
+    final boolPattern = RegExp(r'\b(true|false)\b');
+    final nullPattern = RegExp(r'\bnull\b');
+    
+    int i = 0;
+    while (i < jsonString.length) {
+      final remaining = jsonString.substring(i);
+      
+      final keyMatch = keyPattern.matchAsPrefix(remaining);
+      if (keyMatch != null) {
+        final matched = keyMatch.group(0)!;
+        final colonIndex = matched.lastIndexOf(':');
+        final keyPart = matched.substring(0, colonIndex);
+        final colonPart = matched.substring(colonIndex);
+        spans.add(TextSpan(text: keyPart, style: baseStyle.copyWith(color: keyColor)));
+        spans.add(TextSpan(text: colonPart, style: baseStyle.copyWith(color: punctuationColor)));
+        i += matched.length;
+        continue;
       }
-    });
+      
+      final stringMatch = stringPattern.matchAsPrefix(remaining);
+      if (stringMatch != null) {
+        spans.add(TextSpan(text: stringMatch.group(0), style: baseStyle.copyWith(color: stringColor)));
+        i += stringMatch.group(0)!.length;
+        continue;
+      }
+      
+      final boolMatch = boolPattern.matchAsPrefix(remaining);
+      if (boolMatch != null) {
+        spans.add(TextSpan(text: boolMatch.group(0), style: baseStyle.copyWith(color: boolColor)));
+        i += boolMatch.group(0)!.length;
+        continue;
+      }
+      
+      final nullMatch = nullPattern.matchAsPrefix(remaining);
+      if (nullMatch != null) {
+        spans.add(TextSpan(text: nullMatch.group(0), style: baseStyle.copyWith(color: nullColor)));
+        i += nullMatch.group(0)!.length;
+        continue;
+      }
+      
+      final numberMatch = numberPattern.matchAsPrefix(remaining);
+      if (numberMatch != null) {
+        spans.add(TextSpan(text: numberMatch.group(0), style: baseStyle.copyWith(color: numberColor)));
+        i += numberMatch.group(0)!.length;
+        continue;
+      }
+      
+      final char = jsonString[i];
+      if ('{[]},'.contains(char)) {
+        spans.add(TextSpan(text: char, style: baseStyle.copyWith(color: punctuationColor)));
+        i++;
+        continue;
+      }
+      
+      spans.add(TextSpan(text: char, style: baseStyle.copyWith(color: punctuationColor)));
+      i++;
+    }
+    
+    return SelectableText.rich(TextSpan(children: spans));
   }
 
   void _showTestInjectModal(BuildContext context) {
@@ -726,6 +1372,12 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
       ),
     );
   }
+}
+
+class _phaseSearchQuery {
+}
+
+class _phaseSearchController {
 }
 
 class _AgentBusInjectionModal extends StatefulWidget {

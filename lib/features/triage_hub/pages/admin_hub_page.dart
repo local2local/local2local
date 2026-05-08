@@ -7,6 +7,7 @@ import 'package:local2local/features/triage_hub/pages/fleet_map_page.dart';
 import 'package:local2local/features/triage_hub/pages/evolution_timeline_page.dart';
 import 'package:local2local/features/triage_hub/pages/health_grid_page.dart';
 import 'package:local2local/features/triage_hub/pages/superadmin_dashboard.dart';
+import 'package:local2local/features/triage_hub/pages/phases_page.dart';
 import 'package:local2local/features/triage_hub/providers/app_providers.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/pages/diagnostics_screen.dart';
@@ -55,6 +56,8 @@ class AdminHubPage extends ConsumerWidget {
       case 4:
         return const DiagnosticsScreen();
       case 5:
+        return const PhasesPage();
+      case 6:
         return const SuperadminDashboard(); 
       default:
         return const TriageQueuePage();
