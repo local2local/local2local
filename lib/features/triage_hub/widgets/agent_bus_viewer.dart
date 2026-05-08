@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
 
-enum AgentBusSortField { documentId, correlationId, sender, receiver, processedAt }
+enum AgentBusSortField { documentId, correlationId, sender, receiver, processedAt, createdAt, lastUpdated }
 
 enum AgentBusStatusFilter { all, pending, dispatched, intercepted }
 
@@ -44,6 +44,9 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
 
   // Shadow Bus toggle (per-tab)
   final Map<int, bool> _showShadowBusByTab = {0: false, 1: false, 2: false};
+
+  // Track deleted correlation IDs during static session (per-tab)
+  final Map<int, Set<String>> _deletedCorrelationIdsByTab = {0: {}, 1: {}, 2: {}};
 
   // Animation controller for pulsing LIVE indicator
   late AnimationController _pulseController;
@@ -91,6 +94,12 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
           return ref.watch(systemAgentBusProvider);
       }
     }
+  }
+
+  DateTime _toDateTime(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is String) return DateTime.tryParse(val) ?? DateTime(0);
+    return DateTime(0);
   }
 
   List<Map<String, dynamic>> _filterAndSortItems(List<Map<String, dynamic>> items) {
@@ -188,6 +197,30 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
             comparison = -1;
           } else {
             comparison = aTime.toString().compareTo(bTime.toString());
+          }
+        case AgentBusSortField.createdAt:
+          final aVal = a['created_at'];
+          final bVal = b['created_at'];
+          if (aVal == null && bVal == null) {
+            comparison = 0;
+          } else if (aVal == null) {
+            return 1; // Missing fields sort to end regardless of direction
+          } else if (bVal == null) {
+            return -1; // Missing fields sort to end regardless of direction
+          } else {
+            comparison = _toDateTime(aVal).compareTo(_toDateTime(bVal));
+          }
+        case AgentBusSortField.lastUpdated:
+          final aVal = a['last_updated'];
+          final bVal = b['last_updated'];
+          if (aVal == null && bVal == null) {
+            comparison = 0;
+          } else if (aVal == null) {
+            return 1; // Missing fields sort to end regardless of direction
+          } else if (bVal == null) {
+            return -1; // Missing fields sort to end regardless of direction
+          } else {
+            comparison = _toDateTime(aVal).compareTo(_toDateTime(bVal));
           }
       }
       return _sortAscending ? comparison : -comparison;
@@ -365,7 +398,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
           ),
         ),
       ),
-    ).then((_) => correlationIdController.dispose());
+    );
   }
 
   Future<void> _executeDeleteByCorrelationId(String correlationId) async {
@@ -399,10 +432,22 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Deleted all items with correlation ID: $correlationId', style: const TextStyle(color: AdminColors.emeraldGreen)),
-            backgroundColor: AdminColors.emeraldGreen,
+            content: Text(
+              'Deleted all items with correlation ID: $correlationId',
+              style: const TextStyle(color: AdminColors.emeraldGreen),
+            ),
+            backgroundColor: AdminColors.slateMedium,
+            duration: const Duration(seconds: 3),
           ),
         );
+
+        // Track deleted correlation ID in static mode
+        final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+        if (!isStreaming) {
+          setState(() {
+            _deletedCorrelationIdsByTab[_selectedTenantIndex]!.add(correlationId);
+          });
+        }
 
         // Clear the active correlation ID if it was the one deleted
         if (_activeCorrelationId == correlationId) {
@@ -488,10 +533,16 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
   Widget _buildTenantTab(String label, int index) {
     final isSelected = _selectedTenantIndex == index;
     return GestureDetector(
-      onTap: () => setState(() {
-        _selectedTenantIndex = index;
-        // Per-tab state is preserved; no need to reset _currentPage
-      }),
+      onTap: () {
+        setState(() {
+          _selectedTenantIndex = index;
+          // Per-tab state is preserved; no need to reset _currentPage
+        });
+        // Sync to shared provider for injection modal
+        ref.read(dashboardTenantIndexProvider.notifier).set(index);
+        ref.read(dashboardShadowBusProvider.notifier).set(
+            _showShadowBusByTab[index] ?? false);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
@@ -629,6 +680,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
               _filterToByTab[_selectedTenantIndex] = null;
               _activeTimePresetByTab[_selectedTenantIndex] = null;
             });
+            // Sync to shared provider for injection modal
+            ref.read(dashboardShadowBusProvider.notifier).set(newSelection.first);
           },
           showSelectedIcon: false,
           style: ButtonStyle(
@@ -1120,6 +1173,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
         _filterFromByTab[_selectedTenantIndex] = null;
         _filterToByTab[_selectedTenantIndex] = null;
         _activeTimePresetByTab[_selectedTenantIndex] = null;
+        // Clear deleted correlation IDs tracking
+        _deletedCorrelationIdsByTab[_selectedTenantIndex] = {};
       }
     });
   }
@@ -1132,6 +1187,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
       });
       _newDocsByTab[_selectedTenantIndex] = 0;
       _currentPageByTab[_selectedTenantIndex] = 0;
+      // Clear deleted correlation IDs tracking
+      _deletedCorrelationIdsByTab[_selectedTenantIndex] = {};
     });
   }
 
@@ -1223,6 +1280,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
             DropdownMenuItem(value: AgentBusSortField.sender, child: Text('Sender')),
             DropdownMenuItem(value: AgentBusSortField.receiver, child: Text('Receiver')),
             DropdownMenuItem(value: AgentBusSortField.processedAt, child: Text('Processed At')),
+            DropdownMenuItem(value: AgentBusSortField.createdAt, child: Text('Created At')),
+            DropdownMenuItem(value: AgentBusSortField.lastUpdated, child: Text('Last Updated')),
           ],
           onChanged: (value) {
             if (value != null) {
@@ -1538,8 +1597,13 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     final isHighlighted = _activeCorrelationId != null && 
         correlationId == _activeCorrelationId;
 
+    // Check if this card is in deleted state (static mode + correlation ID was deleted)
+    final isStreaming = _isStreamingByTab[_selectedTenantIndex] ?? true;
+    final deletedIds = _deletedCorrelationIdsByTab[_selectedTenantIndex] ?? {};
+    final isDeleted = !isStreaming && correlationId.isNotEmpty && deletedIds.contains(correlationId);
+
     return GestureDetector(
-      onTap: () {
+      onTap: isDeleted ? null : () {
         setState(() {
           _activeCorrelationId = correlationId.isNotEmpty ? correlationId : null;
         });
@@ -1548,37 +1612,39 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AdminColors.slateDark,
+          color: isDeleted ? AdminColors.slateDarkest : AdminColors.slateDark,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isHighlighted ? AdminColors.statusInfo : AdminColors.borderDefault,
-            width: isHighlighted ? 2 : 1,
+            color: isDeleted 
+                ? AdminColors.borderDefault 
+                : (isHighlighted ? AdminColors.statusInfo : AdminColors.borderDefault),
+            width: isHighlighted && !isDeleted ? 2 : 1,
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Row 1: correlation_id, status badge, expand/collapse, copy JSON
-            _buildCardRow1(correlationId, status, docId, isExpanded, item),
+            _buildCardRow1(correlationId, status, docId, isExpanded, item, isDeleted: isDeleted),
             const SizedBox(height: 8),
             
             // Row 2: From: sender_id ➜ To: receiver_id
-            _buildCardRow2(senderId, receiverId),
+            _buildCardRow2(senderId, receiverId, isDeleted: isDeleted),
             const SizedBox(height: 8),
             
             // Row 3: document id, Type badge, Priority badge
-            _buildCardRow3(docId, controlType, priority),
+            _buildCardRow3(docId, controlType, priority, isDeleted: isDeleted),
             const SizedBox(height: 8),
             
             // Row 4: Processed timestamp
-            _buildCardRow4(processedAt),
+            _buildCardRow4(processedAt, isDeleted: isDeleted),
             const SizedBox(height: 8),
             
             // Row 5: Timestamp row (Created, Processed, Updated)
-            _buildTimestampRow(item),
+            _buildTimestampRow(item, isDeleted: isDeleted),
             
-            // Expanded content
-            if (isExpanded) ...[
+            // Expanded content (not available in deleted state)
+            if (isExpanded && !isDeleted) ...[
               const SizedBox(height: 12),
               const Divider(color: AdminColors.borderDefault, height: 1),
               const SizedBox(height: 12),
@@ -1595,58 +1661,82 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     String status,
     String docId,
     bool isExpanded,
-    Map<String, dynamic> item,
-  ) {
+    Map<String, dynamic> item, {
+    bool isDeleted = false,
+  }) {
     return Row(
       children: [
         Expanded(
-          child: _buildHighlightedText(
+          child: Text(
             correlationId.isNotEmpty ? correlationId : '—',
-            baseStyle: const TextStyle(
-              color: AdminColors.emeraldGreen,
+            style: TextStyle(
+              color: isDeleted ? AdminColors.textMuted : AdminColors.emeraldGreen,
               fontWeight: FontWeight.bold,
               fontSize: 13,
+              decoration: isDeleted ? TextDecoration.lineThrough : null,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: 8),
-        _buildStatusBadge(status),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: () => _showFullJsonModal(item),
-          icon: const Icon(Icons.data_object, size: 16),
-          color: AdminColors.textMuted,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          tooltip: 'View Full JSON',
-        ),
-        IconButton(
-          onPressed: () {
-            setState(() {
-              if (isExpanded) {
-                _expandedCards.remove(docId);
-              } else {
-                _expandedCards.add(docId);
-              }
-            });
-          },
-          icon: Icon(
-            isExpanded ? Icons.expand_less : Icons.expand_more,
-            size: 20,
+        if (isDeleted)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: AdminColors.rubyRed.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'DELETED',
+              style: TextStyle(
+                color: AdminColors.rubyRed,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+        else ...[
+          _buildStatusBadge(status),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _showFullJsonModal(item),
+            icon: const Icon(Icons.data_object, size: 16),
+            color: AdminColors.textMuted,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: 'View Full JSON',
           ),
-          color: AdminColors.textSecondary,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          tooltip: isExpanded ? 'Collapse' : 'Expand',
-        ),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedCards.remove(docId);
+                } else {
+                  _expandedCards.add(docId);
+                }
+              });
+            },
+            icon: Icon(
+              isExpanded ? Icons.expand_less : Icons.expand_more,
+              size: 20,
+            ),
+            color: AdminColors.textSecondary,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: isExpanded ? 'Collapse' : 'Expand',
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildCardRow2(String? senderId, String? receiverId) {
-    const baseStyle = TextStyle(color: AdminColors.textSecondary, fontSize: 12);
+  Widget _buildCardRow2(String? senderId, String? receiverId, {bool isDeleted = false}) {
+    final baseStyle = TextStyle(
+      color: isDeleted ? AdminColors.textMuted : AdminColors.textSecondary,
+      fontSize: 12,
+    );
     
-    if (_searchQuery.isEmpty) {
+    if (_searchQuery.isEmpty || isDeleted) {
       return Text(
         'From: ${senderId ?? '—'} ➜ To: ${receiverId ?? '—'}',
         style: baseStyle,
@@ -1655,11 +1745,11 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
 
     return Row(
       children: [
-        const Text('From: ', style: baseStyle),
+        Text('From: ', style: baseStyle),
         Flexible(
           child: _buildHighlightedText(senderId ?? '—', baseStyle: baseStyle),
         ),
-        const Text(' ➜ To: ', style: baseStyle),
+        Text(' ➜ To: ', style: baseStyle),
         Flexible(
           child: _buildHighlightedText(receiverId ?? '—', baseStyle: baseStyle),
         ),
@@ -1667,30 +1757,40 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     );
   }
 
-  Widget _buildCardRow3(String docId, String controlType, String priority) {
+  Widget _buildCardRow3(String docId, String controlType, String priority, {bool isDeleted = false}) {
     return Row(
       children: [
         Flexible(
-          child: _buildHighlightedText(
-            docId,
-            baseStyle: const TextStyle(
-              color: AdminColors.textMuted,
-              fontSize: 11,
-              fontFamily: 'monospace',
-            ),
-          ),
+          child: isDeleted
+              ? Text(
+                  docId,
+                  style: const TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                )
+              : _buildHighlightedText(
+                  docId,
+                  baseStyle: const TextStyle(
+                    color: AdminColors.textMuted,
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
         ),
         if (controlType.isNotEmpty) ...[
           const SizedBox(width: 8),
-          _buildTypeBadge(controlType),
+          _buildTypeBadge(controlType, isDeleted: isDeleted),
         ],
         const SizedBox(width: 8),
-        _buildPriorityBadge(priority),
+        _buildPriorityBadge(priority, isDeleted: isDeleted),
       ],
     );
   }
 
-  Widget _buildCardRow4(dynamic processedAt) {
+  Widget _buildCardRow4(dynamic processedAt, {bool isDeleted = false}) {
     String formattedTime = '—';
     if (processedAt != null) {
       try {
@@ -1713,7 +1813,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     
     const baseStyle = TextStyle(color: AdminColors.textMuted, fontSize: 11);
     
-    if (_searchQuery.isEmpty) {
+    if (_searchQuery.isEmpty || isDeleted) {
       return Text('Processed: $formattedTime', style: baseStyle);
     }
 
@@ -1727,7 +1827,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     );
   }
 
-  Widget _buildTimestampRow(Map<String, dynamic> item) {
+  Widget _buildTimestampRow(Map<String, dynamic> item, {bool isDeleted = false}) {
     final createdAt = item['created_at'];
     final telemetry = item['telemetry'] as Map<String, dynamic>? ?? {};
     final processedAt = telemetry['processed_at'];
@@ -1737,8 +1837,8 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
       color: AdminColors.textMuted,
       fontSize: 10,
     );
-    const valueStyle = TextStyle(
-      color: AdminColors.textSecondary,
+    final valueStyle = TextStyle(
+      color: isDeleted ? AdminColors.textMuted : AdminColors.textSecondary,
       fontSize: 10,
       fontFamily: 'monospace',
     );
@@ -1804,36 +1904,50 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     );
   }
 
-  Widget _buildTypeBadge(String type) {
+  Widget _buildTypeBadge(String type, {bool isDeleted = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: AdminColors.slateMedium.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: _buildHighlightedText(
-        type,
-        baseStyle: const TextStyle(
-          color: AdminColors.textSecondary,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      child: isDeleted
+          ? Text(
+              type,
+              style: const TextStyle(
+                color: AdminColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          : _buildHighlightedText(
+              type,
+              baseStyle: const TextStyle(
+                color: AdminColors.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
     );
   }
 
-  Widget _buildPriorityBadge(String priority) {
+  Widget _buildPriorityBadge(String priority, {bool isDeleted = false}) {
     Color bgColor;
     Color textColor;
     
-    switch (priority) {
-      case 'urgent':
-        bgColor = AdminColors.rubyRed.withValues(alpha: 0.15);
-        textColor = AdminColors.rubyRed;
-      case 'normal':
-      default:
-        bgColor = AdminColors.slateLight.withValues(alpha: 0.15);
-        textColor = AdminColors.textMuted;
+    if (isDeleted) {
+      bgColor = AdminColors.slateLight.withValues(alpha: 0.15);
+      textColor = AdminColors.textMuted;
+    } else {
+      switch (priority) {
+        case 'urgent':
+          bgColor = AdminColors.rubyRed.withValues(alpha: 0.15);
+          textColor = AdminColors.rubyRed;
+        case 'normal':
+        default:
+          bgColor = AdminColors.slateLight.withValues(alpha: 0.15);
+          textColor = AdminColors.textMuted;
+      }
     }
 
     return Container(
@@ -1842,14 +1956,23 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
         color: bgColor,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: _buildHighlightedText(
-        priority,
-        baseStyle: TextStyle(
-          color: textColor,
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      child: isDeleted
+          ? Text(
+              priority,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            )
+          : _buildHighlightedText(
+              priority,
+              baseStyle: TextStyle(
+                color: textColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
     );
   }
 

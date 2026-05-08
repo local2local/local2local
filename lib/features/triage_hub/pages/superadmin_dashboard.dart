@@ -738,10 +738,11 @@ class _AgentBusInjectionModal extends StatefulWidget {
 }
 
 class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
-  String _tenant = 'kaskflow';
-  bool _shadow = false;
+  late String _tenant;
+  late bool _shadow;
   int _selectedTab = 0;
   bool _isInjecting = false;
+  bool _rawJsonValid = true;
 
   // Structured form controllers
   late TextEditingController _correlationIdController;
@@ -794,9 +795,24 @@ class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
     'TREASURY_WORKER',
   ];
 
+  /// Convert tenant index to tenant string
+  static String _tenantIndexToString(int index) {
+    switch (index) {
+      case 0: return 'system_status';
+      case 1: return 'kaskflow';
+      case 2: return 'moonlitely';
+      default: return 'system_status';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    // Read current dashboard selections from providers
+    final tenantIndex = widget.ref.read(dashboardTenantIndexProvider);
+    _tenant = _tenantIndexToString(tenantIndex);
+    _shadow = widget.ref.read(dashboardShadowBusProvider);
+    
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     _correlationIdController = TextEditingController(text: 'INJECT-$timestamp');
     _senderIdController = TextEditingController(text: 'SUPERADMIN_UI');
@@ -804,11 +820,33 @@ class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
     _hbrIdController = TextEditingController(text: 'HBR-TEST-001');
     _targetPathController = TextEditingController();
     _detailsController = TextEditingController();
-    _rawJsonController = TextEditingController();
+    _rawJsonController = TextEditingController(text: _buildDefaultJson());
+    _rawJsonController.addListener(_validateRawJson);
+  }
+
+  String _buildDefaultJson() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return '''{
+  "correlation_id": "INJECT-$timestamp",
+  "status": "dispatched",
+  "provenance": { "sender_id": "SUPERADMIN_UI", "receiver_id": "EVOLUTION_WORKER" },
+  "control": { "type": "REQUEST", "priority": "normal" },
+  "payload": { "manifest": { "intent": "PROPOSE_LOGIC_CHANGE", "agentId": "SUPERADMIN_UI", "hbrId": "HBR-TEST-001" } }
+}''';
+  }
+
+  void _validateRawJson() {
+    try {
+      json.decode(_rawJsonController.text);
+      if (!_rawJsonValid) setState(() => _rawJsonValid = true);
+    } catch (_) {
+      if (_rawJsonValid) setState(() => _rawJsonValid = false);
+    }
   }
 
   @override
   void dispose() {
+    _rawJsonController.removeListener(_validateRawJson);
     _correlationIdController.dispose();
     _senderIdController.dispose();
     _receiverIdController.dispose();
@@ -905,7 +943,9 @@ class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
               ),
               const SizedBox(width: 12),
               ElevatedButton(
-                onPressed: _isInjecting ? null : _handleInject,
+                onPressed: _isInjecting || (_selectedTab == 0 && !_rawJsonValid)
+                    ? null
+                    : _handleInject,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AdminColors.emeraldGreen,
                   foregroundColor: AdminColors.slateDarkest,
@@ -1035,33 +1075,61 @@ class _AgentBusInjectionModalState extends State<_AgentBusInjectionModal> {
   Widget _buildRawJsonTab() {
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: TextField(
-        controller: _rawJsonController,
-        maxLines: null,
-        expands: true,
-        style: const TextStyle(
-          color: AdminColors.textPrimary,
-          fontSize: 13,
-          fontFamily: 'monospace',
-        ),
-        decoration: InputDecoration(
-          hintText: '{\n  "status": "dispatched",\n  "payload": { ... }\n}',
-          hintStyle: TextStyle(color: AdminColors.textMuted.withValues(alpha: 0.5)),
-          filled: true,
-          fillColor: AdminColors.slateDark,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AdminColors.borderDefault),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 280,
+            child: TextField(
+              controller: _rawJsonController,
+              maxLines: null,
+              minLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(
+                color: AdminColors.textPrimary,
+                fontSize: 13,
+                fontFamily: 'monospace',
+              ),
+              decoration: InputDecoration(
+                hintText: '{\n  "status": "dispatched",\n  "payload": { ... }\n}',
+                hintStyle: TextStyle(color: AdminColors.textMuted.withValues(alpha: 0.5)),
+                filled: true,
+                fillColor: AdminColors.slateDark,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AdminColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AdminColors.borderDefault),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AdminColors.emeraldGreen, width: 2),
+                ),
+              ),
+            ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AdminColors.borderDefault),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                _rawJsonValid ? Icons.check_circle_outline : Icons.error_outline,
+                size: 14,
+                color: _rawJsonValid ? AdminColors.emeraldGreen : AdminColors.rubyRed,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _rawJsonValid ? 'Valid JSON' : 'Invalid JSON',
+                style: TextStyle(
+                  color: _rawJsonValid ? AdminColors.emeraldGreen : AdminColors.rubyRed,
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AdminColors.emeraldGreen, width: 2),
-          ),
-        ),
+        ],
       ),
     );
   }

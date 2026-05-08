@@ -1,6 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
 
+/// Dashboard selection state: tenant index (0=SYSTEM, 1=KASKFLOW, 2=MOONLITELY)
+class DashboardTenantIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  
+  void set(int index) => state = index;
+}
+
+final dashboardTenantIndexProvider = NotifierProvider<DashboardTenantIndexNotifier, int>(
+  DashboardTenantIndexNotifier.new,
+);
+
+/// Dashboard selection state: shadow bus toggle (false=AGENT BUS, true=SHADOW BUS)
+class DashboardShadowBusNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  
+  void set(bool value) => state = value;
+}
+
+final dashboardShadowBusProvider = NotifierProvider<DashboardShadowBusNotifier, bool>(
+  DashboardShadowBusNotifier.new,
+);
+
 /// Live stream of system telemetry (GREEN/YELLOW/RED)
 final systemStatusStreamProvider = StreamProvider<String>((ref) {
   return ref.watch(superadminRepositoryProvider).watchSystemStatus();
