@@ -1,153 +1,233 @@
-L2LAAF_BLOCK_START(code:repository:lib/features/triage_hub/data/superadmin_repository.dart)
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+L2LAAF_BLOCK_START(code:environment:lib/features/triage_hub/providers/environment_provider.dart)
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 
-/// Repository for Phase 44 SuperAdmin capabilities.
-/// Handles multi-tenant telemetry, versioning, and agent bus streams.
-///
-/// Firestore structure (local2local-dev):
-///   artifacts/system_status/public/data/telemetry/last_heartbeat
-///     - status: "GREEN" | "YELLOW" | "RED"
-///     - version: "vX.X.X"
-///     - bridge: string
-///     - timestamp: Timestamp
-///   artifacts/system_status/public/data/abandoned_phases/{auto-id}
-///   artifacts/system_status/public/data/promoted_phases/{auto-id}
-class SuperadminRepository {
-  final FirebaseFirestore _firestore;
+/// L2L environment — staging has been removed.
+/// Only dev and prod exist.
+enum L2LEnvironment { dev, prod }
 
-  SuperadminRepository(this._firestore);
+class EnvironmentState {
+  final L2LEnvironment environment;
+  final String projectId;
+  final Color headerColor;
 
-  /// Streams the current system telemetry status (GREEN | YELLOW | RED).
-  Stream<String> watchSystemStatus() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['status'] as String? ?? 'UNKNOWN');
+  EnvironmentState({
+    required this.environment,
+    required this.projectId,
+    required this.headerColor,
+  });
+
+  EnvironmentState copyWith({L2LEnvironment? environment}) {
+    final newEnv = environment ?? this.environment;
+    return EnvironmentState(
+      environment: newEnv,
+      projectId: _getProjectId(newEnv),
+      headerColor: _getHeaderColor(newEnv),
+    );
   }
 
-  /// Streams the current version from the telemetry heartbeat document.
-  Stream<String> watchCurrentVersion() {
-    return _firestore
-        .doc('artifacts/system_status/public/data/telemetry/last_heartbeat')
-        .snapshots()
-        .map((doc) => doc.data()?['version'] as String? ?? '–');
+  static String _getProjectId(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod:
+        return 'local2local-prod';
+      default:
+        return 'local2local-dev';
+    }
   }
 
-  /// Streams agent bus entries from a specific tenant.
-  /// Tenant values: 'system_status' | 'kaskflow' | 'moonlitely'
-  /// If [shadow] is true, streams from shadow_bus instead of agent_bus.
-  Stream<List<Map<String, dynamic>>> watchAgentBus(String tenant, {bool shadow = false}) {
-    final artifactId = switch (tenant) {
-      'kaskflow' => 'local2local-kaskflow',
-      'moonlitely' => 'local2local-moonlitely',
-      _ => tenant,
-    };
-    final collection = shadow ? 'shadow_bus' : 'agent_bus';
-    final path = 'artifacts/$artifactId/public/data/$collection';
-    debugPrint('[AgentBus] Watching: $path');
-    return _firestore
-        .collection(path)
-        .limit(50)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = Map<String, dynamic>.from(doc.data());
-            data['id'] = doc.id;
-            return data;
-          }).toList();
-        });
-  }
-
-  /// Streams phase history (promoted or abandoned).
-  /// promoted_phases sorts by promoted_at, abandoned_phases by abandoned_at.
-  Stream<List<Map<String, dynamic>>> watchPhaseHistory(String collection) {
-    final sortField =
-        collection == 'promoted_phases' ? 'promoted_at' : 'abandoned_at';
-    return _firestore
-        .collection('artifacts/system_status/public/data/$collection')
-        .orderBy(sortField, descending: true)
-        .limit(10)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Map<String, dynamic>.from(doc.data()))
-            .toList());
-  }
-
-  /// Resolves the Firestore collection path for a given tenant and bus type.
-  String resolveCollectionPath(String tenant, {bool shadow = false}) {
-    final artifactId = switch (tenant) {
-      'kaskflow' => 'local2local-kaskflow',
-      'moonlitely' => 'local2local-moonlitely',
-      _ => tenant,
-    };
-    final collection = shadow ? 'shadow_bus' : 'agent_bus';
-    return 'artifacts/$artifactId/public/data/$collection';
-  }
-
-  /// Injects an arbitrary payload into any tenant bus collection.
-  /// Automatically enriches the document with created_at, last_updated,
-  /// and telemetry.processed_at server timestamps.
-  /// The caller provides the full payload structure — no hardcoded fields.
-  Future<void> injectPayload({
-    required String tenant,
-    required bool shadow,
-    required Map<String, dynamic> payload,
-  }) async {
-    final path = resolveCollectionPath(tenant, shadow: shadow);
-    final now = FieldValue.serverTimestamp();
-    final enriched = <String, dynamic>{
-      ...payload,
-      'created_at': now,
-      'last_updated': now,
-      'telemetry': <String, dynamic>{
-        ...(payload['telemetry'] as Map<String, dynamic>? ?? {}),
-        'processed_at': now,
-      },
-    };
-    await _firestore.collection(path).add(enriched);
-  }
-
-  /// Legacy test injection — kept for backward compatibility.
-  /// Prefer injectPayload for new injection UI.
-  Future<void> injectTestPayload({
-    required String targetPath,
-    required String instructions,
-  }) async {
-    final timestamp = DateTime.now().toIso8601String();
-    final now = FieldValue.serverTimestamp();
-    await _firestore
-        .collection('artifacts/local2local-dev/public/data/agent_bus')
-        .add({
-      'status': 'dispatched',
-      'correlation_id':
-          'TEST-DASHBOARD-${DateTime.now().millisecondsSinceEpoch}',
-      'created_at': now,
-      'last_updated': now,
-      'telemetry': {
-        'processed_at': now,
-      },
-      'payload': {
-        'manifest': {
-          'intent': 'PROPOSE_LOGIC_CHANGE',
-          'hbrId': 'HBR-DASHBOARD-TEST',
-          'agentId': 'SUPERADMIN_UI',
-          'reason': instructions,
-          'targetPath': targetPath,
-          'proposedLogic':
-              '// Manual trigger from dashboard at $timestamp',
-        }
-      }
-    });
+  static Color _getHeaderColor(L2LEnvironment env) {
+    switch (env) {
+      case L2LEnvironment.prod:
+        return AdminColors.rubyRed;
+      default:
+        return AdminColors.slateDark;
+    }
   }
 }
 
-final superadminRepositoryProvider = Provider<SuperadminRepository>((ref) {
-  return SuperadminRepository(FirebaseFirestore.instance);
+class EnvironmentNotifier extends Notifier<EnvironmentState> {
+  @override
+  EnvironmentState build() {
+    return EnvironmentState(
+      environment: L2LEnvironment.dev,
+      projectId: 'local2local-dev',
+      headerColor: AdminColors.slateDark,
+    );
+  }
+
+  void setEnvironment(L2LEnvironment env, BuildContext context) async {
+    if (env == L2LEnvironment.prod) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AdminColors.slateDark,
+          title: const Text(
+            '⚠️ CONFIRM PRODUCTION ACCESS',
+            style: TextStyle(color: AdminColors.textPrimary),
+          ),
+          content: const Text(
+            'You are entering the LIVE production environment. Exercise extreme caution — all actions affect real users.',
+            style: TextStyle(color: AdminColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'BACK',
+                style: TextStyle(color: AdminColors.textSecondary),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminColors.rubyRed,
+                foregroundColor: AdminColors.textPrimary,
+              ),
+              child: const Text('ENTER PROD'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    state = state.copyWith(environment: env);
+  }
+}
+
+final environmentProvider =
+    NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
+  return EnvironmentNotifier();
 });
 L2LAAF_BLOCK_END
 
+L2LAAF_BLOCK_START(code:cockpitHeader:lib/features/triage_hub/presentation/widgets/cockpit_header.dart)
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
+import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
+
+class CockpitHeader extends ConsumerWidget {
+  const CockpitHeader({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final envState = ref.watch(environmentProvider);
+    final isProd = envState.environment == L2LEnvironment.prod;
+    final version = ref.watch(currentVersionStreamProvider).asData?.value ?? '–';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: BoxDecoration(
+        color: envState.headerColor,
+        boxShadow: isProd
+            ? [
+                BoxShadow(
+                  color: Colors.red.withValues(alpha: 0.5),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                )
+              ]
+            : null,
+      ),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'L2LAAF Cockpit',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  if (isProd) ...[
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text(
+                        'LIVE PRODUCTION',
+                        style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              Text(
+                'Build: $version',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 10,
+                    letterSpacing: 0.5),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<L2LEnvironment>(
+                    value: envState.environment,
+                    dropdownColor: const Color(0xFF1E1E2C),
+                    icon: const Icon(Icons.keyboard_arrow_down,
+                        color: Colors.white),
+                    onChanged: (val) => ref
+                        .read(environmentProvider.notifier)
+                        .setEnvironment(val!, context),
+                    items: L2LEnvironment.values
+                        .map((e) => DropdownMenuItem(
+                              value: e,
+                              child: Text(
+                                e.name.toUpperCase(),
+                                style: TextStyle(
+                                  color: e == L2LEnvironment.prod
+                                      ? Colors.redAccent
+                                      : Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'PROJECT: ${envState.projectId}',
+                style: const TextStyle(
+                    color: Colors.greenAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(width: 24),
+          const Icon(Icons.notifications_none, color: Colors.white, size: 22),
+        ],
+      ),
+    );
+  }
+}
+L2LAAF_BLOCK_END
+
 L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
-[ASSISTED] FEAT(superadmin): Add flexible injectPayload method and resolveCollectionPath to SuperadminRepository
+[ASSISTED] CHORE(infra): Remove staging environment, fix dev project ID, apply AdminColors, and wire version to live provider
 L2LAAF_BLOCK_END
