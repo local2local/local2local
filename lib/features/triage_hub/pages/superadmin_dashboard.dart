@@ -971,6 +971,17 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
     // Create a display copy without the internal __docId__ field
     final displayDoc = Map<String, dynamic>.from(document)..remove('__docId__');
     
+    // Generate JSON string for collapsed summary
+    final jsonString = const JsonEncoder.withIndent('  ').convert(_sanitizeBrowserForJson(displayDoc));
+    // Create a single-line summary: first 100 characters
+    final jsonSummary = jsonString.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final truncatedSummary = jsonSummary.length > 100 
+        ? '${jsonSummary.substring(0, 100)}...' 
+        : jsonSummary;
+    
+    // Check if we should apply highlighting
+    final hasSearchQuery = _browserSearchQuery.isNotEmpty;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -987,16 +998,21 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    docId,
-                    style: const TextStyle(
-                      color: AdminColors.emeraldGreen,
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: hasSearchQuery
+                      ? Text.rich(
+                          _buildHighlightedDocId(docId, _browserSearchQuery),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : Text(
+                          docId,
+                          style: const TextStyle(
+                            color: AdminColors.emeraldGreen,
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                 ),
                 IconButton(
                   onPressed: () {
@@ -1054,7 +1070,19 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
             ),
           ),
           
-          // Expanded content: formatted JSON
+          // Collapsed summary: first 100 chars of JSON with search highlighting
+          if (!isExpanded) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Text.rich(
+                _buildHighlightedText(truncatedSummary, _browserSearchQuery),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+          
+          // Expanded content: formatted JSON (no search highlighting here)
           if (isExpanded) ...[
             const Divider(color: AdminColors.borderDefault, height: 1),
             Container(
@@ -1067,14 +1095,78 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
                   bottomRight: Radius.circular(8),
                 ),
               ),
-              child: _buildBrowserSyntaxHighlightedJson(
-                const JsonEncoder.withIndent('  ').convert(_sanitizeBrowserForJson(displayDoc)),
-              ),
+              child: _buildBrowserSyntaxHighlightedJson(jsonString),
             ),
           ],
         ],
       ),
     );
+  }
+
+  /// Builds a TextSpan for document ID with search highlighting
+  /// Uses emeraldGreen as base, with textPrimary (white) for matches
+  TextSpan _buildHighlightedDocId(String docId, String query) {
+    if (query.isEmpty) {
+      return TextSpan(
+        text: docId,
+        style: const TextStyle(
+          color: AdminColors.emeraldGreen,
+          fontSize: 12,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
+
+    final spans = <TextSpan>[];
+    final lowerText = docId.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    int start = 0;
+
+    while (true) {
+      final matchIndex = lowerText.indexOf(lowerQuery, start);
+      if (matchIndex == -1) {
+        // No more matches, add remaining text
+        if (start < docId.length) {
+          spans.add(TextSpan(
+            text: docId.substring(start),
+            style: const TextStyle(
+              color: AdminColors.textSecondary,
+              fontSize: 12,
+              fontFamily: 'monospace',
+            ),
+          ));
+        }
+        break;
+      }
+
+      // Add non-matching text before the match
+      if (matchIndex > start) {
+        spans.add(TextSpan(
+          text: docId.substring(start, matchIndex),
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 12,
+            fontFamily: 'monospace',
+          ),
+        ));
+      }
+
+      // Add the matching text (highlighted with textPrimary and bold)
+      spans.add(TextSpan(
+        text: docId.substring(matchIndex, matchIndex + query.length),
+        style: const TextStyle(
+          color: AdminColors.textPrimary,
+          fontSize: 12,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+
+      start = matchIndex + query.length;
+    }
+
+    return TextSpan(children: spans);
   }
 
   void _showDeleteDocumentDialog(String docId) {
@@ -1265,6 +1357,69 @@ class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard>
         ),
       ),
     );
+  }
+
+  /// Builds a TextSpan with search term highlighting
+  /// Splits text around case-insensitive matches of query
+  /// Non-matching: AdminColors.textSecondary, 12px
+  /// Matching: AdminColors.textPrimary, 12px, bold
+  TextSpan _buildHighlightedText(String text, String query) {
+    if (query.isEmpty) {
+      return TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: AdminColors.textSecondary,
+          fontSize: 12,
+        ),
+      );
+    }
+
+    final spans = <TextSpan>[];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    int start = 0;
+
+    while (true) {
+      final matchIndex = lowerText.indexOf(lowerQuery, start);
+      if (matchIndex == -1) {
+        // No more matches, add remaining text
+        if (start < text.length) {
+          spans.add(TextSpan(
+            text: text.substring(start),
+            style: const TextStyle(
+              color: AdminColors.textSecondary,
+              fontSize: 12,
+            ),
+          ));
+        }
+        break;
+      }
+
+      // Add non-matching text before the match
+      if (matchIndex > start) {
+        spans.add(TextSpan(
+          text: text.substring(start, matchIndex),
+          style: const TextStyle(
+            color: AdminColors.textSecondary,
+            fontSize: 12,
+          ),
+        ));
+      }
+
+      // Add the matching text (highlighted)
+      spans.add(TextSpan(
+        text: text.substring(matchIndex, matchIndex + query.length),
+        style: const TextStyle(
+          color: AdminColors.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+
+      start = matchIndex + query.length;
+    }
+
+    return TextSpan(children: spans);
   }
 
   /// Recursively converts Timestamp objects to ISO 8601 strings for JSON serialization

@@ -33,6 +33,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
   // Streaming/Static mode state (per-tab)
   final Map<int, bool> _isStreamingByTab = {0: true, 1: true, 2: true};
   final Map<int, List<Map<String, dynamic>>> _snapshotByTab = {0: [], 1: [], 2: []};
+  final Map<int, Set<String>> _snapshotIdsByTab = {0: {}, 1: {}, 2: {}};
   final Map<int, int> _newDocsByTab = {0: 0, 1: 0, 2: 0};
   final Map<int, int> _currentPageByTab = {0: 0, 1: 0, 2: 0};
   static const int _pageSize = 50;
@@ -476,12 +477,15 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     final staticSnapshot = _snapshotByTab[_selectedTenantIndex] ?? [];
     final newDocsSinceSnapshot = _newDocsByTab[_selectedTenantIndex] ?? 0;
 
-    // Track new docs when in static mode (compare by list length)
-    if (!isStreaming && staticSnapshot.isNotEmpty) {
+    // Track new docs when in static mode (compare by document IDs)
+    if (!isStreaming) {
+      final snapshotIds = _snapshotIdsByTab[_selectedTenantIndex] ?? {};
       busAsync.whenData((liveItems) {
-        final newCount = liveItems.length > staticSnapshot.length
-            ? liveItems.length - staticSnapshot.length
-            : 0;
+        // Count documents whose ID is NOT in the snapshot
+        final newCount = liveItems.where((doc) {
+          final docId = doc['id'] as String? ?? '';
+          return docId.isNotEmpty && !snapshotIds.contains(docId);
+        }).length;
         if (newCount != newDocsSinceSnapshot) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() => _newDocsByTab[_selectedTenantIndex] = newCount);
@@ -674,6 +678,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
               _showShadowBusByTab[_selectedTenantIndex] = newSelection.first;
               // Reset state when switching bus type (same as switching tabs)
               _snapshotByTab[_selectedTenantIndex] = [];
+              _snapshotIdsByTab[_selectedTenantIndex] = {};
               _newDocsByTab[_selectedTenantIndex] = 0;
               _currentPageByTab[_selectedTenantIndex] = 0;
               _filterFromByTab[_selectedTenantIndex] = null;
@@ -1157,9 +1162,13 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
       if (isStreaming) {
         // Switching from LIVE to PAUSED
         _isStreamingByTab[_selectedTenantIndex] = false;
-        // Copy current live list into static snapshot
+        // Copy current live list into static snapshot and record IDs
         busAsync.whenData((items) {
           _snapshotByTab[_selectedTenantIndex] = List<Map<String, dynamic>>.from(items);
+          _snapshotIdsByTab[_selectedTenantIndex] = items
+              .map((doc) => doc['id'] as String? ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
         });
         _newDocsByTab[_selectedTenantIndex] = 0;
         _currentPageByTab[_selectedTenantIndex] = 0;
@@ -1167,6 +1176,7 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
         // Switching from PAUSED to LIVE
         _isStreamingByTab[_selectedTenantIndex] = true;
         _snapshotByTab[_selectedTenantIndex] = [];
+        _snapshotIdsByTab[_selectedTenantIndex] = {};
         _newDocsByTab[_selectedTenantIndex] = 0;
         _currentPageByTab[_selectedTenantIndex] = 0;
         // Reset timestamp filter when switching to streaming mode
@@ -1184,6 +1194,10 @@ class _AgentBusViewerState extends ConsumerState<AgentBusViewer>
     setState(() {
       busAsync.whenData((items) {
         _snapshotByTab[_selectedTenantIndex] = List<Map<String, dynamic>>.from(items);
+        _snapshotIdsByTab[_selectedTenantIndex] = items
+            .map((doc) => doc['id'] as String? ?? '')
+            .where((id) => id.isNotEmpty)
+            .toSet();
       });
       _newDocsByTab[_selectedTenantIndex] = 0;
       _currentPageByTab[_selectedTenantIndex] = 0;

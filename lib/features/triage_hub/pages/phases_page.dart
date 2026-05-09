@@ -27,6 +27,7 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
   final Map<int, bool> _phaseStreamingByTab = {0: true, 1: true};
   final Map<int, List<Map<String, dynamic>>> _phaseSnapshotByTab = {0: [], 1: []};
   final Map<int, int> _newPhasesByTab = {0: 0, 1: 0};
+  final Map<int, Set<String>> _phaseSnapshotIdsByTab = {0: {}, 1: {}};
 
   // Animation controller for pulsing LIVE indicator
   late AnimationController _pulseController;
@@ -187,14 +188,16 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
     final promotedAsync = ref.watch(promotedPhasesProvider);
     final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
     final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
+    final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
 
-    // Track new phases when in static mode
-    if (!isStreaming && snapshot.isNotEmpty) {
+    // Track new phases when in static mode using ID-based comparison
+    if (!isStreaming && snapshotIds.isNotEmpty) {
       promotedAsync.whenData((liveItems) {
-        int newCount = 0;
-        if (liveItems.length > snapshot.length) {
-          newCount = liveItems.length - snapshot.length;
-        }
+        // Count items whose phase value is NOT in the snapshot ID set
+        final newCount = liveItems.where((item) {
+          final phaseId = item['phase'] as String? ?? '';
+          return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
+        }).length;
         if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
@@ -239,14 +242,16 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
     final abandonedAsync = ref.watch(abandonedPhasesProvider);
     final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
     final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
+    final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
 
-    // Track new phases when in static mode
-    if (!isStreaming && snapshot.isNotEmpty) {
+    // Track new phases when in static mode using ID-based comparison
+    if (!isStreaming && snapshotIds.isNotEmpty) {
       abandonedAsync.whenData((liveItems) {
-        int newCount = 0;
-        if (liveItems.length > snapshot.length) {
-          newCount = liveItems.length - snapshot.length;
-        }
+        // Count items whose phase value is NOT in the snapshot ID set
+        final newCount = liveItems.where((item) {
+          final phaseId = item['phase'] as String? ?? '';
+          return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
+        }).length;
         if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
@@ -677,12 +682,17 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
         final asyncValue = ref.read(provider);
         asyncValue.whenData((items) {
           _phaseSnapshotByTab[tabIndex] = List<Map<String, dynamic>>.from(items);
+          // Populate ID set from snapshot using the phase field as unique identifier
+          _phaseSnapshotIdsByTab[tabIndex] = _phaseSnapshotByTab[tabIndex]!
+              .map((doc) => doc['phase'] as String? ?? '')
+              .toSet();
         });
         _newPhasesByTab[tabIndex] = 0;
       } else {
         // Switching from PAUSED to LIVE for this tab
         _phaseStreamingByTab[tabIndex] = true;
         _phaseSnapshotByTab[tabIndex] = [];
+        _phaseSnapshotIdsByTab[tabIndex] = {};
         _newPhasesByTab[tabIndex] = 0;
       }
     });
