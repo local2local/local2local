@@ -1,85 +1,20 @@
 /**
- * L2LAAF Phase 45.0.0 Payload
+ * L2LAAF Phase 45.0.1 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: hbr_seed
- * Description: Initializes modular HBR structure for CRA and 14 Canadian Alcohol Jurisdictions using correct pathing.
+ * Description: CHORE: Resurrect Phase 45.0.0 HBR seeds after accidental abandonment.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(hbr): Initialize modular HBR structure for Phase 45.0.0 [BUMP: MAJOR]
+[ASSISTED] CHORE(hbr): Resurrect Phase 45.0.0 seeds [BUMP: PATCH]
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:CRA Rules:functions/src/logic/hbr/ca_cra/rules.json)
-{
-  "rule_maker": "CRA",
-  "region_scope": "ca",
-  "category": "tax",
-  "last_verified": "2026-05-13",
-  "rules": {
-    "gst_rate": { "value": 0.05, "type": "percentage", "policy_ref": "policy.md" }
-  }
-}
-L2LAAF_BLOCK_END */
+/* L2LAAF_BLOCK_START(markdown:HBR Index:functions/src/logic/hbr/README.md)
+# Hard Business Rules (HBR) Index
 
-/* L2LAAF_BLOCK_START(markdown:CRA Policy:functions/src/logic/hbr/ca_cra/policy.md)
-# CRA National Tax Policy
-Initial baseline for national GST (5%).
-L2LAAF_BLOCK_END */
+This directory contains the modular legal ground truth for the L2LAAF framework.
+- `ca_cra/`: National Tax Logic
+- `alcohol/`: Jurisdictional Alcohol Regulation (Kaskflow)
 
-/* --- ALCOHOL REGULATORS --- */
-
-/* L2LAAF_BLOCK_START(json:IILA Rules:functions/src/logic/hbr/alcohol/ca_iila/rules.json)
-{ "rule_maker": "IILA", "region_scope": "ca", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:AGLC Rules:functions/src/logic/hbr/alcohol/ca_ab_aglc/rules.json)
-{ "rule_maker": "AGLC", "region_scope": "ca_ab", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:LCRB Rules:functions/src/logic/hbr/alcohol/ca_bc_lcrb/rules.json)
-{ "rule_maker": "LCRB", "region_scope": "ca_bc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:LGCA Rules:functions/src/logic/hbr/alcohol/ca_mb_lgca/rules.json)
-{ "rule_maker": "LGCA", "region_scope": "ca_mb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:ANBL Rules:functions/src/logic/hbr/alcohol/ca_nb_anbl/rules.json)
-{ "rule_maker": "ANBL", "region_scope": "ca_nb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NLC Rules:functions/src/logic/hbr/alcohol/ca_nl_nlc/rules.json)
-{ "rule_maker": "NLC", "region_scope": "ca_nl", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NTLCC Rules:functions/src/logic/hbr/alcohol/ca_nt_ntlcc/rules.json)
-{ "rule_maker": "NTLCC", "region_scope": "ca_nt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NSLC Rules:functions/src/logic/hbr/alcohol/ca_ns_nslc/rules.json)
-{ "rule_maker": "NSLC", "region_scope": "ca_ns", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NULC Rules:functions/src/logic/hbr/alcohol/ca_nu_nulc/rules.json)
-{ "rule_maker": "NULC", "region_scope": "ca_nu", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:AGCO_LCBO Rules:functions/src/logic/hbr/alcohol/ca_on_agcolcbo/rules.json)
-{ "rule_maker": "AGCO / LCBO", "region_scope": "ca_on", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:PEILCC Rules:functions/src/logic/hbr/alcohol/ca_pe_peilcc/rules.json)
-{ "rule_maker": "PEILCC", "region_scope": "ca_pe", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:SAQ_RACJ Rules:functions/src/logic/hbr/alcohol/ca_qc_saqracj/rules.json)
-{ "rule_maker": "SAQ / RACJ", "region_scope": "ca_qc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:SLGA Rules:functions/src/logic/hbr/alcohol/ca_sk_slga/rules.json)
-{ "rule_maker": "SLGA", "region_scope": "ca_sk", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:YLCC Rules:functions/src/logic/hbr/alcohol/ca_yt_ylcc/rules.json)
-{ "rule_maker": "YLCC", "region_scope": "ca_yt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+Rules are structured by `<jurisdiction>_<regulator>`.
 L2LAAF_BLOCK_END */
