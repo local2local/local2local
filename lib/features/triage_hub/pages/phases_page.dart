@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
 import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
 
-/// Page displaying Phase History with PROMOTED and ABANDONED tabs
+/// Page displaying Phase History with PROMOTED and ABANDONED tabs.
+/// Part of the Phase 44 Evolution Timeline.
 class PhasesPage extends ConsumerStatefulWidget {
   const PhasesPage({super.key});
 
@@ -23,13 +22,11 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
   final TextEditingController _phaseSearchController = TextEditingController();
   String _phaseSearchQuery = '';
 
-  // Phase History streaming/static mode state (per-tab: 0=PROMOTED, 1=ABANDONED)
   final Map<int, bool> _phaseStreamingByTab = {0: true, 1: true};
   final Map<int, List<Map<String, dynamic>>> _phaseSnapshotByTab = {0: [], 1: []};
   final Map<int, int> _newPhasesByTab = {0: 0, 1: 0};
   final Map<int, Set<String>> _phaseSnapshotIdsByTab = {0: {}, 1: {}};
 
-  // Animation controller for pulsing LIVE indicator
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -59,7 +56,6 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             const Text(
               'Phase History',
               style: TextStyle(
@@ -78,7 +74,6 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
             ),
             const SizedBox(height: 32),
             
-            // Main content area - Phase History panel
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(20),
@@ -92,10 +87,8 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
                   children: [
                     _buildPhaseHistoryHeader(),
                     const SizedBox(height: 16),
-                    // Phase History Search Bar
                     _buildPhaseSearchBar(),
                     const SizedBox(height: 16),
-                    // Phase History Tabs
                     Row(
                       children: [
                         _buildPhaseHistoryTab('PROMOTED', 0),
@@ -105,7 +98,6 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
                     const SizedBox(height: 16),
                     const Divider(color: AdminColors.borderDefault, height: 1),
                     const SizedBox(height: 16),
-                    // Phase History List with independent scrolling
                     Expanded(
                       child: _selectedPhaseHistoryIndex == 0
                           ? _buildPromotedPhasesList()
@@ -190,10 +182,8 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
     final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
     final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
 
-    // Track new phases when in static mode using ID-based comparison
     if (!isStreaming && snapshotIds.isNotEmpty) {
       promotedAsync.whenData((liveItems) {
-        // Count items whose phase value is NOT in the snapshot ID set
         final newCount = liveItems.where((item) {
           final phaseId = item['phase'] as String? ?? '';
           return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
@@ -206,10 +196,7 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
       });
     }
 
-    // Determine which data to use
-    final effectiveAsync = isStreaming
-        ? promotedAsync
-        : AsyncValue.data(snapshot);
+    final effectiveAsync = isStreaming ? promotedAsync : AsyncValue.data(snapshot);
 
     return effectiveAsync.when(
       data: (phases) {
@@ -219,14 +206,6 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
           );
         }
         final filteredPhases = _filterPhases(phases);
-        if (filteredPhases.isEmpty && _phaseSearchQuery.isNotEmpty) {
-          return Center(
-            child: Text(
-              'No results for "$_phaseSearchQuery"',
-              style: const TextStyle(color: AdminColors.textSecondary),
-            ),
-          );
-        }
         return ListView.builder(
           itemCount: filteredPhases.length,
           itemBuilder: (context, index) => _buildPromotedPhaseCard(filteredPhases[index]),
@@ -244,10 +223,8 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
     final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
     final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
 
-    // Track new phases when in static mode using ID-based comparison
     if (!isStreaming && snapshotIds.isNotEmpty) {
       abandonedAsync.whenData((liveItems) {
-        // Count items whose phase value is NOT in the snapshot ID set
         final newCount = liveItems.where((item) {
           final phaseId = item['phase'] as String? ?? '';
           return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
@@ -260,10 +237,7 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
       });
     }
 
-    // Determine which data to use
-    final effectiveAsync = isStreaming
-        ? abandonedAsync
-        : AsyncValue.data(snapshot);
+    final effectiveAsync = isStreaming ? abandonedAsync : AsyncValue.data(snapshot);
 
     return effectiveAsync.when(
       data: (phases) {
@@ -273,14 +247,6 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
           );
         }
         final filteredPhases = _filterPhases(phases);
-        if (filteredPhases.isEmpty && _phaseSearchQuery.isNotEmpty) {
-          return Center(
-            child: Text(
-              'No results for "$_phaseSearchQuery"',
-              style: const TextStyle(color: AdminColors.textSecondary),
-            ),
-          );
-        }
         return ListView.builder(
           itemCount: filteredPhases.length,
           itemBuilder: (context, index) => _buildAbandonedPhaseCard(filteredPhases[index]),
@@ -321,18 +287,8 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
         children: [
           Row(
             children: [
-              Text(
-                'Phase $phase',
-                style: const TextStyle(
-                  color: AdminColors.emeraldGreen,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (commitSha.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                _buildCommitShaBadge(commitSha),
-              ],
+              Text('Phase $phase', style: const TextStyle(color: AdminColors.emeraldGreen, fontSize: 18, fontWeight: FontWeight.bold)),
+              if (commitSha.isNotEmpty) ...[const SizedBox(width: 12), _buildCommitShaBadge(commitSha)],
               const SizedBox(width: 12),
               _buildOriginatorBadge(originator),
               const Spacer(),
@@ -340,15 +296,9 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            summary,
-            style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4),
-          ),
+          Text(summary, style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4)),
           const SizedBox(height: 12),
-          Text(
-            'Promoted at: ${_formatTimestamp(promotedAt)}',
-            style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11),
-          ),
+          Text('Promoted: ${_formatTimestamp(promotedAt)}', style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11)),
         ],
       ),
     );
@@ -375,18 +325,8 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
         children: [
           Row(
             children: [
-              Text(
-                'Phase $phase',
-                style: const TextStyle(
-                  color: AdminColors.statusWarning,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (commitSha.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                _buildCommitShaBadge(commitSha),
-              ],
+              Text('Phase $phase', style: const TextStyle(color: AdminColors.statusWarning, fontSize: 18, fontWeight: FontWeight.bold)),
+              if (commitSha.isNotEmpty) ...[const SizedBox(width: 12), _buildCommitShaBadge(commitSha)],
               const SizedBox(width: 12),
               _buildOriginatorBadge(originator),
               const Spacer(),
@@ -394,112 +334,40 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            summary,
-            style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4),
-          ),
+          Text(summary, style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4)),
           const SizedBox(height: 12),
-          Text(
-            'Abandoned at: ${_formatTimestamp(abandonedAt)}',
-            style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11),
-          ),
+          Text('Abandoned: ${_formatTimestamp(abandonedAt)}', style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11)),
         ],
       ),
     );
   }
 
   Widget _buildOriginatorBadge(String originator) {
-    Color badgeColor;
+    Color badgeColor = AdminColors.textSecondary;
     switch (originator.toUpperCase()) {
-      case 'MANUAL':
-        badgeColor = AdminColors.statusInfo;
-        break;
-      case 'ASSISTED':
-        badgeColor = AdminColors.emeraldGreen;
-        break;
-      case 'AUTO':
-        badgeColor = AdminColors.statusWarning;
-        break;
-      case 'DREAM':
-        badgeColor = const Color(0xFFA855F7); // Purple for dream
-        break;
-      default:
-        badgeColor = AdminColors.textSecondary;
+      case 'MANUAL': badgeColor = AdminColors.statusInfo; break;
+      case 'ASSISTED': badgeColor = AdminColors.emeraldGreen; break;
+      case 'AUTO': badgeColor = AdminColors.statusWarning; break;
+      case 'DREAM': badgeColor = const Color(0xFFA855F7); break;
     }
-    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: badgeColor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        originator.toUpperCase(),
-        style: TextStyle(
-          color: badgeColor,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
+      decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor.withValues(alpha: 0.5))),
+      child: Text(originator.toUpperCase(), style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
     );
   }
 
   Widget _buildCommitShaBadge(String fullSha) {
     final shortSha = fullSha.length >= 7 ? fullSha.substring(0, 7) : fullSha;
-    
-    return Tooltip(
-      message: 'Click to copy SHA hash: $fullSha',
-      child: InkWell(
-        onTap: () async {
-          await Clipboard.setData(ClipboardData(text: fullSha));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Copied!', style: TextStyle(color: AdminColors.emeraldGreen)),
-                backgroundColor: AdminColors.slateMedium,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 1),
-                margin: const EdgeInsets.all(16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            );
-          }
-        },
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          decoration: BoxDecoration(
-            color: AdminColors.slateDarkest,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: AdminColors.borderDefault),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'SHA ',
-                style: TextStyle(
-                  color: AdminColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                shortSha,
-                style: const TextStyle(
-                  color: AdminColors.textSecondary,
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.copy, size: 12, color: AdminColors.textMuted),
-            ],
-          ),
-        ),
+    return InkWell(
+      onTap: () async {
+        await Clipboard.setData(ClipboardData(text: fullSha));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied SHA')));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(color: AdminColors.slateDarkest, borderRadius: BorderRadius.circular(4), border: Border.all(color: AdminColors.borderDefault)),
+        child: Text('SHA $shortSha', style: const TextStyle(color: AdminColors.textSecondary, fontSize: 11, fontFamily: 'monospace')),
       ),
     );
   }
@@ -507,162 +375,56 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
   Widget _buildStatusChip(String status, {required bool isPromoted}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AdminColors.emeraldGreen.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: const TextStyle(
-          color: AdminColors.emeraldGreen,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
+      decoration: BoxDecoration(color: AdminColors.emeraldGreen.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.5))),
+      child: Text(status.toUpperCase(), style: const TextStyle(color: AdminColors.emeraldGreen, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 
   Widget _buildReasonChip(String reason) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AdminColors.textMuted.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.textMuted.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        reason.toUpperCase(),
-        style: const TextStyle(
-          color: AdminColors.textMuted,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
+      decoration: BoxDecoration(color: AdminColors.textMuted.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminColors.textMuted.withValues(alpha: 0.5))),
+      child: Text(reason.toUpperCase(), style: const TextStyle(color: AdminColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 
   String _formatTimestamp(dynamic timestamp) {
     if (timestamp == null) return 'Unknown';
     try {
-      DateTime dt;
-      if (timestamp is DateTime) {
-        dt = timestamp.toUtc();
-      } else if (timestamp is Timestamp) {
-        // Handle Firestore Timestamp - convert to UTC first
-        dt = timestamp.toDate().toUtc();
-      } else {
-        return timestamp.toString();
-      }
-      // Convert to Mountain Daylight Time (UTC-6 for MDT)
-      // Alberta permanent MDT
-      final mountainTime = dt.subtract(const Duration(hours: 6));
-      return '${DateFormat('yyyy-MM-dd HH:mm').format(mountainTime)} MT';
-    } catch (e) {
-      return timestamp.toString();
-    }
+      DateTime dt = (timestamp is Timestamp) ? timestamp.toDate() : (timestamp as DateTime);
+      return DateFormat('yyyy-MM-dd HH:mm').format(dt.subtract(const Duration(hours: 6)));
+    } catch (e) { return 'Invalid'; }
   }
 
   Widget _buildPhaseHistoryHeader() {
     final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
-    final newCount = _newPhasesByTab[_selectedPhaseHistoryIndex] ?? 0;
-
     return Row(
       children: [
-        const Icon(
-          Icons.timeline_rounded,
-          color: AdminColors.emeraldGreen,
-          size: 24,
-        ),
+        const Icon(Icons.timeline_rounded, color: AdminColors.emeraldGreen, size: 24),
         const SizedBox(width: 12),
-        const Text(
-          'Evolution Phases',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        const Text('Evolution Phases', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
         const Spacer(),
-        _buildPhaseHistoryStreamingToggle(),
-        if (!isStreaming && newCount > 0) ...[
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AdminColors.statusWarning.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              '$newCount new since snapshot',
-              style: const TextStyle(
-                color: AdminColors.statusWarning,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
+        _buildPhaseHistoryStreamingToggle(isStreaming),
       ],
     );
   }
 
-  Widget _buildPhaseHistoryStreamingToggle() {
-    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
-
+  Widget _buildPhaseHistoryStreamingToggle(bool isStreaming) {
     return GestureDetector(
       onTap: _togglePhaseHistoryStreamingMode,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isStreaming
-              ? AdminColors.emeraldGreen.withValues(alpha: 0.15)
-              : AdminColors.statusWarning.withValues(alpha: 0.15),
+          color: isStreaming ? AdminColors.emeraldGreen.withValues(alpha: 0.15) : AdminColors.statusWarning.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isStreaming
-                ? AdminColors.emeraldGreen.withValues(alpha: 0.5)
-                : AdminColors.statusWarning.withValues(alpha: 0.5),
-          ),
+          border: Border.all(color: isStreaming ? AdminColors.emeraldGreen.withValues(alpha: 0.5) : AdminColors.statusWarning.withValues(alpha: 0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isStreaming)
-              AnimatedBuilder(
-                animation: _pulseAnimation,
-                builder: (context, child) => Opacity(
-                  opacity: _pulseAnimation.value,
-                  child: const Text(
-                    '●',
-                    style: TextStyle(
-                      color: AdminColors.emeraldGreen,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              )
-            else
-              const Text(
-                '⏸',
-                style: TextStyle(
-                  color: AdminColors.statusWarning,
-                  fontSize: 14,
-                ),
-              ),
+            if (isStreaming) AnimatedBuilder(animation: _pulseAnimation, builder: (c, _) => Opacity(opacity: _pulseAnimation.value, child: const Text('●', style: TextStyle(color: AdminColors.emeraldGreen, fontSize: 14)))),
             const SizedBox(width: 6),
-            Text(
-              isStreaming ? 'LIVE' : 'PAUSED',
-              style: TextStyle(
-                color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
+            Text(isStreaming ? 'LIVE' : 'PAUSED', style: TextStyle(color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning, fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -671,29 +433,15 @@ class _PhasesPageState extends ConsumerState<PhasesPage>
 
   void _togglePhaseHistoryStreamingMode() {
     final tabIndex = _selectedPhaseHistoryIndex;
-    final isCurrentlyStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-
+    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
     setState(() {
-      if (isCurrentlyStreaming) {
-        // Switching from LIVE to PAUSED for this tab
-        _phaseStreamingByTab[tabIndex] = false;
-        // Copy current live list into snapshot for this tab
+      _phaseStreamingByTab[tabIndex] = !isStreaming;
+      if (isStreaming) {
         final provider = tabIndex == 0 ? promotedPhasesProvider : abandonedPhasesProvider;
-        final asyncValue = ref.read(provider);
-        asyncValue.whenData((items) {
+        ref.read(provider).whenData((items) {
           _phaseSnapshotByTab[tabIndex] = List<Map<String, dynamic>>.from(items);
-          // Populate ID set from snapshot using the phase field as unique identifier
-          _phaseSnapshotIdsByTab[tabIndex] = _phaseSnapshotByTab[tabIndex]!
-              .map((doc) => doc['phase'] as String? ?? '')
-              .toSet();
+          _phaseSnapshotIdsByTab[tabIndex] = items.map((e) => e['phase'] as String? ?? '').toSet();
         });
-        _newPhasesByTab[tabIndex] = 0;
-      } else {
-        // Switching from PAUSED to LIVE for this tab
-        _phaseStreamingByTab[tabIndex] = true;
-        _phaseSnapshotByTab[tabIndex] = [];
-        _phaseSnapshotIdsByTab[tabIndex] = {};
-        _newPhasesByTab[tabIndex] = 0;
       }
     });
   }
