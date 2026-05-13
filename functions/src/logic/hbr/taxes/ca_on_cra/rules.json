@@ -1,0 +1,10 @@
+{
+  "rule_maker": "CRA",
+  "region_scope": "ca_on",
+  "category": "tax",
+  "tax_type": "HST",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "hst_rate": { "value": 0.13, "type": "percentage" }
+  }
+}

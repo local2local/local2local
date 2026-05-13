@@ -1,0 +1,11 @@
+{
+  "rule_maker": "Ministry of Finance",
+  "region_scope": "ca_bc",
+  "category": "tax",
+  "tax_type": "PST",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "pst_rate_general": { "value": 0.07, "type": "percentage" },
+    "pst_rate_alcohol": { "value": 0.10, "type": "percentage" }
+  }
+}

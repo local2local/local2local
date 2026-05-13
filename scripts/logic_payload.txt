@@ -1,657 +1,22 @@
 /**
- * L2LAAF Phase 45.0.0 Resurrection Payload
+ * L2LAAF Phase 45.1.0 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: hbr_seed / triage_hub
- * Description: FEAT(hbr): Resurrect Phase 45.0.0 seeds and resolve cockpit linting issues (BuildContext sync).
+ * Target: hbr_refinement
+ * Description: Relocates tax HBRs to modular taxes hierarchy and seeds regional collectors.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(hbr): Initialize Phase 45.0.0 and resolve cockpit linting [BUMP: MAJOR]
+[ASSISTED] REFACT(hbr): Relocate tax rules to modular /taxes/ hierarchy [BUMP: PATCH]
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(dart:Phases Page:lib/features/triage_hub/pages/phases_page.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-// ignore: depend_on_referenced_packages
-import 'package:intl/intl.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
+/* --- FEDERAL TAX (CRA) --- */
 
-/// Page displaying Phase History with PROMOTED and ABANDONED tabs.
-/// Part of the Phase 44 Evolution Timeline.
-class PhasesPage extends ConsumerStatefulWidget {
-  const PhasesPage({super.key});
-
-  @override
-  ConsumerState<PhasesPage> createState() => _PhasesPageState();
-}
-
-class _PhasesPageState extends ConsumerState<PhasesPage>
-    with SingleTickerProviderStateMixin {
-  int _selectedPhaseHistoryIndex = 0;
-  final TextEditingController _phaseSearchController = TextEditingController();
-  String _phaseSearchQuery = '';
-
-  final Map<int, bool> _phaseStreamingByTab = {0: true, 1: true};
-  final Map<int, List<Map<String, dynamic>>> _phaseSnapshotByTab = {0: [], 1: []};
-  final Map<int, int> _newPhasesByTab = {0: 0, 1: 0};
-  final Map<int, Set<String>> _phaseSnapshotIdsByTab = {0: {}, 1: {}};
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(_pulseController);
-  }
-
-  @override
-  void dispose() {
-    _phaseSearchController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AdminColors.slateDarkest,
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Phase History',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Track promoted and abandoned phases across the evolution pipeline.',
-              style: TextStyle(
-                color: AdminColors.textSecondary,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 32),
-            
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AdminColors.slateDark.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AdminColors.borderDefault),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildPhaseHistoryHeader(),
-                    const SizedBox(height: 16),
-                    _buildPhaseSearchBar(),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        _buildPhaseHistoryTab('PROMOTED', 0),
-                        _buildPhaseHistoryTab('ABANDONED', 1),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(color: AdminColors.borderDefault, height: 1),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: _selectedPhaseHistoryIndex == 0
-                          ? _buildPromotedPhasesList()
-                          : _buildAbandonedPhasesList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhaseSearchBar() {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.borderDefault),
-      ),
-      child: TextField(
-        controller: _phaseSearchController,
-        style: const TextStyle(color: AdminColors.textPrimary, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Search by summary...',
-          hintStyle: const TextStyle(color: AdminColors.textMuted, fontSize: 14),
-          prefixIcon: const Icon(Icons.search, color: AdminColors.textMuted, size: 20),
-          suffixIcon: _phaseSearchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close, color: AdminColors.textMuted, size: 18),
-                  onPressed: () {
-                    _phaseSearchController.clear();
-                    setState(() => _phaseSearchQuery = '');
-                  },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        onChanged: (value) => setState(() => _phaseSearchQuery = value),
-      ),
-    );
-  }
-
-  Widget _buildPhaseHistoryTab(String label, int index) {
-    final isSelected = _selectedPhaseHistoryIndex == index;
-    final isPromoted = index == 0;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedPhaseHistoryIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isSelected 
-                  ? (isPromoted ? AdminColors.emeraldGreen : AdminColors.statusWarning) 
-                  : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AdminColors.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPromotedPhasesList() {
-    const tabIndex = 0;
-    final promotedAsync = ref.watch(promotedPhasesProvider);
-    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
-    final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
-
-    if (!isStreaming && snapshotIds.isNotEmpty) {
-      promotedAsync.whenData((liveItems) {
-        final newCount = liveItems.where((item) {
-          final phaseId = item['phase'] as String? ?? '';
-          return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
-        }).length;
-        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
-          });
-        }
-      });
-    }
-
-    final effectiveAsync = isStreaming ? promotedAsync : AsyncValue.data(snapshot);
-
-    return effectiveAsync.when(
-      data: (phases) {
-        if (phases.isEmpty) {
-          return const Center(
-            child: Text('No history yet.', style: TextStyle(color: AdminColors.textSecondary)),
-          );
-        }
-        final filteredPhases = _filterPhases(phases);
-        return ListView.builder(
-          itemCount: filteredPhases.length,
-          itemBuilder: (context, index) => _buildPromotedPhaseCard(filteredPhases[index]),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-    );
-  }
-
-  Widget _buildAbandonedPhasesList() {
-    const tabIndex = 1;
-    final abandonedAsync = ref.watch(abandonedPhasesProvider);
-    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-    final snapshot = _phaseSnapshotByTab[tabIndex] ?? [];
-    final snapshotIds = _phaseSnapshotIdsByTab[tabIndex] ?? {};
-
-    if (!isStreaming && snapshotIds.isNotEmpty) {
-      abandonedAsync.whenData((liveItems) {
-        final newCount = liveItems.where((item) {
-          final phaseId = item['phase'] as String? ?? '';
-          return phaseId.isNotEmpty && !snapshotIds.contains(phaseId);
-        }).length;
-        if (newCount != (_newPhasesByTab[tabIndex] ?? 0)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _newPhasesByTab[tabIndex] = newCount);
-          });
-        }
-      });
-    }
-
-    final effectiveAsync = isStreaming ? abandonedAsync : AsyncValue.data(snapshot);
-
-    return effectiveAsync.when(
-      data: (phases) {
-        if (phases.isEmpty) {
-          return const Center(
-            child: Text('No history yet.', style: TextStyle(color: AdminColors.textSecondary)),
-          );
-        }
-        final filteredPhases = _filterPhases(phases);
-        return ListView.builder(
-          itemCount: filteredPhases.length,
-          itemBuilder: (context, index) => _buildAbandonedPhaseCard(filteredPhases[index]),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.statusWarning)),
-      error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-    );
-  }
-
-  List<Map<String, dynamic>> _filterPhases(List<Map<String, dynamic>> phases) {
-    if (_phaseSearchQuery.isEmpty) return phases;
-    final query = _phaseSearchQuery.toLowerCase();
-    return phases.where((phase) {
-      final summary = (phase['summary']?.toString() ?? '').toLowerCase();
-      return summary.contains(query);
-    }).toList();
-  }
-
-  Widget _buildPromotedPhaseCard(Map<String, dynamic> data) {
-    final phase = data['phase']?.toString() ?? 'Unknown';
-    final originator = data['originator']?.toString() ?? 'UNKNOWN';
-    final summary = data['summary']?.toString() ?? 'No summary provided.';
-    final promotedAt = data['promoted_at'];
-    final status = data['status']?.toString() ?? 'ACTIVE';
-    final commitSha = data['commit_sha']?.toString() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Phase $phase', style: const TextStyle(color: AdminColors.emeraldGreen, fontSize: 18, fontWeight: FontWeight.bold)),
-              if (commitSha.isNotEmpty) ...[const SizedBox(width: 12), _buildCommitShaBadge(commitSha)],
-              const SizedBox(width: 12),
-              _buildOriginatorBadge(originator),
-              const Spacer(),
-              _buildStatusChip(status, isPromoted: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(summary, style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4)),
-          const SizedBox(height: 12),
-          Text('Promoted: ${_formatTimestamp(promotedAt)}', style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAbandonedPhaseCard(Map<String, dynamic> data) {
-    final phase = data['phase']?.toString() ?? 'Unknown';
-    final originator = data['originator']?.toString() ?? 'UNKNOWN';
-    final summary = data['summary']?.toString() ?? 'No summary provided.';
-    final abandonedAt = data['abandoned_at'];
-    final reason = data['reason']?.toString() ?? 'KEEP_IN_DEV';
-    final commitSha = data['commit_sha']?.toString() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.statusWarning.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Phase $phase', style: const TextStyle(color: AdminColors.statusWarning, fontSize: 18, fontWeight: FontWeight.bold)),
-              if (commitSha.isNotEmpty) ...[const SizedBox(width: 12), _buildCommitShaBadge(commitSha)],
-              const SizedBox(width: 12),
-              _buildOriginatorBadge(originator),
-              const Spacer(),
-              _buildReasonChip(reason),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(summary, style: const TextStyle(color: AdminColors.textMuted, fontSize: 13, height: 1.4)),
-          const SizedBox(height: 12),
-          Text('Abandoned: ${_formatTimestamp(abandonedAt)}', style: TextStyle(color: AdminColors.textSecondary.withValues(alpha: 0.7), fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOriginatorBadge(String originator) {
-    Color badgeColor = AdminColors.textSecondary;
-    switch (originator.toUpperCase()) {
-      case 'MANUAL': badgeColor = AdminColors.statusInfo; break;
-      case 'ASSISTED': badgeColor = AdminColors.emeraldGreen; break;
-      case 'AUTO': badgeColor = AdminColors.statusWarning; break;
-      case 'DREAM': badgeColor = const Color(0xFFA855F7); break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: badgeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4), border: Border.all(color: badgeColor.withValues(alpha: 0.5))),
-      child: Text(originator.toUpperCase(), style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-    );
-  }
-
-  Widget _buildCommitShaBadge(String fullSha) {
-    final shortSha = fullSha.length >= 7 ? fullSha.substring(0, 7) : fullSha;
-    return InkWell(
-      onTap: () async {
-        await Clipboard.setData(ClipboardData(text: fullSha));
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied SHA')));
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(color: AdminColors.slateDarkest, borderRadius: BorderRadius.circular(4), border: Border.all(color: AdminColors.borderDefault)),
-        child: Text('SHA $shortSha', style: const TextStyle(color: AdminColors.textSecondary, fontSize: 11, fontFamily: 'monospace')),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status, {required bool isPromoted}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: AdminColors.emeraldGreen.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminColors.emeraldGreen.withValues(alpha: 0.5))),
-      child: Text(status.toUpperCase(), style: const TextStyle(color: AdminColors.emeraldGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildReasonChip(String reason) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: AdminColors.textMuted.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: AdminColors.textMuted.withValues(alpha: 0.5))),
-      child: Text(reason.toUpperCase(), style: const TextStyle(color: AdminColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'Unknown';
-    try {
-      DateTime dt = (timestamp is Timestamp) ? timestamp.toDate() : (timestamp as DateTime);
-      return DateFormat('yyyy-MM-dd HH:mm').format(dt.subtract(const Duration(hours: 6)));
-    } catch (e) { return 'Invalid'; }
-  }
-
-  Widget _buildPhaseHistoryHeader() {
-    final isStreaming = _phaseStreamingByTab[_selectedPhaseHistoryIndex] ?? true;
-    return Row(
-      children: [
-        const Icon(Icons.timeline_rounded, color: AdminColors.emeraldGreen, size: 24),
-        const SizedBox(width: 12),
-        const Text('Evolution Phases', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        const Spacer(),
-        _buildPhaseHistoryStreamingToggle(isStreaming),
-      ],
-    );
-  }
-
-  Widget _buildPhaseHistoryStreamingToggle(bool isStreaming) {
-    return GestureDetector(
-      onTap: _togglePhaseHistoryStreamingMode,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isStreaming ? AdminColors.emeraldGreen.withValues(alpha: 0.15) : AdminColors.statusWarning.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: isStreaming ? AdminColors.emeraldGreen.withValues(alpha: 0.5) : AdminColors.statusWarning.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isStreaming) AnimatedBuilder(animation: _pulseAnimation, builder: (c, _) => Opacity(opacity: _pulseAnimation.value, child: const Text('●', style: TextStyle(color: AdminColors.emeraldGreen, fontSize: 14)))),
-            const SizedBox(width: 6),
-            Text(isStreaming ? 'LIVE' : 'PAUSED', style: TextStyle(color: isStreaming ? AdminColors.emeraldGreen : AdminColors.statusWarning, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _togglePhaseHistoryStreamingMode() {
-    final tabIndex = _selectedPhaseHistoryIndex;
-    final isStreaming = _phaseStreamingByTab[tabIndex] ?? true;
-    setState(() {
-      _phaseStreamingByTab[tabIndex] = !isStreaming;
-      if (isStreaming) {
-        final provider = tabIndex == 0 ? promotedPhasesProvider : abandonedPhasesProvider;
-        ref.read(provider).whenData((items) {
-          _phaseSnapshotByTab[tabIndex] = List<Map<String, dynamic>>.from(items);
-          _phaseSnapshotIdsByTab[tabIndex] = items.map((e) => e['phase'] as String? ?? '').toSet();
-        });
-      }
-    });
-  }
-}
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(dart:Superadmin Dashboard:lib/features/triage_hub/pages/superadmin_dashboard.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
-import 'package:local2local/features/triage_hub/widgets/system_status_banner.dart';
-import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
-import 'package:local2local/features/triage_hub/data/superadmin_repository.dart';
-
-/// Main Cockpit Dashboard for Phase 44/45 SuperAdmin operations.
-/// Features multi-tenant agent bus monitoring and live telemetry.
-class SuperadminDashboard extends ConsumerStatefulWidget {
-  const SuperadminDashboard({super.key});
-
-  @override
-  ConsumerState<SuperadminDashboard> createState() => _SuperadminDashboardState();
-}
-
-class _SuperadminDashboardState extends ConsumerState<SuperadminDashboard> {
-  int _selectedTenantIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final systemBus = ref.watch(systemAgentBusProvider);
-    final kaskflowBus = ref.watch(kaskflowAgentBusProvider);
-    final moonlitelyBus = ref.watch(moonlitelyAgentBusProvider);
-
-    return Scaffold(
-      backgroundColor: AdminColors.slateDarkest,
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Superadmin Dashboard',
-                  style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => _showTestInjectModal(context),
-                  icon: const Icon(Icons.rocket_launch_rounded, size: 18),
-                  label: const Text('Test Inject'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdminColors.slateDark,
-                    foregroundColor: AdminColors.emeraldGreen,
-                    side: BorderSide(color: AdminColors.emeraldGreen.withValues(alpha: 0.5)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            const SystemStatusBanner(),
-            const SizedBox(height: 40),
-            Row(
-              children: [
-                _buildTab('SYSTEM', 0),
-                _buildTab('KASKFLOW', 1),
-                _buildTab('MOONLITELY', 2),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: AdminColors.borderDefault, height: 1),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _buildBusList(_selectedTenantIndex == 0 
-                  ? systemBus 
-                  : _selectedTenantIndex == 1 ? kaskflowBus : moonlitelyBus),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, int index) {
-    final isSelected = _selectedTenantIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedTenantIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: isSelected ? AdminColors.emeraldGreen : Colors.transparent, width: 2)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(color: isSelected ? Colors.white : AdminColors.textSecondary, fontSize: 13, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBusList(AsyncValue<List<Map<String, dynamic>>> busAsync) {
-    return busAsync.when(
-      data: (items) {
-        if (items.isEmpty) return const Center(child: Text('No active bus traffic.', style: TextStyle(color: AdminColors.textSecondary)));
-        return ListView.builder(
-          itemCount: items.length,
-          itemBuilder: (context, index) => _buildProposalCard(items[index]),
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AdminColors.emeraldGreen)),
-      error: (e, _) => Center(child: Text('Bus Error: $e', style: const TextStyle(color: AdminColors.rubyRed))),
-    );
-  }
-
-  Widget _buildProposalCard(Map<String, dynamic> data) {
-    final Map<String, dynamic> manifest = data['payload']?['manifest'] != null 
-        ? Map<String, dynamic>.from(data['payload']['manifest'])
-        : {};
-    final status = data['status'] ?? 'unknown';
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AdminColors.slateDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdminColors.borderDefault),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.hub_rounded, color: AdminColors.emeraldGreen, size: 20),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(manifest['reason']?.toString() ?? 'Autonomous Proposal', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                Text('Target: ${manifest['targetPath']?.toString() ?? 'Unknown'}', style: const TextStyle(color: AdminColors.textSecondary, fontSize: 12)),
-              ],
-            ),
-          ),
-          Text(status.toString().toUpperCase(), style: const TextStyle(color: AdminColors.emeraldGreen, fontSize: 10, fontWeight: FontWeight.w900)),
-        ],
-      ),
-    );
-  }
-
-  void _showTestInjectModal(BuildContext context) {
-    final TextEditingController pathController = TextEditingController(text: 'lib/features/triage_hub/widgets/system_status_banner.dart');
-    final TextEditingController reasonController = TextEditingController(text: "Update status string to 'AWAITING TELEMETRY'.");
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AdminColors.slateDark,
-        title: const Text('Manual Logic Injection', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: pathController, decoration: const InputDecoration(labelText: 'Target Path', labelStyle: TextStyle(color: AdminColors.textSecondary)), style: const TextStyle(color: Colors.white)),
-            const SizedBox(height: 16),
-            TextField(controller: reasonController, maxLines: 3, decoration: const InputDecoration(labelText: 'Instructions', labelStyle: TextStyle(color: AdminColors.textSecondary)), style: const TextStyle(color: Colors.white)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CANCEL')),
-          ElevatedButton(
-            onPressed: () async {
-              await ref.read(superadminRepositoryProvider).injectTestPayload(targetPath: pathController.text, instructions: reasonController.text);
-              if (dialogContext.mounted) {
-                Navigator.pop(dialogContext);
-              }
-            },
-            child: const Text('INJECT'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-L2LAAF_BLOCK_END */
-
-/* --- PHASE 45.0.0 HBR SEEDS (TAX & ALCOHOL CATEGORIES) --- */
-
-/* L2LAAF_BLOCK_START(markdown:HBR Index:functions/src/logic/hbr/README.md)
-# Hard Business Rules (HBR) Index
-
-This directory contains the modular legal ground truth for the L2LAAF framework.
-- `ca_cra/`: National Tax Logic
-- `alcohol/`: Jurisdictional Alcohol Regulation (Kaskflow)
-
-Rules are structured by `<jurisdiction>_<regulator>`.
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:CRA Rules:functions/src/logic/hbr/ca_cra/rules.json)
+/* L2LAAF_BLOCK_START(json:Federal GST:functions/src/logic/hbr/taxes/ca_cra/rules.json)
 {
   "rule_maker": "CRA",
   "region_scope": "ca",
   "category": "tax",
+  "tax_type": "GST",
   "last_verified": "2026-05-13",
   "rules": {
     "gst_rate": { "value": 0.05, "type": "percentage", "policy_ref": "policy.md" }
@@ -659,58 +24,63 @@ L2LAAF_BLOCK_END */
 }
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:IILA Federal Alcohol:functions/src/logic/hbr/alcohol/ca_iila/rules.json)
-{ "rule_maker": "IILA", "region_scope": "ca", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+/* L2LAAF_BLOCK_START(markdown:CRA Tax Policy:functions/src/logic/hbr/taxes/ca_cra/policy.md)
+# National GST Policy
+Federal Goods and Services Tax (GST) collected by the CRA.
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:AGLC Alcohol:functions/src/logic/hbr/alcohol/ca_ab_aglc/rules.json)
-{ "rule_maker": "AGLC", "region_scope": "ca_ab", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+/* --- ALBERTA TAX (AGLC Markups) --- */
+
+/* L2LAAF_BLOCK_START(json:AB Alcohol Markups:functions/src/logic/hbr/taxes/ca_ab_aglc/rules.json)
+{
+  "rule_maker": "AGLC",
+  "region_scope": "ca_ab",
+  "category": "tax",
+  "tax_type": "substance_markup",
+  "substance": "alcohol",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "markup_spirits": { "value": 13.30, "unit": "LAD", "type": "flat_rate" },
+    "markup_wine": { "value": 3.45, "unit": "liter", "type": "flat_rate" }
+  }
+}
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:LCRB Alcohol:functions/src/logic/hbr/alcohol/ca_bc_lcrb/rules.json)
-{ "rule_maker": "LCRB", "region_scope": "ca_bc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+/* --- BRITISH COLUMBIA TAX (PST via Ministry of Finance) --- */
+
+/* L2LAAF_BLOCK_START(json:BC PST:functions/src/logic/hbr/taxes/ca_bc_mcf/rules.json)
+{
+  "rule_maker": "Ministry of Finance",
+  "region_scope": "ca_bc",
+  "category": "tax",
+  "tax_type": "PST",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "pst_rate_general": { "value": 0.07, "type": "percentage" },
+    "pst_rate_alcohol": { "value": 0.10, "type": "percentage" }
+  }
+}
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:LGCA Alcohol:functions/src/logic/hbr/alcohol/ca_mb_lgca/rules.json)
-{ "rule_maker": "LGCA", "region_scope": "ca_mb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+/* --- ONTARIO TAX (HST via CRA) --- */
+
+/* L2LAAF_BLOCK_START(json:ON HST:functions/src/logic/hbr/taxes/ca_on_cra/rules.json)
+{
+  "rule_maker": "CRA",
+  "region_scope": "ca_on",
+  "category": "tax",
+  "tax_type": "HST",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "hst_rate": { "value": 0.13, "type": "percentage" }
+  }
+}
 L2LAAF_BLOCK_END */
 
-/* L2LAAF_BLOCK_START(json:ANBL Alcohol:functions/src/logic/hbr/alcohol/ca_nb_anbl/rules.json)
-{ "rule_maker": "ANBL", "region_scope": "ca_nb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
+/* --- CLEANUP REDUNDANT PATHS --- */
 
-/* L2LAAF_BLOCK_START(json:NLC Alcohol:functions/src/logic/hbr/alcohol/ca_nl_nlc/rules.json)
-{ "rule_maker": "NLC", "region_scope": "ca_nl", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NTLCC Alcohol:functions/src/logic/hbr/alcohol/ca_nt_ntlcc/rules.json)
-{ "rule_maker": "NTLCC", "region_scope": "ca_nt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NSLC Alcohol:functions/src/logic/hbr/alcohol/ca_ns_nslc/rules.json)
-{ "rule_maker": "NSLC", "region_scope": "ca_ns", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:NULC Alcohol:functions/src/logic/hbr/alcohol/ca_nu_nulc/rules.json)
-{ "rule_maker": "NULC", "region_scope": "ca_nu", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:AGCO LCBO Alcohol:functions/src/logic/hbr/alcohol/ca_on_agcolcbo/rules.json)
-{ "rule_maker": "AGCO / LCBO", "region_scope": "ca_on", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:PEILCC Alcohol:functions/src/logic/hbr/alcohol/ca_pe_peilcc/rules.json)
-{ "rule_maker": "PEILCC", "region_scope": "ca_pe", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:SAQ RACJ Alcohol:functions/src/logic/hbr/alcohol/ca_qc_saqracj/rules.json)
-{ "rule_maker": "SAQ / RACJ", "region_scope": "ca_qc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:SLGA Alcohol:functions/src/logic/hbr/alcohol/ca_sk_slga/rules.json)
-{ "rule_maker": "SLGA", "region_scope": "ca_sk", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:YLCC Alcohol:functions/src/logic/hbr/alcohol/ca_yt_ylcc/rules.json)
-{ "rule_maker": "YLCC", "region_scope": "ca_yt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+/* L2LAAF_BLOCK_START(markdown:Legacy HBR Cleanup:functions/src/logic/hbr/ca_cra/DEPRECATED.md)
+# Deprecated Path
+Tax logic has been moved to `functions/src/logic/hbr/taxes/ca_cra/`. 
+Do not add new rules to this root.
 L2LAAF_BLOCK_END */

@@ -1,0 +1,12 @@
+{
+  "rule_maker": "AGLC",
+  "region_scope": "ca_ab",
+  "category": "tax",
+  "tax_type": "substance_markup",
+  "substance": "alcohol",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "markup_spirits": { "value": 13.30, "unit": "LAD", "type": "flat_rate" },
+    "markup_wine": { "value": 3.45, "unit": "liter", "type": "flat_rate" }
+  }
+}
