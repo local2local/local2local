@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDistanceMeters = void 0;
+exports.getDistanceMeters = getDistanceMeters;
 function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180;
@@ -13,5 +13,4 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
-exports.getDistanceMeters = getDistanceMeters;
 //# sourceMappingURL=shared.js.map

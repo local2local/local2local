@@ -1,0 +1,9 @@
+{
+  "rule_maker": "CRA",
+  "region_scope": "ca",
+  "category": "tax",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "gst_rate": { "value": 0.05, "type": "percentage", "policy_ref": "policy.md" }
+  }
+}

@@ -1,233 +1,85 @@
-L2LAAF_BLOCK_START(code:environment:lib/features/triage_hub/providers/environment_provider.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/theme/admin_theme.dart';
+/**
+ * L2LAAF Phase 45.0.0 Payload
+ * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
+ * Target: hbr_seed
+ * Description: Initializes modular HBR structure for CRA and 14 Canadian Alcohol Jurisdictions using correct pathing.
+ */
 
-/// L2L environment — staging has been removed.
-/// Only dev and prod exist.
-enum L2LEnvironment { dev, prod }
+/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
+[ASSISTED] FEAT(hbr): Initialize modular HBR structure for Phase 45.0.0 [BUMP: MAJOR]
+L2LAAF_BLOCK_END */
 
-class EnvironmentState {
-  final L2LEnvironment environment;
-  final String projectId;
-  final Color headerColor;
-
-  EnvironmentState({
-    required this.environment,
-    required this.projectId,
-    required this.headerColor,
-  });
-
-  EnvironmentState copyWith({L2LEnvironment? environment}) {
-    final newEnv = environment ?? this.environment;
-    return EnvironmentState(
-      environment: newEnv,
-      projectId: _getProjectId(newEnv),
-      headerColor: _getHeaderColor(newEnv),
-    );
-  }
-
-  static String _getProjectId(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.prod:
-        return 'local2local-prod';
-      default:
-        return 'local2local-dev';
-    }
-  }
-
-  static Color _getHeaderColor(L2LEnvironment env) {
-    switch (env) {
-      case L2LEnvironment.prod:
-        return AdminColors.rubyRed;
-      default:
-        return AdminColors.slateDark;
-    }
+/* L2LAAF_BLOCK_START(json:CRA Rules:functions/src/logic/hbr/ca_cra/rules.json)
+{
+  "rule_maker": "CRA",
+  "region_scope": "ca",
+  "category": "tax",
+  "last_verified": "2026-05-13",
+  "rules": {
+    "gst_rate": { "value": 0.05, "type": "percentage", "policy_ref": "policy.md" }
   }
 }
+L2LAAF_BLOCK_END */
 
-class EnvironmentNotifier extends Notifier<EnvironmentState> {
-  @override
-  EnvironmentState build() {
-    return EnvironmentState(
-      environment: L2LEnvironment.dev,
-      projectId: 'local2local-dev',
-      headerColor: AdminColors.slateDark,
-    );
-  }
+/* L2LAAF_BLOCK_START(markdown:CRA Policy:functions/src/logic/hbr/ca_cra/policy.md)
+# CRA National Tax Policy
+Initial baseline for national GST (5%).
+L2LAAF_BLOCK_END */
 
-  void setEnvironment(L2LEnvironment env, BuildContext context) async {
-    if (env == L2LEnvironment.prod) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AdminColors.slateDark,
-          title: const Text(
-            '⚠️ CONFIRM PRODUCTION ACCESS',
-            style: TextStyle(color: AdminColors.textPrimary),
-          ),
-          content: const Text(
-            'You are entering the LIVE production environment. Exercise extreme caution — all actions affect real users.',
-            style: TextStyle(color: AdminColors.textSecondary),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text(
-                'BACK',
-                style: TextStyle(color: AdminColors.textSecondary),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AdminColors.rubyRed,
-                foregroundColor: AdminColors.textPrimary,
-              ),
-              child: const Text('ENTER PROD'),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-    state = state.copyWith(environment: env);
-  }
-}
+/* --- ALCOHOL REGULATORS --- */
 
-final environmentProvider =
-    NotifierProvider<EnvironmentNotifier, EnvironmentState>(() {
-  return EnvironmentNotifier();
-});
-L2LAAF_BLOCK_END
+/* L2LAAF_BLOCK_START(json:IILA Rules:functions/src/logic/hbr/alcohol/ca_iila/rules.json)
+{ "rule_maker": "IILA", "region_scope": "ca", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
 
-L2LAAF_BLOCK_START(code:cockpitHeader:lib/features/triage_hub/presentation/widgets/cockpit_header.dart)
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local2local/features/triage_hub/providers/environment_provider.dart';
-import 'package:local2local/features/triage_hub/providers/superadmin_providers.dart';
+/* L2LAAF_BLOCK_START(json:AGLC Rules:functions/src/logic/hbr/alcohol/ca_ab_aglc/rules.json)
+{ "rule_maker": "AGLC", "region_scope": "ca_ab", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
 
-class CockpitHeader extends ConsumerWidget {
-  const CockpitHeader({super.key});
+/* L2LAAF_BLOCK_START(json:LCRB Rules:functions/src/logic/hbr/alcohol/ca_bc_lcrb/rules.json)
+{ "rule_maker": "LCRB", "region_scope": "ca_bc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final envState = ref.watch(environmentProvider);
-    final isProd = envState.environment == L2LEnvironment.prod;
-    final version = ref.watch(currentVersionStreamProvider).asData?.value ?? '–';
+/* L2LAAF_BLOCK_START(json:LGCA Rules:functions/src/logic/hbr/alcohol/ca_mb_lgca/rules.json)
+{ "rule_maker": "LGCA", "region_scope": "ca_mb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      decoration: BoxDecoration(
-        color: envState.headerColor,
-        boxShadow: isProd
-            ? [
-                BoxShadow(
-                  color: Colors.red.withValues(alpha: 0.5),
-                  blurRadius: 20,
-                  spreadRadius: 5,
-                )
-              ]
-            : null,
-      ),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Text(
-                    'L2LAAF Cockpit',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  if (isProd) ...[
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4)),
-                      child: const Text(
-                        'LIVE PRODUCTION',
-                        style: TextStyle(
-                            color: Colors.red,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              Text(
-                'Build: $version',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 10,
-                    letterSpacing: 0.5),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8)),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<L2LEnvironment>(
-                    value: envState.environment,
-                    dropdownColor: const Color(0xFF1E1E2C),
-                    icon: const Icon(Icons.keyboard_arrow_down,
-                        color: Colors.white),
-                    onChanged: (val) => ref
-                        .read(environmentProvider.notifier)
-                        .setEnvironment(val!, context),
-                    items: L2LEnvironment.values
-                        .map((e) => DropdownMenuItem(
-                              value: e,
-                              child: Text(
-                                e.name.toUpperCase(),
-                                style: TextStyle(
-                                  color: e == L2LEnvironment.prod
-                                      ? Colors.redAccent
-                                      : Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'PROJECT: ${envState.projectId}',
-                style: const TextStyle(
-                    color: Colors.greenAccent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(width: 24),
-          const Icon(Icons.notifications_none, color: Colors.white, size: 22),
-        ],
-      ),
-    );
-  }
-}
-L2LAAF_BLOCK_END
+/* L2LAAF_BLOCK_START(json:ANBL Rules:functions/src/logic/hbr/alcohol/ca_nb_anbl/rules.json)
+{ "rule_maker": "ANBL", "region_scope": "ca_nb", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
 
-L2LAAF_BLOCK_START(commit:message:COMMIT_MSG)
-[ASSISTED] CHORE(infra): Remove staging environment, fix dev project ID, apply AdminColors, and wire version to live provider
-L2LAAF_BLOCK_END
+/* L2LAAF_BLOCK_START(json:NLC Rules:functions/src/logic/hbr/alcohol/ca_nl_nlc/rules.json)
+{ "rule_maker": "NLC", "region_scope": "ca_nl", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:NTLCC Rules:functions/src/logic/hbr/alcohol/ca_nt_ntlcc/rules.json)
+{ "rule_maker": "NTLCC", "region_scope": "ca_nt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:NSLC Rules:functions/src/logic/hbr/alcohol/ca_ns_nslc/rules.json)
+{ "rule_maker": "NSLC", "region_scope": "ca_ns", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:NULC Rules:functions/src/logic/hbr/alcohol/ca_nu_nulc/rules.json)
+{ "rule_maker": "NULC", "region_scope": "ca_nu", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:AGCO_LCBO Rules:functions/src/logic/hbr/alcohol/ca_on_agcolcbo/rules.json)
+{ "rule_maker": "AGCO / LCBO", "region_scope": "ca_on", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:PEILCC Rules:functions/src/logic/hbr/alcohol/ca_pe_peilcc/rules.json)
+{ "rule_maker": "PEILCC", "region_scope": "ca_pe", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:SAQ_RACJ Rules:functions/src/logic/hbr/alcohol/ca_qc_saqracj/rules.json)
+{ "rule_maker": "SAQ / RACJ", "region_scope": "ca_qc", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:SLGA Rules:functions/src/logic/hbr/alcohol/ca_sk_slga/rules.json)
+{ "rule_maker": "SLGA", "region_scope": "ca_sk", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */
+
+/* L2LAAF_BLOCK_START(json:YLCC Rules:functions/src/logic/hbr/alcohol/ca_yt_ylcc/rules.json)
+{ "rule_maker": "YLCC", "region_scope": "ca_yt", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+L2LAAF_BLOCK_END */

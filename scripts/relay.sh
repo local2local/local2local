@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v6.2 (Conditional Preflight + Format Validation) ---
+# --- L2LAAF RELAY v6.3 (Strict Validation + Full stderr Capture) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Auto-Rebase -> Push.
 
@@ -13,7 +13,7 @@ function fatal_error {
 
 test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
 
-echo "--- L2LAAF RELAY v6.2 ---"
+echo "--- L2LAAF RELAY v6.3 ---"
 echo
 echo "Project Root: $(pwd)"
 echo "Using Payload: $PAYLOAD_FILE"
@@ -69,7 +69,7 @@ echo
 # 3. RUN FLUTTER ANALYZE — only if payload contains .dart files
 echo "②  Pre-flight check [2/3]: Analyzing Flutter Code..."
 if [ "$HAS_DART" = "1" ]; then
-    flutter analyze 2>/dev/null > "$PROBLEMS_FILE"
+    flutter analyze > "$PROBLEMS_FILE" 2>&1
     if [ $? -ne 0 ]; then
         fatal_error "Flutter validation failed. Fix outstanding problems before deploying. See $PROBLEMS_FILE for details."
     else
@@ -101,7 +101,6 @@ fi
 echo
 echo "🚀 Initializing Deployment to GitHub..."
 
-# Only force-track n8n_workflows if payload contains them
 if [ "$HAS_N8N" = "1" ]; then
     echo "Force-tracking n8n_workflows..."
     git add -f n8n_workflows/
@@ -113,7 +112,6 @@ git commit -m "$MSG"
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "📡 Pushing to origin/$CURRENT_BRANCH..."
 
-# Auto-rebase logic
 if ! git push origin "$CURRENT_BRANCH"; then
     echo "⚠️  Remote is ahead (likely due to an autonomous AI commit). Attempting to rebase..."
 
@@ -121,7 +119,7 @@ if ! git push origin "$CURRENT_BRANCH"; then
         echo "✅ Synchronized with remote AI commits. Retrying push..."
         git push origin "$CURRENT_BRANCH" || fatal_error "Push failed after rebase."
     else
-        fatal_error "Merge conflict during rebase. The AI modified the same lines you did! Please resolve manually, run 'git rebase --continue', and push."
+        fatal_error "Merge conflict during rebase. Resolve manually, run 'git rebase --continue', and push."
     fi
 fi
 
