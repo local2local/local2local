@@ -7,6 +7,7 @@
         "path": "agent-bus-dev",
         "options": {}
       },
+      "id": "dev-node-1-webhook",
       "name": "Agent Bus Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -22,6 +23,7 @@
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Analyze impact: Path: {{ $json.body.payload.manifest.targetPath }}. Reason: {{ $json.body.payload.manifest.reason }}. Is this HIGH_IMPACT? (Tax, HBR, Auth, System). Return JSON: { \\\"impact\\\": \\\"HIGH_IMPACT\\\" | \\\"ROUTINE\\\" }\" }] }] }",
         "options": {}
       },
+      "id": "dev-node-2-classifier",
       "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -34,6 +36,7 @@
       "parameters": {
         "jsCode": "const text = $input.item.json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
       },
+      "id": "dev-node-3-extract-impact",
       "name": "Extract Impact",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
@@ -45,6 +48,7 @@
           "string": [{ "value1": "={{ $json.impact }}", "value2": "HIGH_IMPACT", "operation": "equal" }]
         }
       },
+      "id": "dev-node-4-switch",
       "name": "Impact Switch",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -59,6 +63,7 @@
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit this change: Path: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}. Proposed Logic: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.proposedLogic }}. Identify regulatory/security flaws.\" }] }] }",
         "options": {}
       },
+      "id": "dev-node-5-validator",
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -71,6 +76,7 @@
       "parameters": {
         "jsCode": "return { critique: $input.item.json.candidates[0].content.parts[0].text };"
       },
+      "id": "dev-node-6-extract-critique",
       "name": "Extract Critique",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
@@ -85,6 +91,7 @@
         "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
         "options": {}
       },
+      "id": "dev-node-7-chat",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -104,5 +111,9 @@
     "Validator Agent": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
     "Extract Critique": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
   },
-  "settings": { "executionOrder": "v1", "saveExecutionProgress": true, "saveManualExecutions": true }
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  }
 }
