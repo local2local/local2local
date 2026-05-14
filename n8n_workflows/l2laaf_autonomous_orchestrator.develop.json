@@ -85,5 +85,12 @@
       ]
     },
     "Validator Agent": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
   }
 }

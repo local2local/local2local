@@ -1,20 +1,26 @@
 #!/bin/bash
-# --- L2LAAF RELAY v6.4 (Multi-File JSON Validation Fix) ---
+# --- L2LAAF RELAY v6.5 (Strict Schema Validation + Enhanced Telemetry) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Auto-Rebase -> Push.
 
 PAYLOAD_FILE="./scripts/logic_payload.txt"
 PROBLEMS_FILE="🔴_flutter_problems_list.txt"
+PATCHER_LOG="patcher_output.log"
 
 function fatal_error {
     echo "❌ FATAL: $1"
     exit 1
 }
 
+# Ensure we are in the project root
+if [ ! -f "pubspec.yaml" ]; then
+    fatal_error "Must run relay from project root containing pubspec.yaml"
+fi
+
 test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
 
-echo "--- L2LAAF RELAY v6.4 ---"
-echo
+echo "--- L2LAAF RELAY v6.5 ---"
+echo "Timestamp: $(date)"
 echo "Project Root: $(pwd)"
 echo "Using Payload: $PAYLOAD_FILE"
 echo
@@ -22,12 +28,16 @@ echo
 # 0. SMART CLEANUP OLD ARTIFACTS
 grep -q "n8n_workflows/" "$PAYLOAD_FILE"
 GREP_RES=$?
-test $GREP_RES -eq 0 && echo "⚠️  New n8n workflow detected in payload. Purging legacy workflows..."
-test $GREP_RES -eq 0 && rm -f n8n_workflows/*.json
-test $GREP_RES -ne 0 && echo "⚠️  No n8n workflow update in payload. Preserving current workflow JSON."
+if [ $GREP_RES -eq 0 ]; then
+    echo "⚠️  New n8n workflow detected in payload. Purging legacy workflows..."
+    rm -f n8n_workflows/*.json
+else
+    echo "⚠️  No n8n workflow update in payload. Preserving current workflow JSON."
+fi
 
 # 1. RUN PATCHER
-node ./scripts/patcher.js < "$PAYLOAD_FILE" || fatal_error "Patcher failed."
+echo "🚀 Running Patcher..."
+node ./scripts/patcher.js < "$PAYLOAD_FILE" > "$PATCHER_LOG" 2>&1 || fatal_error "Patcher failed. See $PATCHER_LOG"
 
 # 1a. VALIDATE COMMIT_MSG FORMAT
 test -f "COMMIT_MSG" || fatal_error "No COMMIT_MSG found. Did patcher run correctly?"
@@ -53,7 +63,7 @@ HAS_FUNCTIONS=$(grep -l "functions/" "$PAYLOAD_FILE" | wc -l | tr -d ' ')
 HAS_DART=$(grep -qE '\.dart' "$PAYLOAD_FILE" && echo "1" || echo "0")
 HAS_N8N=$(grep -q "n8n_workflows/" "$PAYLOAD_FILE" && echo "1" || echo "0")
 
-# 2. RUN TSC VALIDATION (Cloud Functions) — only if payload contains functions/
+# 2. RUN TSC VALIDATION (Cloud Functions)
 echo "①  Pre-flight check [1/3]: Validating Cloud Functions..."
 if [ "$HAS_FUNCTIONS" -gt 0 ] && grep -qE 'functions/src/.*\.ts' "$PAYLOAD_FILE"; then
     cd functions || fatal_error "Could not enter functions directory."
@@ -66,9 +76,10 @@ fi
 
 echo
 
-# 3. RUN FLUTTER ANALYZE — only if payload contains .dart files
+# 3. RUN FLUTTER ANALYZE
 echo "②  Pre-flight check [2/3]: Analyzing Flutter Code..."
 if [ "$HAS_DART" = "1" ]; then
+    # Capture both stdout and stderr for absolute transparency
     flutter analyze > "$PROBLEMS_FILE" 2>&1
     if [ $? -ne 0 ]; then
         fatal_error "Flutter validation failed. Fix outstanding problems before deploying. See $PROBLEMS_FILE for details."
@@ -82,21 +93,21 @@ fi
 
 echo
 
-# 4. N8N JSON VALIDATION — only if payload contains n8n_workflows/
+# 4. N8N JSON VALIDATION
 echo "③  Pre-flight check [3/3]: Validating N8N Workflow JSON..."
 if [ "$HAS_N8N" = "1" ] && [ -d "n8n_workflows" ]; then
     # Syntax check
-    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { if(!JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")).nodes) throw Error("Missing nodes array"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
-    node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Fix syntax before deploying."
+    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { const data = JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")); if(!data.nodes) throw Error("Missing nodes array"); if(!data.settings || typeof data.settings !== "object") throw Error("settings must be an object {} - Fixes 400 API error"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
+    node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Schema must include 'settings: {}'."
     rm -f .tmp_check.js
 
     # Webhook ID check (Slurping files to avoid multi-line array comparison issues)
     MISSING=$(jq -s 'map(.nodes[]) | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name' n8n_workflows/*.json 2>/dev/null)
-    if [ -n "$MISSING" ]; then
+    if [ -n "$MISSING" ] && [ "$MISSING" != "null" ]; then
         fatal_error "Webhook nodes missing webhookId: $MISSING"
     fi
 
-    echo "🟢 SUCCESS: n8n Workflows Validated (Syntax & Webhook IDs)."
+    echo "🟢 SUCCESS: n8n Workflows Validated (Syntax, Settings Object & Webhook IDs)."
 else
     echo "⏭️  No n8n workflow files found in payload. Pre-flight check skipped."
 fi
@@ -127,5 +138,7 @@ if ! git push origin "$CURRENT_BRANCH"; then
     fi
 fi
 
+# Cleanup
+rm -f "$PATCHER_LOG"
 echo "🎉 DEPLOYMENT COMPLETE: Stack stabilized and pushed."
 rm -f COMMIT_MSG
