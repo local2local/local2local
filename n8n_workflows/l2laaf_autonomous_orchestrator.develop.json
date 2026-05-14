@@ -1,15 +1,3 @@
-/**
- * L2LAAF Phase 45.2.0 Payload
- * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
- * Target: n8n_orchestrator
- * Description: Implements Multi-Agent Consensus (The Council) in the n8n orchestration layer.
- */
-
-/* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(orchestrator): Implement Multi-Agent Consensus (The Council) [BUMP: MINOR]
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:DEV Orchestrator:n8n_workflows/l2laaf_autonomous_orchestrator.develop.json)
 {
   "name": "L2LAAF Autonomous Orchestrator (DEV)",
   "nodes": [
@@ -99,40 +87,3 @@ L2LAAF_BLOCK_END */
     "Validator Agent": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
   }
 }
-L2LAAF_BLOCK_END */
-
-/* L2LAAF_BLOCK_START(json:PROD Orchestrator:n8n_workflows/l2laaf_autonomous_orchestrator.main.json)
-{
-  "name": "L2LAAF Autonomous Orchestrator (PROD)",
-  "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "agent-bus-prod",
-        "options": {}
-      },
-      "id": "bus-trigger-prod",
-      "name": "Agent Bus Trigger",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [100, 400],
-      "webhookId": "agent-bus-prod-hook"
-    },
-    {
-      "parameters": {
-        "model": "gemini-2.5-flash-preview-09-2025",
-        "prompt": "=Analyze impact for PROD context: {{ $json.body.payload.manifest.targetPath }}"
-      },
-      "id": "impact-classifier-prod",
-      "name": "Impact Classifier",
-      "type": "n8n-nodes-base.googleGemini",
-      "typeVersion": 1,
-      "position": [300, 400],
-      "credentials": {
-        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
-      }
-    }
-  ],
-  "connections": {}
-}
-L2LAAF_BLOCK_END */

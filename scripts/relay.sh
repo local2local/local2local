@@ -1,10 +1,10 @@
 #!/bin/bash
-# --- L2LAAF RELAY v6.3 (Strict Validation + Full stderr Capture) ---
+# --- L2LAAF RELAY v6.4 (Multi-File JSON Validation Fix) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Auto-Rebase -> Push.
 
 PAYLOAD_FILE="./scripts/logic_payload.txt"
-PROBLEMS_FILE="flutter_problems_list.txt"
+PROBLEMS_FILE="🔴_flutter_problems_list.txt"
 
 function fatal_error {
     echo "❌ FATAL: $1"
@@ -13,7 +13,7 @@ function fatal_error {
 
 test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
 
-echo "--- L2LAAF RELAY v6.3 ---"
+echo "--- L2LAAF RELAY v6.4 ---"
 echo
 echo "Project Root: $(pwd)"
 echo "Using Payload: $PAYLOAD_FILE"
@@ -85,12 +85,16 @@ echo
 # 4. N8N JSON VALIDATION — only if payload contains n8n_workflows/
 echo "③  Pre-flight check [3/3]: Validating N8N Workflow JSON..."
 if [ "$HAS_N8N" = "1" ] && [ -d "n8n_workflows" ]; then
+    # Syntax check
     echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { if(!JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")).nodes) throw Error("Missing nodes array"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
     node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Fix syntax before deploying."
     rm -f .tmp_check.js
 
-    MISSING=$(jq '[.nodes[] | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name]' n8n_workflows/*.json 2>/dev/null)
-    test "$MISSING" != "[]" && test -n "$MISSING" && fatal_error "Webhook nodes missing webhookId: $MISSING"
+    # Webhook ID check (Slurping files to avoid multi-line array comparison issues)
+    MISSING=$(jq -s 'map(.nodes[]) | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name' n8n_workflows/*.json 2>/dev/null)
+    if [ -n "$MISSING" ]; then
+        fatal_error "Webhook nodes missing webhookId: $MISSING"
+    fi
 
     echo "🟢 SUCCESS: n8n Workflows Validated (Syntax & Webhook IDs)."
 else

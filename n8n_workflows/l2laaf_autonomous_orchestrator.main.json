@@ -1,0 +1,33 @@
+{
+  "name": "L2LAAF Autonomous Orchestrator (PROD)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-bus-prod",
+        "options": {}
+      },
+      "id": "bus-trigger-prod",
+      "name": "Agent Bus Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 400],
+      "webhookId": "agent-bus-prod-hook"
+    },
+    {
+      "parameters": {
+        "model": "gemini-2.5-flash-preview-09-2025",
+        "prompt": "=Analyze impact for PROD context: {{ $json.body.payload.manifest.targetPath }}"
+      },
+      "id": "impact-classifier-prod",
+      "name": "Impact Classifier",
+      "type": "n8n-nodes-base.googleGemini",
+      "typeVersion": 1,
+      "position": [300, 400],
+      "credentials": {
+        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
+      }
+    }
+  ],
+  "connections": {}
+}
