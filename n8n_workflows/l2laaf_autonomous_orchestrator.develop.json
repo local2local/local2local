@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-dev",
+        "path": "agent-bus-v2-dev",
         "options": {}
       },
       "id": "bus-trigger",
@@ -12,7 +12,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-dev-hook"
+      "webhookId": "agent-bus-v2-dev-hook"
     },
     {
       "parameters": {
@@ -24,7 +24,7 @@
         "options": {}
       },
       "id": "impact-classifier",
-      "name": "Impact Classifier (HTTP)",
+      "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [300, 400],
@@ -34,7 +34,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const text = items[0].json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
+        "jsCode": "const text = $input.item.json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
       },
       "id": "extract-impact",
       "name": "Extract Impact",
@@ -64,7 +64,7 @@
         "options": {}
       },
       "id": "validator-agent",
-      "name": "Validator Agent (HTTP)",
+      "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [900, 300],
@@ -74,7 +74,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return { critique: items[0].json.candidates[0].content.parts[0].text };"
+        "jsCode": "return { critique: $input.item.json.candidates[0].content.parts[0].text };"
       },
       "id": "extract-critique",
       "name": "Extract Critique",
@@ -85,7 +85,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
@@ -99,17 +99,17 @@
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier (HTTP)", "type": "main", "index": 0 }]] },
-    "Impact Classifier (HTTP)": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
+    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier", "type": "main", "index": 0 }]] },
+    "Impact Classifier": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
     "Extract Impact": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
     "Impact Switch": {
       "main": [
-        [{ "node": "Validator Agent (HTTP)", "type": "main", "index": 0 }],
-        [{ "node": "chat-notify", "type": "main", "index": 0 }]
+        [{ "node": "Validator Agent", "type": "main", "index": 0 }],
+        [{ "node": "Google Chat Card", "type": "main", "index": 0 }]
       ]
     },
-    "Validator Agent (HTTP)": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
-    "Extract Critique": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
+    "Validator Agent": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
+    "Extract Critique": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1", "saveExecutionProgress": true, "saveManualExecutions": true }
 }

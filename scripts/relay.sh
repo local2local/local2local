@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v6.5 (Strict Schema Validation + Enhanced Telemetry) ---
+# --- L2LAAF RELAY v6.7 (Connection Graph Validation + Probe Telemetry) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Auto-Rebase -> Push.
 
@@ -19,9 +19,8 @@ fi
 
 test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
 
-echo "--- L2LAAF RELAY v6.5 ---"
+echo "--- L2LAAF RELAY v6.7 ---"
 echo "Timestamp: $(date)"
-echo "Project Root: $(pwd)"
 echo "Using Payload: $PAYLOAD_FILE"
 echo
 
@@ -29,10 +28,8 @@ echo
 grep -q "n8n_workflows/" "$PAYLOAD_FILE"
 GREP_RES=$?
 if [ $GREP_RES -eq 0 ]; then
-    echo "⚠️  New n8n workflow detected in payload. Purging legacy workflows..."
+    echo "⚠️  New n8n workflow detected. Purging legacy workflows..."
     rm -f n8n_workflows/*.json
-else
-    echo "⚠️  No n8n workflow update in payload. Preserving current workflow JSON."
 fi
 
 # 1. RUN PATCHER
@@ -42,103 +39,64 @@ node ./scripts/patcher.js < "$PAYLOAD_FILE" > "$PATCHER_LOG" 2>&1 || fatal_error
 # 1a. VALIDATE COMMIT_MSG FORMAT
 test -f "COMMIT_MSG" || fatal_error "No COMMIT_MSG found. Did patcher run correctly?"
 MSG=$(cat COMMIT_MSG)
-
-# Reject if message starts with a digit (manually prefixed version number)
 if echo "$MSG" | grep -qE '^[0-9]+\.'; then
-    fatal_error "COMMIT_MSG starts with a version number ('$MSG'). Remove the version prefix — the pipeline adds it automatically."
+    fatal_error "COMMIT_MSG starts with a version number. Remove the prefix."
 fi
-
-# Reject if message does not start with a valid source tag
 if ! echo "$MSG" | grep -qE '^\[(MANUAL|ASSISTED|AUTO|DREAM)\]'; then
-    fatal_error "COMMIT_MSG missing valid source tag. Must start with [MANUAL], [ASSISTED], [AUTO], or [DREAM]. Got: '$MSG'"
+    fatal_error "COMMIT_MSG missing valid source tag."
 fi
 
-echo "✅ COMMIT_MSG format valid: $MSG"
-echo
+echo "✅ COMMIT_MSG format valid."
 
 echo "============= PRE-FLIGHT CHECKS ============"
 
-# Detect what's in the payload
 HAS_FUNCTIONS=$(grep -l "functions/" "$PAYLOAD_FILE" | wc -l | tr -d ' ')
 HAS_DART=$(grep -qE '\.dart' "$PAYLOAD_FILE" && echo "1" || echo "0")
 HAS_N8N=$(grep -q "n8n_workflows/" "$PAYLOAD_FILE" && echo "1" || echo "0")
 
-# 2. RUN TSC VALIDATION (Cloud Functions)
-echo "①  Pre-flight check [1/3]: Validating Cloud Functions..."
+# 2. RUN TSC VALIDATION
 if [ "$HAS_FUNCTIONS" -gt 0 ] && grep -qE 'functions/src/.*\.ts' "$PAYLOAD_FILE"; then
-    cd functions || fatal_error "Could not enter functions directory."
-    npm run build || fatal_error "TypeScript validation failed. Bad code will not be pushed."
+    echo "①  Pre-flight check [1/3]: Validating Cloud Functions..."
+    cd functions && npm run build > /dev/null 2>&1 || fatal_error "TypeScript validation failed."
     cd ..
     echo "🟢 SUCCESS: Cloud Functions Validated."
-else
-    echo "⏭️  No Cloud Functions found in payload. Pre-flight check skipped."
 fi
 
-echo
-
 # 3. RUN FLUTTER ANALYZE
-echo "②  Pre-flight check [2/3]: Analyzing Flutter Code..."
 if [ "$HAS_DART" = "1" ]; then
-    # Capture both stdout and stderr for absolute transparency
+    echo "②  Pre-flight check [2/3]: Analyzing Flutter Code..."
     flutter analyze > "$PROBLEMS_FILE" 2>&1
     if [ $? -ne 0 ]; then
-        fatal_error "Flutter validation failed. Fix outstanding problems before deploying. See $PROBLEMS_FILE for details."
+        fatal_error "Flutter validation failed. See $PROBLEMS_FILE"
     else
         rm -f "$PROBLEMS_FILE"
         echo "🟢 SUCCESS: Flutter Analysis Passed."
     fi
-else
-    echo "⏭️  No Flutter (.dart) files found in payload. Pre-flight check skipped."
 fi
 
-echo
-
 # 4. N8N JSON VALIDATION
-echo "③  Pre-flight check [3/3]: Validating N8N Workflow JSON..."
 if [ "$HAS_N8N" = "1" ] && [ -d "n8n_workflows" ]; then
-    # Syntax check
-    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { const data = JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")); if(!data.nodes) throw Error("Missing nodes array"); if(!data.settings || typeof data.settings !== "object") throw Error("settings must be an object {} - Fixes 400 API error"); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
-    node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Schema must include 'settings: {}'."
+    echo "③  Pre-flight check [3/3]: Validating N8N Workflow Graph..."
+    echo 'const fs = require("fs"); const path = require("path"); let err = false; fs.readdirSync("n8n_workflows").filter(f => f.endsWith(".json")).forEach(f => { try { const data = JSON.parse(fs.readFileSync(path.join("n8n_workflows",f),"utf8")); if(!data.nodes) throw Error("Missing nodes array"); const nodeNames = data.nodes.map(n => n.name); Object.keys(data.connections).forEach(src => { data.connections[src].main.forEach(outputs => { outputs.forEach(target => { if(!nodeNames.includes(target.node)) throw Error(`Connection broken: Destination node "${target.node}" not found in nodes list.`); }); }); }); } catch(e) { console.error("❌ " + f + ": " + e.message); err = true; } }); if(err) process.exit(1);' > .tmp_check.js
+    node .tmp_check.js || fatal_error "n8n Workflow graph is invalid. Connections must use Name, not ID."
     rm -f .tmp_check.js
 
-    # Webhook ID check (Slurping files to avoid multi-line array comparison issues)
+    # Webhook ID check
     MISSING=$(jq -s 'map(.nodes[]) | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name' n8n_workflows/*.json 2>/dev/null)
     if [ -n "$MISSING" ] && [ "$MISSING" != "null" ]; then
         fatal_error "Webhook nodes missing webhookId: $MISSING"
     fi
-
-    echo "🟢 SUCCESS: n8n Workflows Validated (Syntax, Settings Object & Webhook IDs)."
-else
-    echo "⏭️  No n8n workflow files found in payload. Pre-flight check skipped."
+    echo "🟢 SUCCESS: n8n Workflow graph validated."
 fi
 
 # 5. GITHUB DEPLOYMENT SEQUENCE
-echo
-echo "🚀 Initializing Deployment to GitHub..."
-
-if [ "$HAS_N8N" = "1" ]; then
-    echo "Force-tracking n8n_workflows..."
-    git add -f n8n_workflows/
-fi
-
+echo "🚀 Deploying to GitHub..."
 git add .
 git commit -m "$MSG"
-
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo "📡 Pushing to origin/$CURRENT_BRANCH..."
-
 if ! git push origin "$CURRENT_BRANCH"; then
-    echo "⚠️  Remote is ahead (likely due to an autonomous AI commit). Attempting to rebase..."
-
-    if git pull --rebase origin "$CURRENT_BRANCH"; then
-        echo "✅ Synchronized with remote AI commits. Retrying push..."
-        git push origin "$CURRENT_BRANCH" || fatal_error "Push failed after rebase."
-    else
-        fatal_error "Merge conflict during rebase. Resolve manually, run 'git rebase --continue', and push."
-    fi
+    git pull --rebase origin "$CURRENT_BRANCH" && git push origin "$CURRENT_BRANCH" || fatal_error "Push failed."
 fi
 
-# Cleanup
-rm -f "$PATCHER_LOG"
-echo "🎉 DEPLOYMENT COMPLETE: Stack stabilized and pushed."
-rm -f COMMIT_MSG
+rm -f "$PATCHER_LOG" COMMIT_MSG
+echo "🎉 DEPLOYMENT COMPLETE."

@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-prod",
+        "path": "agent-bus-v2-prod",
         "options": {}
       },
       "id": "bus-trigger-prod",
@@ -12,7 +12,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-prod-hook"
+      "webhookId": "agent-bus-v2-prod-hook"
     },
     {
       "parameters": {
@@ -24,7 +24,7 @@
         "options": {}
       },
       "id": "validator-agent-prod",
-      "name": "Validator Agent (HTTP)",
+      "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [300, 400],
@@ -35,10 +35,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent (HTTP)'].json.candidates[0].content.parts[0].text }}\" }",
+        "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent'].json.candidates[0].content.parts[0].text }}\" }",
         "options": {}
       },
       "id": "chat-notify-prod",
@@ -49,8 +49,8 @@
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "validator-agent-prod", "type": "main", "index": 0 }]] },
-    "validator-agent-prod": { "main": [[{ "node": "chat-notify-prod", "type": "main", "index": 0 }]] }
+    "Agent Bus Trigger": { "main": [[{ "node": "Validator Agent", "type": "main", "index": 0 }]] },
+    "Validator Agent": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1", "saveExecutionProgress": true }
 }

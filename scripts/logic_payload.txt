@@ -1,13 +1,13 @@
 /**
- * L2LAAF Phase 45.2.0 Payload
+ * L2LAAF Phase 45.2.1 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator
- * Description: Implements Multi-Agent Consensus (The Council).
- * FIX: Replaced specialized Gemini nodes with universal httpRequest nodes to fix CI/CD 400 errors.
+ * Description: Implements Multi-Agent Consensus (The Council) with stabilized connection graph.
+ * FIX: Matched connection names to node names and restored full Chat Webhook URL.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(orchestrator): Implement Universal Multi-Agent Consensus [BUMP: MINOR]
+[ASSISTED] FEAT(orchestrator): Fix n8n route mounting for Consensus engine [BUMP: MINOR]
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:DEV Orchestrator:n8n_workflows/l2laaf_autonomous_orchestrator.develop.json)
@@ -17,7 +17,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-dev",
+        "path": "agent-bus-v2-dev",
         "options": {}
       },
       "id": "bus-trigger",
@@ -25,7 +25,7 @@ L2LAAF_BLOCK_END */
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-dev-hook"
+      "webhookId": "agent-bus-v2-dev-hook"
     },
     {
       "parameters": {
@@ -37,7 +37,7 @@ L2LAAF_BLOCK_END */
         "options": {}
       },
       "id": "impact-classifier",
-      "name": "Impact Classifier (HTTP)",
+      "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [300, 400],
@@ -47,7 +47,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "const text = items[0].json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
+        "jsCode": "const text = $input.item.json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
       },
       "id": "extract-impact",
       "name": "Extract Impact",
@@ -77,7 +77,7 @@ L2LAAF_BLOCK_END */
         "options": {}
       },
       "id": "validator-agent",
-      "name": "Validator Agent (HTTP)",
+      "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [900, 300],
@@ -87,7 +87,7 @@ L2LAAF_BLOCK_END */
     },
     {
       "parameters": {
-        "jsCode": "return { critique: items[0].json.candidates[0].content.parts[0].text };"
+        "jsCode": "return { critique: $input.item.json.candidates[0].content.parts[0].text };"
       },
       "id": "extract-critique",
       "name": "Extract Critique",
@@ -98,7 +98,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
@@ -112,17 +112,17 @@ L2LAAF_BLOCK_END */
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier (HTTP)", "type": "main", "index": 0 }]] },
-    "Impact Classifier (HTTP)": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
+    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier", "type": "main", "index": 0 }]] },
+    "Impact Classifier": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
     "Extract Impact": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
     "Impact Switch": {
       "main": [
-        [{ "node": "Validator Agent (HTTP)", "type": "main", "index": 0 }],
-        [{ "node": "chat-notify", "type": "main", "index": 0 }]
+        [{ "node": "Validator Agent", "type": "main", "index": 0 }],
+        [{ "node": "Google Chat Card", "type": "main", "index": 0 }]
       ]
     },
-    "Validator Agent (HTTP)": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
-    "Extract Critique": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
+    "Validator Agent": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
+    "Extract Critique": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1", "saveExecutionProgress": true, "saveManualExecutions": true }
 }
@@ -135,7 +135,7 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-prod",
+        "path": "agent-bus-v2-prod",
         "options": {}
       },
       "id": "bus-trigger-prod",
@@ -143,7 +143,7 @@ L2LAAF_BLOCK_END */
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-prod-hook"
+      "webhookId": "agent-bus-v2-prod-hook"
     },
     {
       "parameters": {
@@ -155,7 +155,7 @@ L2LAAF_BLOCK_END */
         "options": {}
       },
       "id": "validator-agent-prod",
-      "name": "Validator Agent (HTTP)",
+      "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [300, 400],
@@ -166,10 +166,10 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent (HTTP)'].json.candidates[0].content.parts[0].text }}\" }",
+        "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent'].json.candidates[0].content.parts[0].text }}\" }",
         "options": {}
       },
       "id": "chat-notify-prod",
@@ -180,8 +180,8 @@ L2LAAF_BLOCK_END */
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "validator-agent-prod", "type": "main", "index": 0 }]] },
-    "validator-agent-prod": { "main": [[{ "node": "chat-notify-prod", "type": "main", "index": 0 }]] }
+    "Agent Bus Trigger": { "main": [[{ "node": "Validator Agent", "type": "main", "index": 0 }]] },
+    "Validator Agent": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1", "saveExecutionProgress": true }
 }
