@@ -2,7 +2,7 @@
  * L2LAAF Phase 45.1.0 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: hbr_refinement
- * Description: Relocates tax HBRs to modular taxes hierarchy and seeds regional collectors.
+ * Description: Relocates tax HBRs to modular /taxes/ hierarchy and seeds regional collectors.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
@@ -26,7 +26,7 @@ L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(markdown:CRA Tax Policy:functions/src/logic/hbr/taxes/ca_cra/policy.md)
 # National GST Policy
-Federal Goods and Services Tax (GST) collected by the CRA.
+Federal Goods and Services Tax (GST) collected by the CRA. This is the baseline tax for all Canadian marketplaces.
 L2LAAF_BLOCK_END */
 
 /* --- ALBERTA TAX (AGLC Markups) --- */
@@ -81,6 +81,6 @@ L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(markdown:Legacy HBR Cleanup:functions/src/logic/hbr/ca_cra/DEPRECATED.md)
 # Deprecated Path
-Tax logic has been moved to `functions/src/logic/hbr/taxes/ca_cra/`. 
+Tax logic has been moved to `functions/src/logic/hbr/taxes/ca_cra/` to support the multi-collector model. 
 Do not add new rules to this root.
 L2LAAF_BLOCK_END */
