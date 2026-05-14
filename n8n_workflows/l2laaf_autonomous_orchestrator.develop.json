@@ -25,7 +25,7 @@
       "typeVersion": 1,
       "position": [
         112,
-        1288
+        1296
       ]
     },
     {
@@ -43,7 +43,7 @@
       "typeVersion": 4,
       "position": [
         336,
-        1288
+        1296
       ]
     },
     {
@@ -416,7 +416,7 @@
       "typeVersion": 4,
       "position": [
         1232,
-        1064
+        1072
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -435,7 +435,7 @@
       "typeVersion": 1,
       "position": [
         1456,
-        1064
+        1072
       ]
     },
     {
@@ -448,7 +448,7 @@
       "typeVersion": 1,
       "position": [
         1680,
-        1064
+        1072
       ]
     },
     {
@@ -464,7 +464,7 @@
       "typeVersion": 4,
       "position": [
         1904,
-        1064
+        1072
       ],
       "credentials": {
         "githubApi": {
@@ -491,7 +491,7 @@
       "typeVersion": 4,
       "position": [
         2128,
-        1064
+        1072
       ],
       "credentials": {
         "githubApi": {
@@ -511,7 +511,7 @@
       "typeVersion": 1,
       "position": [
         2352,
-        1064
+        1072
       ],
       "webhookId": "d8f6ca36-baf8-4b7d-8032-f4def3f04538"
     },
@@ -525,7 +525,7 @@
       "typeVersion": 1,
       "position": [
         2576,
-        1064
+        1072
       ]
     },
     {
@@ -541,7 +541,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        1064
+        1072
       ],
       "credentials": {
         "githubApi": {
@@ -568,7 +568,7 @@
       "typeVersion": 4,
       "position": [
         3024,
-        1064
+        1072
       ],
       "credentials": {
         "githubApi": {
@@ -627,7 +627,7 @@
       "typeVersion": 3,
       "position": [
         3248,
-        920
+        928
       ]
     },
     {
@@ -645,7 +645,7 @@
       "typeVersion": 4,
       "position": [
         3472,
-        680
+        688
       ]
     },
     {
@@ -663,7 +663,7 @@
       "typeVersion": 4,
       "position": [
         4144,
-        680
+        688
       ]
     },
     {
@@ -717,7 +717,7 @@
       "typeVersion": 4,
       "position": [
         3920,
-        440
+        448
       ],
       "credentials": {
         "googleApi": {
@@ -744,7 +744,7 @@
       "typeVersion": 4,
       "position": [
         3696,
-        920
+        928
       ],
       "credentials": {
         "googleApi": {
@@ -789,7 +789,7 @@
       "typeVersion": 4,
       "position": [
         3920,
-        920
+        928
       ],
       "credentials": {
         "googleApi": {
@@ -829,7 +829,7 @@
       "typeVersion": 2,
       "position": [
         2576,
-        680
+        688
       ]
     },
     {
@@ -847,7 +847,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        584
+        592
       ]
     },
     {
@@ -863,7 +863,7 @@
       "typeVersion": 4,
       "position": [
         2128,
-        680
+        688
       ],
       "credentials": {
         "githubApi": {
@@ -897,7 +897,7 @@
       "typeVersion": 4,
       "position": [
         2352,
-        680
+        688
       ],
       "credentials": {
         "githubApi": {
@@ -920,7 +920,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        776
+        784
       ],
       "credentials": {
         "githubApi": {
@@ -947,7 +947,7 @@
       "typeVersion": 4,
       "position": [
         3024,
-        776
+        784
       ],
       "credentials": {
         "githubApi": {
@@ -970,7 +970,7 @@
       "typeVersion": 4,
       "position": [
         1456,
-        680
+        688
       ],
       "credentials": {
         "githubApi": {
@@ -990,7 +990,7 @@
       "typeVersion": 2,
       "position": [
         1680,
-        680
+        688
       ]
     },
     {
@@ -1017,7 +1017,7 @@
       "typeVersion": 4,
       "position": [
         1904,
-        680
+        688
       ],
       "credentials": {
         "githubApi": {
@@ -1044,7 +1044,7 @@
       "typeVersion": 4,
       "position": [
         1680,
-        -264
+        -272
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -1064,7 +1064,7 @@
       "typeVersion": 1,
       "position": [
         1904,
-        -264
+        -272
       ]
     },
     {
@@ -1098,7 +1098,7 @@
       "typeVersion": 2,
       "position": [
         2128,
-        -264
+        -272
       ]
     },
     {
@@ -1110,7 +1110,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "applicatoin/json",
-        "body": "=={{ $json.validatorBody }}",
+        "body": "={{ $json.validatorBody }}",
         "options": {}
       },
       "id": "p45-validator-agent",
@@ -1747,7 +1747,7 @@
     "saveExecutionProgress": true,
     "saveManualExecutions": true
   },
-  "versionId": "168f855f-1b63-456d-8448-ce6fec082b49",
+  "versionId": "e2aafe7c-84fc-407b-b18e-0f5c7e54bb75",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "261923412a3ee3006949a29e9b78a6fe94c5bdde95bd10a5978cc61dac3a65e0"
