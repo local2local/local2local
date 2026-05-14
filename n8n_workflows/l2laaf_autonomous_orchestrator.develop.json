@@ -25,7 +25,7 @@
       "typeVersion": 1,
       "position": [
         112,
-        1432
+        1440
       ]
     },
     {
@@ -43,7 +43,7 @@
       "typeVersion": 4,
       "position": [
         336,
-        1432
+        1440
       ]
     },
     {
@@ -251,7 +251,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        -120
+        -128
       ]
     },
     {
@@ -416,7 +416,7 @@
       "typeVersion": 4,
       "position": [
         1232,
-        1208
+        1216
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -435,7 +435,7 @@
       "typeVersion": 1,
       "position": [
         1456,
-        1208
+        1216
       ]
     },
     {
@@ -448,7 +448,7 @@
       "typeVersion": 1,
       "position": [
         1680,
-        1208
+        1216
       ]
     },
     {
@@ -464,7 +464,7 @@
       "typeVersion": 4,
       "position": [
         1904,
-        1208
+        1216
       ],
       "credentials": {
         "githubApi": {
@@ -491,7 +491,7 @@
       "typeVersion": 4,
       "position": [
         2128,
-        1208
+        1216
       ],
       "credentials": {
         "githubApi": {
@@ -511,7 +511,7 @@
       "typeVersion": 1,
       "position": [
         2352,
-        1208
+        1216
       ],
       "webhookId": "d8f6ca36-baf8-4b7d-8032-f4def3f04538"
     },
@@ -525,7 +525,7 @@
       "typeVersion": 1,
       "position": [
         2576,
-        1208
+        1216
       ]
     },
     {
@@ -541,7 +541,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        1208
+        1216
       ],
       "credentials": {
         "githubApi": {
@@ -568,7 +568,7 @@
       "typeVersion": 4,
       "position": [
         3024,
-        1208
+        1216
       ],
       "credentials": {
         "githubApi": {
@@ -627,7 +627,7 @@
       "typeVersion": 3,
       "position": [
         3248,
-        1064
+        1072
       ]
     },
     {
@@ -645,7 +645,7 @@
       "typeVersion": 4,
       "position": [
         3472,
-        824
+        832
       ]
     },
     {
@@ -663,7 +663,7 @@
       "typeVersion": 4,
       "position": [
         4144,
-        824
+        832
       ]
     },
     {
@@ -717,7 +717,7 @@
       "typeVersion": 4,
       "position": [
         3920,
-        584
+        592
       ],
       "credentials": {
         "googleApi": {
@@ -744,7 +744,7 @@
       "typeVersion": 4,
       "position": [
         3696,
-        1064
+        1072
       ],
       "credentials": {
         "googleApi": {
@@ -789,7 +789,7 @@
       "typeVersion": 4,
       "position": [
         3920,
-        1064
+        1072
       ],
       "credentials": {
         "googleApi": {
@@ -829,7 +829,7 @@
       "typeVersion": 2,
       "position": [
         2576,
-        824
+        832
       ]
     },
     {
@@ -847,7 +847,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        728
+        736
       ]
     },
     {
@@ -863,7 +863,7 @@
       "typeVersion": 4,
       "position": [
         2128,
-        824
+        832
       ],
       "credentials": {
         "githubApi": {
@@ -897,7 +897,7 @@
       "typeVersion": 4,
       "position": [
         2352,
-        824
+        832
       ],
       "credentials": {
         "githubApi": {
@@ -920,7 +920,7 @@
       "typeVersion": 4,
       "position": [
         2800,
-        920
+        928
       ],
       "credentials": {
         "githubApi": {
@@ -947,7 +947,7 @@
       "typeVersion": 4,
       "position": [
         3024,
-        920
+        928
       ],
       "credentials": {
         "githubApi": {
@@ -970,7 +970,7 @@
       "typeVersion": 4,
       "position": [
         1456,
-        824
+        832
       ],
       "credentials": {
         "githubApi": {
@@ -990,7 +990,7 @@
       "typeVersion": 2,
       "position": [
         1680,
-        824
+        832
       ]
     },
     {
@@ -1017,7 +1017,7 @@
       "typeVersion": 4,
       "position": [
         1904,
-        824
+        832
       ],
       "credentials": {
         "githubApi": {
@@ -1044,7 +1044,7 @@
       "typeVersion": 4,
       "position": [
         1680,
-        -120
+        -128
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -1064,7 +1064,7 @@
       "typeVersion": 1,
       "position": [
         1904,
-        -120
+        -128
       ]
     },
     {
@@ -1098,7 +1098,7 @@
       "typeVersion": 2,
       "position": [
         2128,
-        -120
+        -128
       ]
     },
     {
@@ -1109,7 +1109,7 @@
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=={{ { 'contents': [{ 'parts': [{ 'text': 'You are a senior software auditor for the L2LAAF autonomous agent platform. This change has been classified as HIGH_IMPACT. Provide a concise 1-2 sentence risk assessment identifying any regulatory, security, or operational concerns the human operator should consider before approving.\\n\\nChange summary: ' + ($json.meta.summary || '') + '\\nMethod: ' + ($json.meta.method || 'UNKNOWN') + '\\nIntent: ' + ($json.intent || 'FUNCTIONALITY') }] }] } }}",
+        "jsonBody": "=={{ { \"contents\": [{ \"parts\": [{ \"text\": \"You are a senior software auditor for the L2LAAF autonomous agent platform. This change has been classified as HIGH_IMPACT. Provide a concise 1-2 sentence risk assessment identifying any regulatory, security, or operational concerns the human operator should consider before approving.\\n\\nChange summary: \" + ($json.meta.summary || '') + \"\\nMethod: \" + ($json.meta.method || 'UNKNOWN') + \"\\nIntent: \" + ($json.intent || 'FUNCTIONALITY') }] }] } }}",
         "options": {}
       },
       "id": "p45-validator-agent",
@@ -1721,7 +1721,7 @@
     "saveExecutionProgress": true,
     "saveManualExecutions": true
   },
-  "versionId": "ecc5e8da-8e57-4667-9ab9-22702a6ef973",
+  "versionId": "2f376f7d-4780-43aa-bf2a-826258035b6f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "261923412a3ee3006949a29e9b78a6fe94c5bdde95bd10a5978cc61dac3a65e0"
