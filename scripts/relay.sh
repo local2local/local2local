@@ -1,5 +1,5 @@
 #!/bin/bash
-# --- L2LAAF RELAY v6.3 (Conditional Preflight + Format Validation) ---
+# --- L2LAAF RELAY v6.4 (Conditional Preflight + Format Validation) ---
 # Target: logic_payload.txt
 # Deployment: Automated validation (TS + Flutter + n8n) -> Git Commit -> Auto-Rebase -> Push.
 
@@ -13,7 +13,7 @@ function fatal_error {
 
 test -f "$PAYLOAD_FILE" || fatal_error "Payload file not found at $PAYLOAD_FILE"
 
-echo "--- L2LAAF RELAY v6.2 ---"
+echo "--- L2LAAF RELAY v6.4 ---"
 echo
 echo "Project Root: $(pwd)"
 echo "Using Payload: $PAYLOAD_FILE"
@@ -23,7 +23,7 @@ echo
 grep -q "n8n_workflows/" "$PAYLOAD_FILE"
 GREP_RES=$?
 test $GREP_RES -eq 0 && echo "⚠️  New n8n workflow detected in payload. Purging legacy workflows..."
-test $GREP_RES -eq 0 && rm -f n8n_workflows/*.json
+test $GREP_RES -eq 0 && grep -oE "n8n_workflows/[^)]+\.json" "$PAYLOAD_FILE" | while read -r WF; do rm -f "$WF"; done
 test $GREP_RES -ne 0 && echo "⚠️  No n8n workflow update in payload. Preserving current workflow JSON."
 
 # 1. RUN PATCHER
