@@ -16,48 +16,20 @@
     },
     {
       "parameters": {
-        "model": "gemini-2.5-flash-preview-09-2025",
-        "prompt": "=Analyze impact for PROD context: {{ $json.body.payload.manifest.targetPath }}\n\nIs this HIGH_IMPACT? (Tax, HBR, Auth, System Config)\nReturn JSON: { \"impact\": \"HIGH_IMPACT\" | \"ROUTINE\" }"
-      },
-      "id": "impact-classifier-prod",
-      "name": "Impact Classifier",
-      "type": "n8n-nodes-base.googleGemini",
-      "typeVersion": 1,
-      "position": [300, 400],
-      "credentials": {
-        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.impact }}",
-              "value2": "HIGH_IMPACT",
-              "operation": "equal"
-            }
-          ]
-        }
-      },
-      "id": "impact-switch-prod",
-      "name": "Impact Switch",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [500, 400]
-    },
-    {
-      "parameters": {
-        "model": "gemini-2.5-flash-preview-09-2025",
-        "prompt": "=AUDIT PROPOSAL FOR PRODUCTION:\nPath: {{ $node[\"Agent Bus Trigger\"].json.body.payload.manifest.targetPath }}\nProposed Logic: {{ $node[\"Agent Bus Trigger\"].json.body.payload.manifest.proposedLogic }}\n\nIdentify security or regulatory risks for the live production environment."
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit PROD change: Path: {{ $json.body.payload.manifest.targetPath }}. Identify high-impact risks for production.\" }] }] }",
+        "options": {}
       },
       "id": "validator-agent-prod",
-      "name": "Validator Agent",
-      "type": "n8n-nodes-base.googleGemini",
-      "typeVersion": 1,
-      "position": [700, 300],
+      "name": "Validator Agent (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 400],
       "credentials": {
-        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
+        "httpHeaderAuth": { "id": "Gemini API Key", "name": "Gemini API Key" }
       }
     },
     {
@@ -66,31 +38,19 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\n\n**Impact:** {{ $node['Impact Classifier'].json.impact }}\n\n{{ $node['Validator Agent'] ? '🛡️ **VALIDATOR CRITIQUE:**\n' + $node['Validator Agent'].json.text : '✅ **ROUTINE PRODUCTION CHANGE.**' }}\"}"
+        "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent (HTTP)'].json.candidates[0].content.parts[0].text }}\" }",
+        "options": {}
       },
       "id": "chat-notify-prod",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1000, 400]
+      "position": [600, 400]
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier", "type": "main", "index": 0 }]] },
-    "Impact Classifier": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
-    "Impact Switch": {
-      "main": [
-        [{ "node": "Validator Agent", "type": "main", "index": 0 }],
-        [{ "node": "chat-notify", "type": "main", "index": 0 }]
-      ]
-    },
-    "Validator Agent": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
+    "Agent Bus Trigger": { "main": [[{ "node": "validator-agent-prod", "type": "main", "index": 0 }]] },
+    "validator-agent-prod": { "main": [[{ "node": "chat-notify-prod", "type": "main", "index": 0 }]] }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true
-  }
+  "settings": { "executionOrder": "v1", "saveExecutionProgress": true }
 }

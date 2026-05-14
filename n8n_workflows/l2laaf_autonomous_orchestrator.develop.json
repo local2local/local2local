@@ -16,49 +16,71 @@
     },
     {
       "parameters": {
-        "model": "gemini-2.5-flash-preview-09-2025",
-        "prompt": "=Analyze the following code change proposal:\nPath: {{ $json.body.payload.manifest.targetPath }}\nReason: {{ $json.body.payload.manifest.reason }}\n\nIs this change HIGH_IMPACT? A change is HIGH_IMPACT if it modifies tax logic, regulatory rules (HBR), authentication, or core system instructions.\nReturn ONLY a JSON object: { \"impact\": \"HIGH_IMPACT\" | \"ROUTINE\", \"justification\": \"string\" }"
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Analyze impact: Path: {{ $json.body.payload.manifest.targetPath }}. Reason: {{ $json.body.payload.manifest.reason }}. Is this HIGH_IMPACT? (Tax, HBR, Auth, System). Return JSON: { \\\"impact\\\": \\\"HIGH_IMPACT\\\" | \\\"ROUTINE\\\" }\" }] }] }",
+        "options": {}
       },
       "id": "impact-classifier",
-      "name": "Impact Classifier",
-      "type": "n8n-nodes-base.googleGemini",
-      "typeVersion": 1,
+      "name": "Impact Classifier (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [300, 400],
       "credentials": {
-        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
+        "httpHeaderAuth": { "id": "Gemini API Key", "name": "Gemini API Key" }
       }
     },
     {
       "parameters": {
+        "jsCode": "const text = items[0].json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
+      },
+      "id": "extract-impact",
+      "name": "Extract Impact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
         "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.impact }}",
-              "value2": "HIGH_IMPACT",
-              "operation": "equal"
-            }
-          ]
+          "string": [{ "value1": "={{ $json.impact }}", "value2": "HIGH_IMPACT", "operation": "equal" }]
         }
       },
       "id": "impact-switch",
       "name": "Impact Switch",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [500, 400]
+      "position": [700, 400]
     },
     {
       "parameters": {
-        "model": "gemini-2.5-flash-preview-09-2025",
-        "prompt": "=You are the L2LAAF Validator Agent (Red Team). Critically audit this proposed logic change:\nPath: {{ $node[\"Agent Bus Trigger\"].json.body.payload.manifest.targetPath }}\nProposed Logic: {{ $node[\"Agent Bus Trigger\"].json.body.payload.manifest.proposedLogic }}\n\nIdentify potential bugs, security flaws, or regulatory violations (CRA/AGLC). Be concise and strict."
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit this change: Path: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}. Proposed Logic: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.proposedLogic }}. Identify regulatory/security flaws.\" }] }] }",
+        "options": {}
       },
       "id": "validator-agent",
-      "name": "Validator Agent",
-      "type": "n8n-nodes-base.googleGemini",
-      "typeVersion": 1,
-      "position": [700, 300],
+      "name": "Validator Agent (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300],
       "credentials": {
-        "googleApi": { "id": "Gemini API Key", "name": "Gemini API Key" }
+        "httpHeaderAuth": { "id": "Gemini API Key", "name": "Gemini API Key" }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "return { critique: items[0].json.candidates[0].content.parts[0].text };"
+      },
+      "id": "extract-critique",
+      "name": "Extract Critique",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1100, 300]
     },
     {
       "parameters": {
@@ -66,31 +88,28 @@
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\n\n**Reason:** {{ $node['Agent Bus Trigger'].json.body.payload.manifest.reason }}\n**Impact:** {{ $node['Impact Classifier'].json.impact }}\n\n{{ $node['Validator Agent'] ? '🛡️ **VALIDATOR CRITIQUE:**\n' + $node['Validator Agent'].json.text : '✅ **ROUTINE CHANGE: No validator review required.**' }}\n\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }}) | [REJECT](https://n8n.local2local.ca/webhook/reject?id={{ $node['Agent Bus Trigger'].json.body.id }})\"}"
+        "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
+        "options": {}
       },
       "id": "chat-notify",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1000, 400]
+      "position": [1300, 400]
     }
   ],
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier", "type": "main", "index": 0 }]] },
-    "Impact Classifier": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
+    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier (HTTP)", "type": "main", "index": 0 }]] },
+    "Impact Classifier (HTTP)": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
+    "Extract Impact": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
     "Impact Switch": {
       "main": [
-        [{ "node": "Validator Agent", "type": "main", "index": 0 }],
+        [{ "node": "Validator Agent (HTTP)", "type": "main", "index": 0 }],
         [{ "node": "chat-notify", "type": "main", "index": 0 }]
       ]
     },
-    "Validator Agent": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
+    "Validator Agent (HTTP)": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
+    "Extract Critique": { "main": [[{ "node": "chat-notify", "type": "main", "index": 0 }]] }
   },
-  "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true
-  }
+  "settings": { "executionOrder": "v1", "saveExecutionProgress": true, "saveManualExecutions": true }
 }
