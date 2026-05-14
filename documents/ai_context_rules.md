@@ -54,6 +54,55 @@ Never remove these filters from `deploy.yml`.
 
 ---
 
+## n8n: NEVER replace the orchestrator
+
+**Context:** Any change to `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json` or `l2laaf_autonomous_orchestrator.main.json`
+
+**Rule:** Never replace either orchestrator with a new workflow. The DEV and PROD orchestrators are the product of 43+ phases of accumulated pipeline logic including the HITL gate, version bumping, Firestore tracking, and the promotion flow. Replacing them destroys all of this.
+
+**Always add nodes additively.** New features are inserted at a specific point in the existing flow. Existing nodes are never removed or replaced.
+
+**Always request the current orchestrator JSON before making changes.** Ask the developer to provide the current file. Never generate an orchestrator workflow from scratch.
+
+The correct insertion point for Phase 45 consensus nodes is between `Throttle Switch` PROCEED/DELAYED outputs and `Google Chat Card`. The BLOCKED path goes directly to `Blocked Chat Card` and must not be touched.
+
+---
+
+## n8n: HTTP Request body — use Code node + Raw body
+
+**Context:** n8n HTTP Request node where the body contains dynamic content
+
+**Rule:** Never build a JSON body inline in the `jsonBody` expression field of an HTTP Request node. When an expression returns a JavaScript object, n8n serialises it inconsistently — it may send `[object Object]` instead of valid JSON, causing silent failures.
+
+**Correct pattern:**
+1. Add a Code node immediately before the HTTP Request node
+2. In the Code node, use `JSON.stringify()` to build the request body as a string and store it in `$json`:
+
+```javascript
+return {
+  json: {
+    ...$json,
+    requestBody: JSON.stringify({
+      contents: [{ parts: [{ text: 'your prompt here' }] }]
+    })
+  }
+};
+```
+
+3. In the HTTP Request node, set Body Content Type to `Raw`, Content Type to `application/json`, and Body to `{{ $json.requestBody }}` using expression mode (click the expression toggle — do not type `=` literally into the field)
+
+`JSON.stringify` is standard JavaScript — not a Node.js global — and is valid inside Code nodes.
+
+---
+
+## n8n: Expression mode toggle vs literal `=`
+
+**Context:** n8n Raw body field, or any field that supports Fixed/Expression toggle
+
+**Rule:** In n8n fields that support expression mode, the `=` prefix is a UI toggle indicator — it is not part of the value. To set a field to expression mode, click the expression toggle button (the `=` or fx icon at the right edge of the input). Then type only `{{ $json.fieldName }}` inside. If you type `={{ $json.fieldName }}` with a literal `=` in the field, n8n includes the `=` in the body and the upstream service receives `={"key":"value"}` which is not valid JSON.
+
+---
+
 ## n8n: HTTP Request URL fields — no string concatenation
 
 **Context:** n8n HTTP Request node (any typeVersion)
@@ -73,8 +122,6 @@ Never remove these filters from `deploy.yml`.
 "url": "=\"https://\" + \"chat.googleapis.com/v1/spaces/...\""
 ```
 
-Only use the `=` expression prefix when at least one segment is genuinely dynamic. If the entire URL is static, use a plain string with no `=` prefix.
-
 ---
 
 ## n8n: GitHub node branch targeting
@@ -83,8 +130,6 @@ Only use the `=` expression prefix when at least one segment is genuinely dynami
 - The `get` operation uses the `reference` parameter to specify branch
 - The `edit` operation uses `options.branch` to specify branch
 - Never leave either field unset when the target branch is not the repo default
-
-A missing branch is a silent bug — n8n will not warn you; it will just default to `main` and 404 on any file that only exists on `develop`.
 
 ---
 
@@ -113,6 +158,31 @@ If base64 encoding, JSON stringification, or any Node.js operation is needed to 
 - `"typeValidation": "loose"` when comparing expression values to string literals
 
 Guard clauses in Code nodes must use `return []` not `throw` when the intent is to silently stop a leaked item. Only use `throw` when you genuinely want the Error Trigger to fire.
+
+---
+
+## n8n: Code node mode and return format
+
+**Rule:** n8n Code nodes have two modes with different return formats:
+
+- **Run Once for All Items:** use `$input.all()` to access items. Return an array: `return [{ json: {...} }]`
+- **Run Once for Each Item:** use `$json` to access the current item. Return a plain object: `return { json: {...} }`
+
+`$json` is only available in "Run Once for Each Item" mode. Using it in "Run Once for All Items" mode causes a lint error. Choose the mode before writing the code.
+
+---
+
+## relay.sh: Targeted n8n workflow cleanup (v6.4)
+
+**Current version:** relay.sh v6.4
+
+**Rule:** relay.sh v6.4 only deletes n8n workflow files that are explicitly listed in the payload. It no longer purges all `n8n_workflows/*.json` files. This means:
+
+- A payload containing only `develop.json` will NOT delete `main.json`
+- A payload containing both will delete and replace both
+- No workaround or "remember to include main.json" rule is needed
+
+Do not revert to v6.3 or earlier — the blunt `rm -f n8n_workflows/*.json` in earlier versions caused `main.json` to be silently deleted.
 
 ---
 

@@ -1,6 +1,6 @@
 # L2LAAF Project Plan
 
-**Current version:** 43.1.66
+**Current version:** 45.1.3
 **System status:** 🟢 OPERATIONAL
 **Tech stack:** Flutter 3.38.5 + Node.js 24 (2nd Gen Firebase Functions) + TypeScript
 
@@ -34,6 +34,38 @@ Key outcomes:
 - Multi-developer safety with `relay.sh` auto-rebase logic
 - **Upstream Relay mechanism** — production-identified fixes are funnelled back through `develop` and the HITL gate before re-entering `main`
 
+### Phase Group 5: SuperAdmin Dashboard (Phase 44) — COMPLETED
+**Final version:** 44.4.4
+
+Full CI/CD visibility and cross-tenant control dashboard built across two pages:
+
+**Page 1 — Phases**
+- Promoted and abandoned phase history with SHA display, originator badges, and timestamps
+- Search/filter by summary text
+- Per-tab streaming/static mode with live document counter (ID-based, works beyond 50-doc stream limit)
+- Timestamp range filtering with quick presets (Last 15 min, Last hour, Last 24h, Custom)
+
+**Page 2 — Data**
+- Colour-coded telemetry banner (GREEN/YELLOW/RED) with status-aware icons and messages
+- Multi-tenant agent bus viewer (SYSTEM / KASKFLOW / MOONLITELY)
+- Agent bus / Shadow bus segmented toggle per tab
+- Full-featured bus cards: correlation highlighting, sort, filter, expand, full JSON modal, copy SHA, delete by correlation ID
+- Per-tab streaming/static mode with pagination (page size 50) and timestamp range filter
+- Generic data browser: collection selector with autocomplete (18 known collections), document viewer, field filters, search with match highlighting, and delete
+- Agent bus injection UI: Raw JSON editor (default), Structured form, Template library
+
+**Infrastructure work completed in Phase 44:**
+- GoRouter properly mounted in `app.dart`
+- `adminDarkTheme` applied throughout
+- Firestore paths corrected in `SuperadminRepository`
+- `.gitignore` restored and expanded
+- Staging environment removed from `environment_provider.dart`
+- Dev project ID corrected (`local2local-dev`)
+- DEV/PROD switcher wired to live environment and version providers
+- `created_at`, `last_updated`, `telemetry.processed_at` added to all agent bus writes
+- `telemetryAggregatorV2` fixed to write to correct Firestore document (`last_heartbeat`)
+- `development_method_dreamflow.md` updated with Dreamflow AI agent workflow, minification bug rule, Firebase session conventions
+
 ---
 
 ## Branch strategy
@@ -54,42 +86,30 @@ Key outcomes:
 | `local2local-internal` | Governance hub (Registry, Policy, Vector DB) | Active |
 | `n8n-bot-prod` | n8n chat handler service account host | Active |
 
-Note: `local2local-staging` was removed from the architecture. The HITL gate in Google Chat serves as the validation layer between dev and prod.
+Note: `local2local-staging` was removed from the architecture in Phase 44.
 
 ---
 
 ## Upcoming work
 
-### SuperAdmin Dashboard (Phase 44)
-Flutter UI in the Triage Hub for CI/CD visibility and cross-tenant control:
+### Phase 45: Advanced Intelligence — IN PROGRESS
 
-**1. Infrastructure Cleanup**
-Staged Removal: Remove all remaining references to "staged" branch or GCP projects from the dashboard UI and underlying logic.
+**45.1 — Multi-Agent Consensus** ✅ COMPLETE (45.1.3)
+Impact Classifier and Validator Agent nodes inserted into the HITL path. Every deployment is classified as HIGH_IMPACT or ROUTINE by Gemini. HIGH_IMPACT changes receive a Gemini risk assessment in the Google Chat HITL card.
 
-**2. Version & Phase Tracking**
-- Current version display: reads from `artifacts/system_status/public/data/version`
-- Phase history: displays `promoted_phases` and `abandoned_phases` from Firestore
+New orchestrator nodes (between Throttle Switch and Google Chat Card):
+- `Impact Classifier` — Gemini 2.5 Flash, classifies change
+- `Extract Impact` — parses response, defaults to ROUTINE on failure
+- `Impact Switch` — If node routing HIGH_IMPACT vs ROUTINE
+- `Prepare Validator Prompt` — Code node building request body via `JSON.stringify`
+- `Validator Agent` — Gemini 2.5 Flash, produces 1-2 sentence risk assessment
+- `Extract Critique` — parses validator response, merges into card data
 
-**3. Telemetry & Health**
-Visual indicator of `system_status` (GREEN/YELLOW/RED) with manual override capability.
+**45.2 — Semantic Retrieval** (PENDING)
+Agents query `lessons_learned` in `local2local-internal` via vector search before proposing changes.
 
-**4. Multi-Tenant Agent Bus Control**
-Unified monitoring supporting the three primary agent bus collections:
-- `artifacts/system_status/public/data/agent_bus` (System-wide)
-- `artifacts/local2local_kaskflow/public/data/agent_bus` (Kaskflow Marketplace)
-- `artifacts/local2local_moonlitely/public/data/agent_bus` (Moonlitely Marketplace)
-
-Data Transparency: visibility and interaction for all subcollections under the `public/data/` nodes for System, Kaskflow, and Moonlitely artifact paths.
-
-Injection UI: interface to trigger test injections and view real-time traffic across all buses.
-
-**5. Mobile Integration**
-Mobile-friendly HITL buttons: requires real HTTP endpoint at `https://local2local.ca/chat-bot-hook`.
-
-### Phase 45: Advanced Intelligence
-- Semantic Retrieval: agents query the `lessons_learned` database via vector search
-- Multi-Agent Consensus: requiring approval from multiple orchestrators for high-impact changes
-- Regulatory Drift Automation: closed-loop adaptation to AGLC/CRA legislative shifts
+**45.3 — Regulatory Drift Automation** (PENDING)
+Compliance monitoring agent tracks AGLC/CRA regulatory source documents and proposes corrective HBR updates when drift is detected.
 
 ---
 
