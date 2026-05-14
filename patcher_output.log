@@ -1,3 +1,0 @@
-✅ [1] Synchronized: COMMIT_MSG ("[ASSISTED] FIX(orchestrator): Restore node IDs to fix 404 webhook mounting [BUMP: MINOR]")
-✅ [2] Synchronized: n8n_workflows/l2laaf_autonomous_orchestrator.develop.json (DEV Orchestrator)
-✅ [3] Synchronized: n8n_workflows/l2laaf_autonomous_orchestrator.main.json (PROD Orchestrator)

@@ -1,5 +1,5 @@
 {
-  "name": "L2LAAF Autonomous Orchestrator (DEV)",
+  "name": "L2LAAF Autonomous Orchestrator - DEV",
   "nodes": [
     {
       "parameters": {
@@ -11,13 +11,18 @@
       "name": "Agent Bus Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 400],
+      "position": [
+        112,
+        400
+      ],
       "webhookId": "agent-bus-dev-hook"
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Analyze impact: Path: {{ $json.body.payload.manifest.targetPath }}. Reason: {{ $json.body.payload.manifest.reason }}. Is this HIGH_IMPACT? (Tax, HBR, Auth, System). Return JSON: { \\\"impact\\\": \\\"HIGH_IMPACT\\\" | \\\"ROUTINE\\\" }\" }] }] }",
@@ -27,9 +32,15 @@
       "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 400],
+      "position": [
+        304,
+        400
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "Gemini API Key", "name": "Gemini API Key" }
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        }
       }
     },
     {
@@ -40,24 +51,37 @@
       "name": "Extract Impact",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [500, 400]
+      "position": [
+        512,
+        400
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "string": [{ "value1": "={{ $json.impact }}", "value2": "HIGH_IMPACT", "operation": "equal" }]
+          "string": [
+            {
+              "value1": "={{ $json.impact }}",
+              "value2": "HIGH_IMPACT"
+            }
+          ]
         }
       },
       "id": "dev-node-4-switch",
       "name": "Impact Switch",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [700, 400]
+      "position": [
+        704,
+        400
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit this change: Path: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}. Proposed Logic: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.proposedLogic }}. Identify regulatory/security flaws.\" }] }] }",
@@ -67,9 +91,15 @@
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [900, 300],
+      "position": [
+        912,
+        304
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "Gemini API Key", "name": "Gemini API Key" }
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        }
       }
     },
     {
@@ -80,12 +110,17 @@
       "name": "Extract Critique",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1100, 300]
+      "position": [
+        1104,
+        304
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
@@ -95,25 +130,154 @@
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1300, 400]
+      "position": [
+        1312,
+        400
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "eFKQbbqJ5990rW1A",
+          "name": "Chat account"
+        }
+      }
     }
   ],
+  "pinData": {
+    "Approval Listener": [
+      {
+        "json": {
+          "headers": {
+            "host": "local2local.app.n8n.cloud",
+            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Mobile/15E148 Safari/604.1",
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "accept-encoding": "gzip, br",
+            "accept-language": "en-US,en;q=0.9",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "2a09:bac3:13c0:2b4::45:10a",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "CA",
+            "cf-ray": "9f2004269ecc5a49-YVR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "priority": "u=0, i",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "none",
+            "x-forwarded-for": "2a09:bac3:13c0:2b4::45:10a, 162.159.102.17",
+            "x-forwarded-host": "local2local.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-74-6649cf98c6-cf6pz",
+            "x-is-trusted": "yes",
+            "x-real-ip": "2a09:bac3:13c0:2b4::45:10a"
+          },
+          "params": {},
+          "query": {
+            "action": "approve",
+            "env": "develop",
+            "build_id": "24939616732",
+            "phase": "43.1.4",
+            "hbrId": "undefined"
+          },
+          "webhookUrl": "https://local2local.app.n8n.cloud/webhook/approve-promotion",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
   "connections": {
-    "Agent Bus Trigger": { "main": [[{ "node": "Impact Classifier", "type": "main", "index": 0 }]] },
-    "Impact Classifier": { "main": [[{ "node": "Extract Impact", "type": "main", "index": 0 }]] },
-    "Extract Impact": { "main": [[{ "node": "Impact Switch", "type": "main", "index": 0 }]] },
-    "Impact Switch": {
+    "Agent Bus Trigger": {
       "main": [
-        [{ "node": "Validator Agent", "type": "main", "index": 0 }],
-        [{ "node": "Google Chat Card", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Impact Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Validator Agent": { "main": [[{ "node": "Extract Critique", "type": "main", "index": 0 }]] },
-    "Extract Critique": { "main": [[{ "node": "Google Chat Card", "type": "main", "index": 0 }]] }
+    "Impact Classifier": {
+      "main": [
+        [
+          {
+            "node": "Extract Impact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Impact": {
+      "main": [
+        [
+          {
+            "node": "Impact Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Impact Switch": {
+      "main": [
+        [
+          {
+            "node": "Validator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validator Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Critique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Critique": {
+      "main": [
+        [
+          {
+            "node": "Google Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
     "saveExecutionProgress": true,
     "saveManualExecutions": true
-  }
+  },
+  "versionId": "d26a6958-40ac-4449-aff0-e11bba425271",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "261923412a3ee3006949a29e9b78a6fe94c5bdde95bd10a5978cc61dac3a65e0"
+  },
+  "id": "ThWtTTPTR4ymYD6a",
+  "tags": []
 }
