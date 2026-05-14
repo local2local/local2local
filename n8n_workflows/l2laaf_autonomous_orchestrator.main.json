@@ -4,15 +4,14 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-v2-prod",
+        "path": "agent-bus-prod",
         "options": {}
       },
-      "id": "bus-trigger-prod",
       "name": "Agent Bus Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-v2-prod-hook"
+      "webhookId": "agent-bus-prod-hook"
     },
     {
       "parameters": {
@@ -23,7 +22,6 @@
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit PROD change: Path: {{ $json.body.payload.manifest.targetPath }}. Identify high-impact risks for production.\" }] }] }",
         "options": {}
       },
-      "id": "validator-agent-prod",
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -41,7 +39,6 @@
         "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent'].json.candidates[0].content.parts[0].text }}\" }",
         "options": {}
       },
-      "id": "chat-notify-prod",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,

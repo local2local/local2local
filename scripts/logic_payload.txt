@@ -1,13 +1,13 @@
 /**
- * L2LAAF Phase 45.2.1 Payload
+ * L2LAAF Phase 45.2.2 Payload
  * PROTOCOL: NASA_STANDARD_V6.0_STRICT_TYPING_FINALIZED
  * Target: n8n_orchestrator
- * Description: Implements Multi-Agent Consensus (The Council) with stabilized connection graph.
- * FIX: Matched connection names to node names and restored full Chat Webhook URL.
+ * Description: Implements Multi-Agent Consensus (The Council).
+ * FIX: Reverted paths to agent-bus-dev/prod to match GitHub Action probe endpoints.
  */
 
 /* L2LAAF_BLOCK_START(text:COMMIT_MSG:COMMIT_MSG)
-[ASSISTED] FEAT(orchestrator): Fix n8n route mounting for Consensus engine [BUMP: MINOR]
+[ASSISTED] FEAT(orchestrator): Finalize Consensus engine with stable paths [BUMP: MINOR]
 L2LAAF_BLOCK_END */
 
 /* L2LAAF_BLOCK_START(json:DEV Orchestrator:n8n_workflows/l2laaf_autonomous_orchestrator.develop.json)
@@ -17,15 +17,14 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-v2-dev",
+        "path": "agent-bus-dev",
         "options": {}
       },
-      "id": "bus-trigger",
       "name": "Agent Bus Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-v2-dev-hook"
+      "webhookId": "agent-bus-dev-hook"
     },
     {
       "parameters": {
@@ -36,7 +35,6 @@ L2LAAF_BLOCK_END */
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Analyze impact: Path: {{ $json.body.payload.manifest.targetPath }}. Reason: {{ $json.body.payload.manifest.reason }}. Is this HIGH_IMPACT? (Tax, HBR, Auth, System). Return JSON: { \\\"impact\\\": \\\"HIGH_IMPACT\\\" | \\\"ROUTINE\\\" }\" }] }] }",
         "options": {}
       },
-      "id": "impact-classifier",
       "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -49,7 +47,6 @@ L2LAAF_BLOCK_END */
       "parameters": {
         "jsCode": "const text = $input.item.json.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '');\nreturn JSON.parse(text);"
       },
-      "id": "extract-impact",
       "name": "Extract Impact",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
@@ -61,7 +58,6 @@ L2LAAF_BLOCK_END */
           "string": [{ "value1": "={{ $json.impact }}", "value2": "HIGH_IMPACT", "operation": "equal" }]
         }
       },
-      "id": "impact-switch",
       "name": "Impact Switch",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
@@ -76,7 +72,6 @@ L2LAAF_BLOCK_END */
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit this change: Path: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}. Proposed Logic: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.proposedLogic }}. Identify regulatory/security flaws.\" }] }] }",
         "options": {}
       },
-      "id": "validator-agent",
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -89,7 +84,6 @@ L2LAAF_BLOCK_END */
       "parameters": {
         "jsCode": "return { critique: $input.item.json.candidates[0].content.parts[0].text };"
       },
-      "id": "extract-critique",
       "name": "Extract Critique",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
@@ -104,7 +98,6 @@ L2LAAF_BLOCK_END */
         "jsonBody": "={ \"text\": \"🚀 **PROPOSAL FOR {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n**Impact:** {{ $node['Extract Impact'].json.impact }}\\n\\n{{ $node['Extract Critique'] ? '🛡️ **VALIDATOR CRITIQUE:**\\n' + $node['Extract Critique'].json.critique : '✅ **ROUTINE CHANGE.**' }}\\n\\n[APPROVE](https://n8n.local2local.ca/webhook/approve?id={{ $node['Agent Bus Trigger'].json.body.id }})\" }",
         "options": {}
       },
-      "id": "chat-notify",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -135,15 +128,14 @@ L2LAAF_BLOCK_END */
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "agent-bus-v2-prod",
+        "path": "agent-bus-prod",
         "options": {}
       },
-      "id": "bus-trigger-prod",
       "name": "Agent Bus Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [100, 400],
-      "webhookId": "agent-bus-v2-prod-hook"
+      "webhookId": "agent-bus-prod-hook"
     },
     {
       "parameters": {
@@ -154,7 +146,6 @@ L2LAAF_BLOCK_END */
         "jsonBody": "={ \"contents\": [{ \"parts\": [{ \"text\": \"Audit PROD change: Path: {{ $json.body.payload.manifest.targetPath }}. Identify high-impact risks for production.\" }] }] }",
         "options": {}
       },
-      "id": "validator-agent-prod",
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
@@ -172,7 +163,6 @@ L2LAAF_BLOCK_END */
         "jsonBody": "={ \"text\": \"🚨 **PRODUCTION PROPOSAL: {{ $node['Agent Bus Trigger'].json.body.payload.manifest.targetPath }}**\\n\\n🛡️ **AUDIT:** {{ $node['Validator Agent'].json.candidates[0].content.parts[0].text }}\" }",
         "options": {}
       },
-      "id": "chat-notify-prod",
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
