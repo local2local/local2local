@@ -5,16 +5,56 @@
 
 ---
 
+## Quick Start
+
+Both session scripts live in `scripts/` and must be run from the repo root.
+
+### Gemini session
+
+```zsh
+./scripts/gemini_session.sh
+```
+
+1. Select session type (1–4) in the terminal
+2. Script clears and populates `~/Downloads/gemini_session_documents/` with the correct files
+3. Script opens Gemini (AI Studio) and the staging folder in Finder simultaneously
+4. **Confirm model is Gemini 2.5 Pro** in AI Studio
+5. Select all files in the Finder window (⌘A) and drag into the Gemini chat
+6. Paste the GitHub repo link as text in the chat: `https://github.com/local2local/local2local`
+7. Press Enter in the terminal — the script walks you through Steps 2–4, copying each prompt to clipboard one at a time (⌘V to paste each one, send, then press Enter to continue)
+8. **Verify Gemini's 5 quiz answers** before starting work — answers are shown in the terminal
+
+> If Gemini answers Q2 or Q3 incorrectly, correct it before continuing. These are the two failure modes that caused the most regressions.
+
+### Claude session
+
+```zsh
+./scripts/claude_session.sh
+```
+
+1. Select session type (1–5) in the terminal
+2. Script clears and populates `~/Downloads/claude_session_documents/` with the correct files
+3. Script opens Claude (claude.ai/new) and the staging folder in Finder simultaneously
+4. **Confirm model** — Sonnet 4.6 for audits and debugging, Opus 4.6 for architecture
+5. Select all files in the Finder window (⌘A) and drag into the Claude chat
+6. Press Enter in the terminal — the script copies the appropriate prompt template to clipboard
+7. Paste into Claude (⌘V), fill in the placeholders, and send
+
+> No quiz, no standing instruction, no GitHub link needed for Claude.
+
+---
+
 ## Quick Reference
 
 | | Gemini | Claude |
 |---|---|---|
 | **Role** | Actor — generates code, payloads, n8n workflows | Judge / Architect — QA review, planning, debugging |
 | **Preferred model** | Gemini 2.5 Pro | Claude Sonnet 4.6 (standard) / Claude Opus 4.6 (architecture) |
-| **GitHub repo link** | ✅ Required | ❌ Not needed (paste content directly) |
-| **Core docs always attached** | 5 documents | 3 documents |
-| **Standing instruction** | Required — Part 1 of session setup | Not required — Claude holds context |
-| **Confirmation quiz** | Required — 5 questions | Not required |
+| **Script** | `./scripts/gemini_session.sh` | `./scripts/claude_session.sh` |
+| **Staging folder** | `~/Downloads/gemini_session_documents/` | `~/Downloads/claude_session_documents/` |
+| **GitHub repo link** | ✅ Required — paste as text | ❌ Not needed |
+| **Standing instruction** | ✅ Required — script handles it | ❌ Not required |
+| **Confirmation quiz** | ✅ Required — 5 questions | ❌ Not required |
 | **Pre-flight audit role** | Receives audit results | Performs audit |
 
 ---
@@ -31,7 +71,7 @@
 
 ### Step 2 — Attach core documents (always)
 
-These five documents must be attached at the start of every Gemini session without exception:
+These five documents are copied automatically by the script into `~/Downloads/gemini_session_documents/`:
 
 - [ ] `documents/gemini_cicd_briefing.md` — pipeline overview, commit format, n8n orchestrator rules, body serialization rules, relay.sh v6.4 behaviour
 - [ ] `documents/project_plan.md` — current roadmap, active phase, horizon 2 detail
@@ -41,32 +81,31 @@ These five documents must be attached at the start of every Gemini session witho
 
 ### Step 3 — Attach session-type documents (conditional)
 
-**If working on n8n orchestrator:**
-- [ ] Current `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json` (download from repo or copy from local)
-- [ ] Current `n8n_workflows/l2laaf_autonomous_orchestrator.main.json` (same)
+The script adds these automatically based on session type selection:
 
-> Rule: Never let Gemini generate an orchestrator workflow without the current file as context. Attach it and say "Here is the current orchestrator. Add to this — do not replace it."
+**If working on n8n orchestrator (type 2):**
+- [ ] `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json`
+- [ ] `n8n_workflows/l2laaf_autonomous_orchestrator.main.json`
 
-**If working on Cloud Functions:**
-- [ ] `documents/firestore_schema.md`
-- [ ] Current file content for every file being modified (copy-paste from Cursor)
+> Rule: Never let Gemini generate an orchestrator workflow without the current file as context. Tell Gemini: "Add to this file — do not replace it."
 
-**If working on Flutter UI:**
+**If working on Flutter UI (type 3):**
 - [ ] `documents/development_method_dreamflow.md`
 - [ ] `documents/L2LAAF_flutter-first_architecture.md`
 - [ ] `documents/firestore_schema.md`
-- [ ] Current file content for every file being modified
 
-**If working on a new phase or planning:**
+**If working on phase planning / architecture (type 4):**
 - [ ] `documents/l2laaf_full_specification.md`
 
 ### Step 4 — Provide GitHub repo link
 
-- [ ] Paste: `https://github.com/local2local/local2local`
+- [ ] Paste as text in the chat: `https://github.com/local2local/local2local`
 
-Gemini can read the repo structure and recent commits directly. This helps it understand the current state without requiring you to paste every file. Still attach the current version of any file it will modify — do not rely on Gemini reading it from GitHub for file content.
+Gemini uses this to orient itself on repo structure and recent commits. Still attach the current version of any file it will modify — do not rely on Gemini reading file content from GitHub.
 
-### Step 5 — Paste the standing instruction (Part 1 of `gemini_session_setup.md`)
+### Step 5 — Standing instruction
+
+The script copies this to clipboard automatically. Paste (⌘V) and send:
 
 ```
 You are working as a development assistant on the L2LAAF platform. Before we begin,
@@ -87,7 +126,9 @@ scratch. Work only from what I give you.
 These two rules are non-negotiable and apply for the entire session.
 ```
 
-### Step 6 — Paste the one-shot opener (Part 2 of `gemini_session_setup.md`)
+### Step 6 — One-shot opener
+
+The script copies this to clipboard automatically. Paste (⌘V) and send:
 
 ```
 I am starting a new L2LAAF development session. Please read all attached documents
@@ -106,7 +147,7 @@ Do not begin any development work until you have answered all five questions.
 
 ### Step 7 — Verify Gemini's answers
 
-Before proceeding, check Gemini's five answers against these correct responses:
+The correct responses are shown in the terminal. Reference:
 
 | Question | Correct answer |
 |---|---|
@@ -116,9 +157,11 @@ Before proceeding, check Gemini's five answers against these correct responses:
 | 4 | `main.json` is not touched. v6.4 only deletes files explicitly listed in the payload. |
 | 5 | `[SOURCE] TYPE(scope): Description`. Never a version prefix. Never multi-line. |
 
-If Gemini answers question 2 or 3 incorrectly, correct it before starting work. These are the two failure modes that caused the most regressions.
+If Gemini answers question 2 or 3 incorrectly, correct it before starting work.
 
-### Step 8 — Add plan context prompt (Part 4 of `gemini_session_setup.md`)
+### Step 8 — Plan context prompt
+
+The script copies this to clipboard automatically. Paste (⌘V) and send:
 
 ```
 Before we begin implementation, confirm you have read documents/project_plan.md.
@@ -135,13 +178,15 @@ today that will affect Phase 46 or later?
 
 | Task | Model |
 |---|---|
-| Pre-flight payload audit (standard) | **Claude Sonnet 4.6** |
+| Pre-flight payload audit | **Claude Sonnet 4.6** |
 | Architecture decisions, phase planning, judge layer design | **Claude Opus 4.6** |
-| Debugging a specific error, fixing a failing test | **Claude Sonnet 4.6** |
+| Debugging a specific error | **Claude Sonnet 4.6** |
 | Writing or reviewing documentation | **Claude Sonnet 4.6** |
 | Designing a new system component from scratch | **Claude Opus 4.6** |
 
 ### Step 2 — Attach core documents (always)
+
+These three documents are copied automatically by the script into `~/Downloads/claude_session_documents/`:
 
 - [ ] `documents/project_plan.md`
 - [ ] `documents/ai_context_rules.md`
@@ -149,74 +194,55 @@ today that will affect Phase 46 or later?
 
 ### Step 3 — Attach session-type documents (conditional)
 
-**If doing a pre-flight payload audit:**
-- [ ] The `logic_payload.txt` content (paste directly — no file needed)
+The script adds these automatically based on session type selection:
+
+**Pre-flight audit or debugging (types 1 & 2):**
 - [ ] `documents/cicd_pipeline_reference.md`
 
-**If debugging n8n orchestrator issues:**
-- [ ] The relevant n8n execution JSON or screenshot description
+**Architecture / planning (type 3):**
 - [ ] `documents/cicd_pipeline_reference.md`
-- [ ] Current orchestrator JSON if available
-
-**If doing architecture or planning work:**
 - [ ] `documents/l2laaf_full_specification.md`
-- [ ] `documents/cicd_pipeline_reference.md`
-- [ ] `documents/gemini_cicd_briefing.md` (so Claude understands what Gemini has been told)
+- [ ] `documents/gemini_cicd_briefing.md`
 
-**If reviewing Flutter code:**
+**Flutter code review (type 4):**
 - [ ] `documents/development_method_dreamflow.md`
-- [ ] The specific file content being reviewed
+
+**Documentation update (type 5):**
+- [ ] `documents/cicd_pipeline_reference.md`
+- [ ] Any additional document being updated (drag in manually)
 
 ### Step 4 — GitHub repo link
 
-- [ ] **Not required.** Claude works with content pasted directly into the conversation. The repo is private and Claude cannot authenticate to read it. Paste file content explicitly when needed.
+**Not required.** Claude works with content pasted directly into the conversation. Paste file content explicitly when needed.
 
 ### Step 5 — No standing instruction needed
 
-Claude maintains context across the session and does not require a confirmation quiz. Start with the task directly.
+Claude maintains context across the session and does not require a confirmation quiz. Start with the task directly after attaching documents.
 
-**For a pre-flight audit, use this template:**
+**For a pre-flight audit** — the script copies the audit template to clipboard with live baseline values (version, relay version, node counts). Paste into Claude, replace the placeholder with the full payload content, and send.
 
-```
-Audit this payload.
+**For architecture or planning** — start with the question. Claude will orient itself from the attached documents.
 
-[paste logic_payload.txt content here]
-
-Known baseline:
-- DEV orchestrator node count: 51
-- PROD orchestrator node count: 51
-- relay.sh version: v6.4
-- Current prod version: [current version]
-- Active phase: [current phase]
-```
-
-**For architecture or planning:**
-
-Start with the question. Claude has the project plan and will orient itself.
-
-**For debugging:**
-
-Paste the error output, the relevant file content, and describe what you expected vs what happened. Claude will diagnose and provide a fix.
+**For debugging** — paste the error output, the relevant file content, and describe what you expected vs what happened.
 
 ---
 
 ## Session Workflow Summary
 
 ```
-1. Open Gemini 2.5 Pro
-   → Attach 5 core docs + session-type docs
+1. Run ./scripts/gemini_session.sh
+   → Select session type
+   → Drag ~/Downloads/gemini_session_documents/ files into Gemini
    → Paste GitHub repo link
-   → Paste standing instruction (Part 1)
-   → Paste one-shot opener (Part 2)
-   → Verify 5 answers
-   → Paste plan context prompt (Part 4)
+   → Script walks through standing instruction + opener + plan context
+   → Verify 5 quiz answers
    → Do development work
 
 2. Gemini produces logic_payload.txt
-   → Copy payload content
 
-3. Open Claude Sonnet 4.6
-   → Attach 3 core docs
+3. Run ./scripts/claude_session.sh
+   → Select type 1 (Pre-flight audit)
+   → Drag ~/Downloads/claude_session_documents/ files into Claude
    → Paste audit template with payload content
    → Receive CLEARED or BLOCKED + issues
 
@@ -240,7 +266,7 @@ Paste the error output, the relevant file content, and describe what you expecte
 
 ## Document Location Reference
 
-All documents live in `documents/` in the repo root. Current versions are always in `main` after promotion.
+All documents live in `documents/` in the repo root. The scripts always copy from the current working tree — run `git pull --rebase origin develop` before starting a session to ensure documents are current.
 
 | Document | Purpose | Always attach to |
 |---|---|---|
@@ -259,8 +285,8 @@ All documents live in `documents/` in the repo root. Current versions are always
 
 ## Update this checklist when
 
-- relay.sh version changes (update baseline in audit template)
-- Orchestrator node count changes (update baseline in audit template)
-- Current prod version changes (update audit template before each session)
-- A new document is added to `documents/` that both AIs need
-- A new failure mode is discovered that should be added to the audit checklist
+- relay.sh version changes (script reads it dynamically — no manual update needed)
+- Orchestrator node count changes (script reads it dynamically — no manual update needed)
+- A new document is added to `documents/` that both AIs need (update script copy lists)
+- A new failure mode is discovered that should be added to the Gemini quiz or Claude audit checklist
+- Session type options change
