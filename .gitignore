@@ -38,4 +38,4 @@ android/app/build/
 scripts/logic_payload.txt
 COMMIT_MSG
 flutter_problems_list.txt
-audit_bundle.txt
+audit_bundle.txt.dart_tool/
