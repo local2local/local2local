@@ -1,4 +1,3 @@
-L2LAAF_BLOCK_START(FIX:Semantic Retrieval Type Fixes:functions/src/logic/semanticRetrieval.ts)
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -83,8 +82,3 @@ export const semanticRetrievalV1 = onCall(async (request) => {
 
   return { instructions, evidence };
 });
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(FIX:Commit Message:COMMIT_MSG)
-[ASSISTED] FIX(orchestration): Fix TypeScript Type Errors In Semantic Retrieval Function
-L2LAAF_BLOCK_END

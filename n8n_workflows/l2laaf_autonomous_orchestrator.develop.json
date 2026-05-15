@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 45.1.2\n**Feature:** Phase 45 Multi-Agent Consensus — Impact Classifier + Validator Agent inserted on HITL path",
+        "content": "## 🤖 L2LAAF Orchestrator\n**Phase:** 45.2.0\n**Feature:** Phase 45.2 Semantic Retrieval — Lessons Learned injected into Fixer prompt",
         "height": 150,
         "width": 926,
         "color": 6
@@ -12,10 +12,7 @@
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [
-        96,
-        -272
-      ]
+      "position": [ 96, -272 ]
     },
     {
       "parameters": {},
@@ -23,10 +20,7 @@
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [
-        112,
-        1296
-      ]
+      "position": [ 112, 1296 ]
     },
     {
       "parameters": {
@@ -41,10 +35,7 @@
       "name": "Error Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        336,
-        1296
-      ]
+      "position": [ 336, 1296 ]
     },
     {
       "parameters": {
@@ -56,10 +47,7 @@
       "name": "MCP Code Payload",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        112,
-        -192
-      ],
+      "position": [ 112, -192 ],
       "webhookId": "b8f49bcc-cb60-4c00-9f8c-ae008be7b5b3"
     },
     {
@@ -75,10 +63,7 @@
       "name": "Fetch Main State",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [
-        336,
-        -192
-      ],
+      "position": [ 336, -192 ],
       "webhookId": "34e5b124-b6ea-472c-83c0-244f09fefe5d",
       "credentials": {
         "githubApi": {
@@ -95,10 +80,7 @@
       "name": "State Manager",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        560,
-        -192
-      ]
+      "position": [ 560, -192 ]
     },
     {
       "parameters": {
@@ -109,10 +91,7 @@
       "name": "Fetch System Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        784,
-        -192
-      ]
+      "position": [ 784, -192 ]
     },
     {
       "parameters": {
@@ -122,10 +101,7 @@
       "name": "Throttling Evaluator",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        1008,
-        -192
-      ]
+      "position": [ 1008, -192 ]
     },
     {
       "parameters": {
@@ -199,10 +175,7 @@
       "name": "Throttle Switch",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [
-        1232,
-        -208
-      ]
+      "position": [ 1232, -208 ]
     },
     {
       "parameters": {
@@ -212,10 +185,7 @@
       "name": "Throttle Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [
-        1456,
-        -192
-      ],
+      "position": [ 1456, -192 ],
       "webhookId": "d83d05c7-f947-47ff-a965-909f7d06bd98"
     },
     {
@@ -231,10 +201,7 @@
       "name": "Blocked Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1456,
-        0
-      ]
+      "position": [ 1456, 0 ]
     },
     {
       "parameters": {
@@ -249,10 +216,7 @@
       "name": "Google Chat Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3040,
-        -128
-      ]
+      "position": [ 3040, -128 ]
     },
     {
       "parameters": {
@@ -264,10 +228,7 @@
       "name": "Approval Listener",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        112,
-        416
-      ],
+      "position": [ 112, 416 ],
       "webhookId": "ea64f359-a428-46e4-9dc1-d5c643f385eb"
     },
     {
@@ -280,10 +241,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        336,
-        224
-      ]
+      "position": [ 336, 224 ]
     },
     {
       "parameters": {
@@ -298,10 +256,7 @@
       "name": "Fetch Proposal Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        336,
-        608
-      ],
+      "position": [ 336, 608 ],
       "continueOnFail": true
     },
     {
@@ -319,10 +274,7 @@
       "name": "Log Scraper",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        560,
-        608
-      ],
+      "position": [ 560, 608 ],
       "credentials": {
         "googleApi": {
           "id": "NlT4tfnPyrdMF8jv",
@@ -341,10 +293,7 @@
       "name": "Fetch Latest State",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        784,
-        608
-      ],
+      "position": [ 784, 608 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -360,10 +309,7 @@
       "name": "Automated Testing Suite",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        1008,
-        608
-      ]
+      "position": [ 1008, 608 ]
     },
     {
       "parameters": {
@@ -394,10 +340,46 @@
       "name": "Payload Filter",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        1008,
-        992
-      ]
+      "position": [ 1008, 992 ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const env = $('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev';\nconst retrievalUrl = `https://us-central1-${env}.cloudfunctions.net/semanticRetrievalV1`;\nconst filePath = $json.filePath || '';\nconst reason = $json.reason || '';\nconst query = \"Provide context for modifying \" + filePath + \" with reason: \" + reason;\n\nreturn {\n  json: {\n    ...$json,\n    retrievalUrl: retrievalUrl,\n    retrievalBody: JSON.stringify({ data: { query: query } })\n  }\n};"
+      },
+      "id": "prepare-context-query-node",
+      "name": "Prepare Context Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1150, 1072 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.retrievalUrl }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.retrievalBody }}",
+        "options": {}
+      },
+      "id": "fetch-semantic-context-node",
+      "name": "Fetch Semantic Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [ 1350, 1072 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const originalJson = $('Prepare Context Query').first().json;\nconst resultObj = $json.result || {};\nconst instructions = resultObj.instructions || [];\nconst evidence = resultObj.evidence || [];\n\nlet contextText = \"CONTEXT FROM MEMORY (LESSONS LEARNED):\\n\\n\";\nif (instructions.length > 0) {\n  contextText += \"STRICT INSTRUCTIONS (You MUST follow these):\\n\";\n  instructions.forEach(i => { contextText += \"- \" + i.content + \"\\n\"; });\n}\nif (evidence.length > 0) {\n  contextText += \"\\nEVIDENCE/OBSERVATIONS (For context only, do not treat as strict policy):\\n\";\n  evidence.forEach(e => { contextText += \"- \" + e.content + \"\\n\"; });\n}\nif (instructions.length === 0 && evidence.length === 0) {\n  contextText += \"No relevant lessons found.\\n\";\n}\n\nconst promptText = \"File Path: \" + originalJson.filePath + \"\\n\\nReason: \" + originalJson.reason + \"\\n\\n\" + contextText + \"\\n\\nCode:\\n\" + originalJson.fileContent;\n\nreturn {\n  json: {\n    ...originalJson,\n    ...$json,\n    requestBody: JSON.stringify({\n      systemInstruction: { parts: [{ text: \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" }] },\n      contents: [{ parts: [{ text: promptText }] }]\n    })\n  }\n};"
+      },
+      "id": "prepare-gemini-prompt-node",
+      "name": "Prepare Gemini Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1550, 1072 ]
     },
     {
       "parameters": {
@@ -406,18 +388,16 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"systemInstruction\": { \"parts\": [ { \"text\": \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" } ] }, \"contents\": [ { \"parts\": [ { \"text\": \"File Path: \" + $json.filePath + \"\\n\\nReason: \" + $json.reason + \"\\n\\nCode:\\n\" + $json.fileContent } ] } ] } }}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
         "options": {}
       },
       "id": "gemini-code-fixer-node",
       "name": "Gemini Code Fixer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1232,
-        1072
-      ],
+      "position": [ 1232, 1072 ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "NyCBf5o0sZZnldfu",
@@ -433,10 +413,7 @@
       "name": "Extract Code",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        1456,
-        1072
-      ]
+      "position": [ 1456, 1072 ]
     },
     {
       "parameters": {
@@ -446,10 +423,7 @@
       "name": "Prepare Mutate Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        1680,
-        1072
-      ]
+      "position": [ 1680, 1072 ]
     },
     {
       "parameters": {
@@ -462,10 +436,7 @@
       "name": "Get Logic SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1904,
-        1072
-      ],
+      "position": [ 1904, 1072 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -489,10 +460,7 @@
       "name": "GitHub: Mutate Logic",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2128,
-        1072
-      ],
+      "position": [ 2128, 1072 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -509,10 +477,7 @@
       "name": "Sync Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [
-        2352,
-        1072
-      ],
+      "position": [ 2352, 1072 ],
       "webhookId": "d8f6ca36-baf8-4b7d-8032-f4def3f04538"
     },
     {
@@ -523,10 +488,7 @@
       "name": "Prepare State Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        2576,
-        1072
-      ]
+      "position": [ 2576, 1072 ]
     },
     {
       "parameters": {
@@ -539,10 +501,7 @@
       "name": "Get State SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2800,
-        1072
-      ],
+      "position": [ 2800, 1072 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -566,10 +525,7 @@
       "name": "GitHub: Update State",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3024,
-        1072
-      ],
+      "position": [ 3024, 1072 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -625,10 +581,7 @@
       "name": "Proposal Closure Check",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [
-        3248,
-        928
-      ]
+      "position": [ 3248, 928 ]
     },
     {
       "parameters": {
@@ -643,10 +596,7 @@
       "name": "Trigger Firestore Closure",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3472,
-        688
-      ]
+      "position": [ 3472, 688 ]
     },
     {
       "parameters": {
@@ -661,10 +611,7 @@
       "name": "Final Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        4144,
-        688
-      ]
+      "position": [ 4144, 688 ]
     },
     {
       "parameters": {
@@ -695,10 +642,7 @@
       "name": "Action Gate",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        1232,
-        608
-      ]
+      "position": [ 1232, 608 ]
     },
     {
       "parameters": {
@@ -715,10 +659,7 @@
       "name": "Write Abandoned Phase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3920,
-        448
-      ],
+      "position": [ 3920, 448 ],
       "credentials": {
         "googleApi": {
           "id": "NlT4tfnPyrdMF8jv",
@@ -742,10 +683,7 @@
       "name": "Write Version to Firestore",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3696,
-        928
-      ],
+      "position": [ 3696, 928 ],
       "credentials": {
         "googleApi": {
           "id": "NlT4tfnPyrdMF8jv",
@@ -767,10 +705,7 @@
       "name": "Post Decision Card",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        336,
-        416
-      ]
+      "position": [ 336, 416 ]
     },
     {
       "parameters": {
@@ -787,10 +722,7 @@
       "name": "Write Promoted Phase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3920,
-        928
-      ],
+      "position": [ 3920, 928 ],
       "credentials": {
         "googleApi": {
           "id": "NlT4tfnPyrdMF8jv",
@@ -827,10 +759,7 @@
       "name": "Merge Error Check",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        2576,
-        688
-      ]
+      "position": [ 2576, 688 ]
     },
     {
       "parameters": {
@@ -845,10 +774,7 @@
       "name": "Merge Failed Alert",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2800,
-        592
-      ]
+      "position": [ 2800, 592 ]
     },
     {
       "parameters": {
@@ -861,10 +787,7 @@
       "name": "Get Develop SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2128,
-        688
-      ],
+      "position": [ 2128, 688 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -895,10 +818,7 @@
       "name": "Force Update Main",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2352,
-        688
-      ],
+      "position": [ 2352, 688 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -918,10 +838,7 @@
       "name": "Get Main State SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2800,
-        784
-      ],
+      "position": [ 2800, 784 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -945,10 +862,7 @@
       "name": "Create Promotion Commit",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        3024,
-        784
-      ],
+      "position": [ 3024, 784 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -968,10 +882,7 @@
       "name": "Get pubspec on Develop",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1456,
-        688
-      ],
+      "position": [ 1456, 688 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -988,10 +899,7 @@
       "name": "Calculate New Version",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1680,
-        688
-      ]
+      "position": [ 1680, 688 ]
     },
     {
       "parameters": {
@@ -1015,10 +923,7 @@
       "name": "Write Bumped pubspec",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1904,
-        688
-      ],
+      "position": [ 1904, 688 ],
       "credentials": {
         "githubApi": {
           "id": "6OSt2bN1T5JeIKvt",
@@ -1042,10 +947,7 @@
       "name": "Impact Classifier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        1680,
-        -272
-      ],
+      "position": [ 1680, -272 ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "NyCBf5o0sZZnldfu",
@@ -1062,10 +964,7 @@
       "name": "Extract Impact",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        1904,
-        -272
-      ]
+      "position": [ 1904, -272 ]
     },
     {
       "parameters": {
@@ -1096,10 +995,7 @@
       "name": "Impact Switch",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        2128,
-        -272
-      ]
+      "position": [ 2128, -272 ]
     },
     {
       "parameters": {
@@ -1109,7 +1005,7 @@
         "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
         "contentType": "raw",
-        "rawContentType": "applicatoin/json",
+        "rawContentType": "application/json",
         "body": "={{ $json.validatorBody }}",
         "options": {}
       },
@@ -1117,10 +1013,7 @@
       "name": "Validator Agent",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [
-        2576,
-        -336
-      ],
+      "position": [ 2576, -336 ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "NyCBf5o0sZZnldfu",
@@ -1137,10 +1030,7 @@
       "name": "Extract Critique",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [
-        2800,
-        -336
-      ]
+      "position": [ 2800, -336 ]
     },
     {
       "parameters": {
@@ -1149,10 +1039,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2352,
-        -336
-      ],
+      "position": [ 2352, -336 ],
       "id": "094997c8-89ce-4d8a-a151-dcf774e7a4bc",
       "name": "Prepare Validator Prompt"
     }
@@ -1205,536 +1092,170 @@
   },
   "connections": {
     "MCP Code Payload": {
-      "main": [
-        [
-          {
-            "node": "Fetch Main State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Fetch Main State", "type": "main", "index": 0 } ] ]
     },
     "Fetch Main State": {
-      "main": [
-        [
-          {
-            "node": "State Manager",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "State Manager", "type": "main", "index": 0 } ] ]
     },
     "State Manager": {
-      "main": [
-        [
-          {
-            "node": "Fetch System Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Fetch System Status", "type": "main", "index": 0 } ] ]
     },
     "Fetch System Status": {
-      "main": [
-        [
-          {
-            "node": "Throttling Evaluator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Throttling Evaluator", "type": "main", "index": 0 } ] ]
     },
     "Throttling Evaluator": {
-      "main": [
-        [
-          {
-            "node": "Throttle Switch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Throttle Switch", "type": "main", "index": 0 } ] ]
     },
     "Throttle Switch": {
       "main": [
-        [
-          {
-            "node": "Impact Classifier",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Throttle Wait",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Blocked Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Impact Classifier", "type": "main", "index": 0 } ],
+        [ { "node": "Throttle Wait", "type": "main", "index": 0 } ],
+        [ { "node": "Blocked Chat Card", "type": "main", "index": 0 } ]
       ]
     },
     "Throttle Wait": {
-      "main": [
-        [
-          {
-            "node": "Impact Classifier",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Impact Classifier", "type": "main", "index": 0 } ] ]
     },
     "Impact Classifier": {
-      "main": [
-        [
-          {
-            "node": "Extract Impact",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Extract Impact", "type": "main", "index": 0 } ] ]
     },
     "Extract Impact": {
-      "main": [
-        [
-          {
-            "node": "Impact Switch",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Impact Switch", "type": "main", "index": 0 } ] ]
     },
     "Impact Switch": {
       "main": [
-        [
-          {
-            "node": "Prepare Validator Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Prepare Validator Prompt", "type": "main", "index": 0 } ],
+        [ { "node": "Google Chat Card", "type": "main", "index": 0 } ]
       ]
     },
     "Validator Agent": {
-      "main": [
-        [
-          {
-            "node": "Extract Critique",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Extract Critique", "type": "main", "index": 0 } ] ]
     },
     "Extract Critique": {
-      "main": [
-        [
-          {
-            "node": "Google Chat Card",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Google Chat Card", "type": "main", "index": 0 } ] ]
     },
     "Approval Listener": {
       "main": [
         [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Proposal Data",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Post Decision Card",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Respond to Webhook", "type": "main", "index": 0 },
+          { "node": "Fetch Proposal Data", "type": "main", "index": 0 },
+          { "node": "Post Decision Card", "type": "main", "index": 0 }
         ]
       ]
     },
     "Fetch Proposal Data": {
-      "main": [
-        [
-          {
-            "node": "Log Scraper",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Log Scraper", "type": "main", "index": 0 } ] ]
     },
     "Log Scraper": {
-      "main": [
-        [
-          {
-            "node": "Fetch Latest State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Fetch Latest State", "type": "main", "index": 0 } ] ]
     },
     "Fetch Latest State": {
-      "main": [
-        [
-          {
-            "node": "Automated Testing Suite",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Automated Testing Suite", "type": "main", "index": 0 } ] ]
     },
     "Automated Testing Suite": {
-      "main": [
-        [
-          {
-            "node": "Action Gate",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Action Gate", "type": "main", "index": 0 } ] ]
     },
     "Payload Filter": {
       "main": [
-        [
-          {
-            "node": "Gemini Code Fixer",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Proposal Closure Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Prepare Context Query", "type": "main", "index": 0 } ],
+        [ { "node": "Proposal Closure Check", "type": "main", "index": 0 } ]
       ]
+    },
+    "Prepare Context Query": {
+      "main": [ [ { "node": "Fetch Semantic Context", "type": "main", "index": 0 } ] ]
+    },
+    "Fetch Semantic Context": {
+      "main": [ [ { "node": "Prepare Gemini Prompt", "type": "main", "index": 0 } ] ]
+    },
+    "Prepare Gemini Prompt": {
+      "main": [ [ { "node": "Gemini Code Fixer", "type": "main", "index": 0 } ] ]
     },
     "Gemini Code Fixer": {
-      "main": [
-        [
-          {
-            "node": "Extract Code",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Extract Code", "type": "main", "index": 0 } ] ]
     },
     "Extract Code": {
-      "main": [
-        [
-          {
-            "node": "Prepare Mutate Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Prepare Mutate Payload", "type": "main", "index": 0 } ] ]
     },
     "Prepare Mutate Payload": {
-      "main": [
-        [
-          {
-            "node": "Get Logic SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Get Logic SHA", "type": "main", "index": 0 } ] ]
     },
     "Get Logic SHA": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Mutate Logic",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "GitHub: Mutate Logic", "type": "main", "index": 0 } ] ]
     },
     "GitHub: Mutate Logic": {
-      "main": [
-        [
-          {
-            "node": "Sync Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Sync Wait", "type": "main", "index": 0 } ] ]
     },
     "Sync Wait": {
-      "main": [
-        [
-          {
-            "node": "Prepare State Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Prepare State Payload", "type": "main", "index": 0 } ] ]
     },
     "Prepare State Payload": {
-      "main": [
-        [
-          {
-            "node": "Get State SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Get State SHA", "type": "main", "index": 0 } ] ]
     },
     "Get State SHA": {
-      "main": [
-        [
-          {
-            "node": "GitHub: Update State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "GitHub: Update State", "type": "main", "index": 0 } ] ]
     },
     "GitHub: Update State": {
-      "main": [
-        [
-          {
-            "node": "Proposal Closure Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Proposal Closure Check", "type": "main", "index": 0 } ] ]
     },
     "Proposal Closure Check": {
       "main": [
-        [
-          {
-            "node": "Trigger Firestore Closure",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Write Version to Firestore",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Trigger Firestore Closure", "type": "main", "index": 0 } ],
+        [ { "node": "Write Version to Firestore", "type": "main", "index": 0 } ]
       ]
     },
     "Trigger Firestore Closure": {
-      "main": [
-        [
-          {
-            "node": "Write Version to Firestore",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Write Version to Firestore", "type": "main", "index": 0 } ] ]
     },
     "Error Trigger": {
-      "main": [
-        [
-          {
-            "node": "Error Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Error Alert", "type": "main", "index": 0 } ] ]
     },
     "Action Gate": {
       "main": [
-        [
-          {
-            "node": "Get pubspec on Develop",
-            "type": "main",
-            "index": 0
-          }
+        [ 
+          { "node": "Get pubspec on Develop", "type": "main", "index": 0 },
+          { "node": "Payload Filter", "type": "main", "index": 0 }
         ],
-        [
-          {
-            "node": "Write Abandoned Phase",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Write Abandoned Phase", "type": "main", "index": 0 } ]
       ]
     },
     "Write Abandoned Phase": {
-      "main": [
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Final Alert", "type": "main", "index": 0 } ] ]
     },
     "Write Version to Firestore": {
-      "main": [
-        [
-          {
-            "node": "Write Promoted Phase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Write Promoted Phase", "type": "main", "index": 0 } ] ]
     },
     "Write Promoted Phase": {
-      "main": [
-        [
-          {
-            "node": "Final Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Final Alert", "type": "main", "index": 0 } ] ]
     },
     "Merge Error Check": {
       "main": [
-        [
-          {
-            "node": "Merge Failed Alert",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Get Main State SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Merge Failed Alert", "type": "main", "index": 0 } ],
+        [ { "node": "Get Main State SHA", "type": "main", "index": 0 } ]
       ]
     },
     "Get Develop SHA": {
-      "main": [
-        [
-          {
-            "node": "Force Update Main",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Force Update Main", "type": "main", "index": 0 } ] ]
     },
     "Force Update Main": {
-      "main": [
-        [
-          {
-            "node": "Merge Error Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Merge Error Check", "type": "main", "index": 0 } ] ]
     },
     "Get Main State SHA": {
-      "main": [
-        [
-          {
-            "node": "Create Promotion Commit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Create Promotion Commit", "type": "main", "index": 0 } ] ]
     },
     "Create Promotion Commit": {
-      "main": [
-        [
-          {
-            "node": "Proposal Closure Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Proposal Closure Check", "type": "main", "index": 0 } ] ]
     },
     "Get pubspec on Develop": {
-      "main": [
-        [
-          {
-            "node": "Calculate New Version",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Calculate New Version", "type": "main", "index": 0 } ] ]
     },
     "Calculate New Version": {
-      "main": [
-        [
-          {
-            "node": "Write Bumped pubspec",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Write Bumped pubspec", "type": "main", "index": 0 } ] ]
     },
     "Write Bumped pubspec": {
-      "main": [
-        [
-          {
-            "node": "Get Develop SHA",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Get Develop SHA", "type": "main", "index": 0 } ] ]
     },
     "Prepare Validator Prompt": {
-      "main": [
-        [
-          {
-            "node": "Validator Agent",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [ [ { "node": "Validator Agent", "type": "main", "index": 0 } ] ]
     }
   },
   "active": true,
