@@ -8,14 +8,16 @@
 
 ## How this plan works
 
-This document is the single shared roadmap for all development work on L2LAAF. It is read by Claude AI, Google Gemini, and the developer at the start of every session. Changes to the plan are committed before the implementation commits that follow them — this creates a clear audit trail of why the codebase evolved the way it did.
+This document is the single shared roadmap for all development work on L2LAAF. It is read by Claude AI, Google Gemini, and the developer at the start of every session. Changes to the plan are committed before the implementation commits that follow them.
 
 **Three planning horizons:**
 - **Horizon 1 — Active phase:** fully specified, being built now
 - **Horizon 2 — Next 2-3 phases:** planned with enough detail to make architectural decisions today that won't need to be undone later
-- **Horizon 3 — Future phases:** directional intent and sequence only — no implementation detail until a phase moves to Horizon 2
+- **Horizon 3 — Future phases:** directional intent and sequence only
 
 Mid-course corrections are committed as `[MANUAL] CHORE(docs): Update project plan — [reason]` before any implementation changes.
+
+**Judge Layer reference:** All agent actions in this system are governed by the judge layer architecture defined in `documents/judge_layer_architecture.md`. Read that document before designing any feature that involves an agent taking an action against an external system.
 
 ---
 
@@ -37,20 +39,10 @@ Phase 35: Autonomous Logic Refinement.
 Phase 36: Global Memory (Lessons Learned Vault).
 
 ### Phase Group 4: CI/CD Pipeline (Phases 41–43) — COMPLETED & STABLE
-Full automated deploy-to-dev, human-approve, promote-to-prod system. See `documents/cicd_pipeline_reference.md` and `documents/cicd_master_checklist.md`.
-
-Key outcomes: automatic version bumping from `pubspec.yaml`, four development methods (MANUAL/ASSISTED/AUTO/DREAM), HITL gate via Google Chat, relay.sh v6.4 with targeted n8n workflow cleanup, Upstream Relay mechanism.
+Full automated deploy-to-dev, human-approve, promote-to-prod system. See `documents/cicd_pipeline_reference.md`.
 
 ### Phase Group 5: SuperAdmin Dashboard (Phase 44) — COMPLETED
-**Final version:** 44.4.4
-
-Two-page dashboard (Phases page + Data page) with:
-- Telemetry banner (GREEN/YELLOW/RED)
-- Promoted and abandoned phase history with ID-based streaming counter
-- Multi-tenant agent bus viewer (SYSTEM / KASKFLOW / MOONLITELY) with AGENT BUS / SHADOW BUS toggle
-- Generic data browser across 18 known Firestore collections
-- Agent bus injection UI with Raw JSON editor, Structured form, and Template library
-- DEV/PROD environment switcher wired to live providers
+**Final version:** 44.4.4. Two-page dashboard with telemetry, phase history, agent bus viewer, data browser, and injection UI.
 
 ---
 
@@ -64,36 +56,29 @@ Two-page dashboard (Phases page + Data page) with:
 ---
 
 #### 45.1 — Multi-Agent Consensus ✅ COMPLETE
-Impact Classifier and Validator Agent nodes inserted into the HITL path of both DEV and PROD orchestrators. Every deployment is classified as HIGH_IMPACT or ROUTINE by Gemini 2.5 Flash. HIGH_IMPACT changes receive a Gemini risk assessment in the Google Chat HITL card under "Impact Assessment".
+Impact Classifier and Validator Agent inserted into HITL path. All deployments classified HIGH_IMPACT or ROUTINE. HIGH_IMPACT changes receive a Gemini risk assessment in the Google Chat card under "Impact Assessment".
 
-New orchestrator nodes (between Throttle Switch and Google Chat Card):
-- `Impact Classifier` — classifies change as HIGH_IMPACT or ROUTINE
-- `Extract Impact` — parses response, defaults to ROUTINE on failure
-- `Impact Switch` — If node routing HIGH_IMPACT vs ROUTINE
-- `Prepare Validator Prompt` — Code node building Gemini request body via `JSON.stringify`
-- `Validator Agent` — produces 1-2 sentence risk assessment
-- `Extract Critique` — parses response, merges into card data
+**Known limitation:** Both Impact Classifier and Validator Agent use Gemini — same model family as the actor. This is the correlated judgment failure mode identified in the judge layer reference paper. Mitigated by Claude QA (Phase 45.5) which uses a different model family. The current Gemini-only validation catches surface errors; Claude catches the category errors Gemini shares with the actor.
 
 ---
 
 #### 45.2 — Semantic Retrieval (PENDING)
-Agents query the `lessons_learned` collection in `local2local-internal` via vector search before proposing changes. When an agent encounters a new HBR decision point, it retrieves semantically similar past decisions to inform its reasoning.
+Agents query `lessons_learned` in `local2local-internal` via vector search before proposing changes.
 
-Requires:
-- Vertex AI text-embedding-004 pipeline writing embeddings to `local2local-internal`
-- Similarity search Cloud Function (`semanticRetrievalV1`)
-- n8n orchestrator node inserted before Gemini Code Fixer to enrich context with retrieved lessons
+**Critical constraint from judge layer architecture:** Retrieved lessons must be filtered by `use_as` field before being included in agent context. Only lessons with `use_as: INSTRUCTION` (provenance `OBSERVED` or `CONFIRMED`) can be treated as policy. Lessons with `use_as: EVIDENCE` (provenance `INFERRED` or `GENERATED`) can be referenced but not acted on directly. This filtering must be implemented before semantic retrieval goes live, not after.
+
+Requires: Vertex AI text-embedding-004 pipeline, `semanticRetrievalV1` Cloud Function, provenance-aware query filters, n8n orchestrator context enrichment node before Gemini Code Fixer.
 
 ---
 
 #### 45.3 — Regulatory Drift Automation (PENDING)
-Compliance monitoring agent tracks AGLC and CRA regulatory source documents. When regulatory content changes, the agent detects drift from current system HBRs and proposes corrective updates through the standard Evolution Engine pipeline.
+Compliance monitoring agent tracks AGLC and CRA regulatory source documents. Detects drift from current HBRs. Proposes corrective updates through the Evolution Engine pipeline. HBR changes produced by this agent are tagged `provenance: GENERATED` in lessons_learned and require human confirmation before becoming instruction-grade.
 
 ---
 
 #### 45.4 — Design Intent Infrastructure (PENDING) — HORIZON 2
 
-Establishes the structured input format that allows the human operator to incrementally feed design specifications into the autonomous coding pipeline one unit of work at a time.
+Establishes the structured input mechanism for feeding design specifications into the autonomous coding pipeline. Includes the `ActionProposal` schema that all judged actions must produce.
 
 **Firestore schema — `design_intents/{intentId}`:**
 ```json
@@ -104,16 +89,10 @@ Establishes the structured input format that allows the human operator to increm
   "method": "ASSISTED",
   "target_files": ["functions/src/stripe/webhookHandler.ts"],
   "description": "Natural language description of what to build",
-  "acceptance_criteria": [
-    "Verifies Stripe webhook signature before processing",
-    "Handles payment_intent.succeeded and payment_intent.payment_failed",
-    "Writes to orders/{orderId} on success"
-  ],
-  "context_files": [
-    "functions/src/logic/treasury.ts",
-    "documents/firestore_schema.md"
-  ],
+  "acceptance_criteria": ["..."],
+  "context_files": ["functions/src/logic/treasury.ts"],
   "firestore_collections_affected": ["orders", "payment_intents"],
+  "action_class": "EXTERNAL_IMPACT",
   "bump_type": "MINOR",
   "status": "PENDING",
   "created_at": "...",
@@ -122,172 +101,124 @@ Establishes the structured input format that allows the human operator to increm
 }
 ```
 
-Status lifecycle: `PENDING` → `IN_PROGRESS` → `SATISFIED` | `ABANDONED`
+The `action_class` field in the design intent pre-classifies the work tier so the judge knows which checks to run before evaluating the proposal.
 
-**SuperAdmin dashboard panel (Dreamflow):**
-- Intent queue view: list of PENDING intents with phase, title, method, acceptance criteria
-- Create intent form: fields matching schema above with validation
-- Intent detail: full spec, status, result phase link, lessons learned reference
-- Select button: marks intent `IN_PROGRESS` and triggers the Intent Dispatcher (45.6)
+**ActionProposal extension to agent bus payload:**
+Every autonomously generated commit appends a structured `action_proposal` field to the agent bus message. This is the object the judge evaluates — not the commit message prose. See `documents/judge_layer_architecture.md` for the full schema.
 
-The human operator writes intent documents and selects which one to process next. This is the primary mechanism for directing autonomous development work.
+**SuperAdmin dashboard panel:** Intent queue, create form, detail view, select button.
 
 ---
 
 #### 45.5 — Claude QA Integration (PENDING) — HORIZON 2
 
-Integrates Claude API as an automated QA review step in the n8n orchestrator, between code generation and the HITL gate. Claude reviews every autonomously generated bundle against known failure modes before the human sees it.
+Integrates Claude Opus as the primary QA judge for `EXTERNAL_IMPACT` and `HIGH_STAKES` actions. Claude uses a different model family than Gemini, providing structural protection against correlated judgment failure.
 
-**New orchestrator nodes (inserted after Gemini Code Fixer, before Google Chat Card):**
+**Four-outcome verdict:** Claude returns `ALLOW`, `BLOCK`, `REVISE`, or `ESCALATE` — never binary. See `documents/judge_layer_architecture.md` for routing behaviour for each outcome.
 
-1. `Prepare QA Prompt` (Code node) — builds the Claude API request body:
-```javascript
-const bundle = $json.generatedBundle;
-const intent = $json.intent;
-const body = JSON.stringify({
-  model: "claude-opus-4-5",
-  max_tokens: 2000,
-  messages: [{
-    role: "user",
-    content: `Audit this logic_payload bundle...`
-  }]
-});
-return { json: { ...$json, qaBody: body } };
-```
+**Judge criteria are explicit policy, not vibes.** The Claude prompt implements specific HBR-versioned criteria. A list of criteria is evaluated against the structured `ActionProposal`, not against the actor's prose argument.
 
-2. `Claude QA Agent` (HTTP Request node, Raw body) — calls `https://api.anthropic.com/v1/messages`
-   - Header: `x-api-key: {{ $json.claudeApiKey }}`
-   - Header: `anthropic-version: 2023-06-01`
-   - Body: `{{ $json.qaBody }}`
+**Criteria checked (commit boundary):**
+- Commit message format: `[SOURCE] TYPE(scope): Description` (deterministic regex — not LLM)
+- No abbreviated code: `// ... rest of code` or equivalent
+- No orchestrator replacement: if `n8n_workflows/` in payload, node count ≥ baseline
+- No staging references: `local2local-staging` not present
+- No hardcoded colours in Flutter: AdminColors or L2LColors only
+- n8n HTTP Request body pattern: Raw body + Code node, not inline jsonBody expression
+- Webhook nodes: `webhookId` field present
+- Acceptance criteria coverage: each criterion from design intent addressed
 
-3. `Extract QA Result` (Code node) — parses Claude response, extracts CLEARED/BLOCKED verdict and issue list
+**REVISE path:** Claude returns specific revision instructions. Gemini corrects and resubmits. Maximum 3 retries before ESCALATE.
 
-4. `QA Gate` (If node) — routes CLEARED to HITL card, BLOCKED to Gemini correction pass
-
-5. `Prepare Correction Prompt` (Code node, BLOCKED path) — builds a new Gemini prompt combining the original intent + Claude's specific issues
-
-6. `Retry Counter` (Code node) — tracks correction attempts, escalates to human after 3 failed passes
-
-**QA checklist Claude evaluates against:**
-- No abbreviated code (`// ... rest of code` or equivalent)
-- No orchestrator replacement if bundle contains `n8n_workflows/`
-- Valid commit message format: `[SOURCE] TYPE(scope): Description`
-- No version prefix in commit message
-- No references to `local2local-staging`
-- No hardcoded hex colours in Flutter (must use AdminColors or L2LColors)
-- n8n HTTP Request nodes calling external APIs use Raw body + Code node pattern
-- Webhook nodes in n8n JSON have `webhookId` fields
-- All acceptance criteria from the design intent addressed
-
-**The HITL card** gains a new field: `QA Status` showing CLEARED (with Claude's notes if any) or the correction pass count if issues were found and auto-corrected.
+**BLOCK path:** Reserved for security violations, orchestrator replacement attempts, secrets in code. Does not retry. Human notification only.
 
 ---
 
 #### 45.6 — Intent Dispatcher (PENDING) — HORIZON 2
 
-A new n8n workflow (separate from the main orchestrator) that activates when the human selects an intent in the SuperAdmin dashboard. It fetches context, calls Gemini to generate the code bundle, and feeds the result into the existing orchestrator pipeline.
+New n8n workflow (`L2LAAF: Intent Dispatcher`) activated when human selects a design intent. Fetches context files from GitHub, builds Gemini coding prompt, calls Gemini to generate a `logic_payload` bundle including the structured `ActionProposal`, writes to agent bus, feeds existing orchestrator.
 
-**Workflow: `L2LAAF: Intent Dispatcher`**
-
-```
-Intent Selected (Firestore trigger or webhook)
-    → Fetch Intent Document (Firestore read)
-    → Fetch Context Files (GitHub Contents API — one call per context_file)
-    → Prepare Gemini Coding Prompt (Code node)
-        Combines: intent spec + acceptance criteria + current file content
-    → Gemini Bundle Generator (HTTP Request → Gemini API)
-        Instructs Gemini to produce a complete logic_payload.txt bundle
-        with L2LAAF_BLOCK sections, COMMIT_MSG, and full file content
-    → Extract Bundle (Code node — parse Gemini response)
-    → Write to Agent Bus (Firestore write)
-        event: CODING_PROPOSAL
-        payload.manifest.generatedBundle: <bundle content>
-        payload.manifest.intentId: <intent_id>
-    → Existing MCP Code Payload webhook fires
-    → Main orchestrator handles: State Manager → Throttling → Consensus → Claude QA → HITL
-```
-
-**Multi-file handling:** The Intent Dispatcher generates a single bundle with multiple `L2LAAF_BLOCK` sections. `patcher.js` already supports this. The pipeline commits and deploys all files in one operation. For intents with more than 3 files, the dispatcher breaks the intent into sequential sub-intents automatically, each going through its own HITL gate.
+Multi-file handling: bundles with more than 3 files are automatically split into sequential single-file intents by the dispatcher, each going through its own judge + HITL gate.
 
 ---
 
 #### 45.7 — Autonomous Coding Loop Completion (PENDING) — HORIZON 2
 
-Closes the feedback loop after a successful HITL promotion.
+Closes the feedback loop after HITL promotion. On PROMOTE:
 
-**On PROMOTE TO PROD, the orchestrator additionally:**
-1. Marks the source design intent `SATISFIED` in Firestore, records `result_phase` and `satisfied_at`
-2. Writes a `lessons_learned` entry to `local2local-internal` combining the intent, the generated solution, and the Claude QA clearance notes — this feeds Phase 45.2 semantic retrieval
-3. Posts a summary to the SuperAdmin dashboard intent queue showing the satisfied intent and the resulting phase number
-4. Surfaces the next `PENDING` intent (ordered by phase) as a suggestion in the Google Chat Final Alert card: `"Next suggested intent: INT-046-002 — Vendor Stripe onboarding function"`
+1. Design intent marked `SATISFIED` in Firestore
+2. Judge event written to `judge_events/{eventId}` with full decision record (see `documents/judge_layer_architecture.md`)
+3. Lesson written to `lessons_learned` in `local2local-internal` with provenance label:
+   - If human approved without override: `provenance: CONFIRMED`, `use_as: INSTRUCTION`
+   - If human overrode a BLOCK or ESCALATE: `provenance: CONFIRMED`, `use_as: INSTRUCTION`, `human_override: true`
+   - System-generated pattern recognition: `provenance: GENERATED`, `use_as: EVIDENCE`
+4. Next `PENDING` intent surfaced as suggestion in Final Alert card
 
-**On KEEP IN DEV:**
-1. Marks the intent `ABANDONED` with the correction pass count and Claude QA issues
-2. Human can re-open the intent, revise the acceptance criteria, and resubmit
+On KEEP IN DEV: intent marked `ABANDONED`, judge event recorded, lesson written as `provenance: GENERATED`, `use_as: EVIDENCE`.
 
 **Human's role in the completed loop:**
-1. Write design intent documents (or review AI-proposed intents in Phase 55+)
-2. Select next intent in SuperAdmin dashboard
-3. Watch pipeline — Gemini codes → Claude reviews → HITL card arrives
-4. Read HITL card: what was built, QA status, impact level, validator critique
-5. PROMOTE or KEEP IN DEV
-6. Repeat from step 2
+1. Write or review design intent documents
+2. Select next intent
+3. Watch pipeline — Gemini codes → Gemini validates → Claude judges → HITL card
+4. Read card: what was built, QA outcome (ALLOW/REVISE count/ESCALATE), impact tier, validator critique
+5. PROMOTE, KEEP IN DEV, REQUEST REVISION, or ESCALATE
+6. System records, learns, suggests next intent
 
 ---
 
-#### 45.8 — Semantic Retrieval for Intent Generation (PENDING) — HORIZON 3
+#### 45.8 — Judge Ops Dashboard (PENDING) — HORIZON 2
 
-Once 45.2 (Semantic Retrieval) and 45.7 (feedback loop) are complete, the system can propose its own design intents based on patterns in `lessons_learned`, telemetry anomalies, and HBR drift signals. The human reviews proposed intents and approves/rejects them before they enter the queue. This is the first step toward the system directing its own evolution within human-set boundaries.
+SuperAdmin dashboard panel for monitoring judge performance. Tracks metrics defined in `documents/judge_layer_architecture.md`: escalation rate, human override rate, revision success rate, BLOCK rate, latency per action class.
+
+Alerts when metrics exceed thresholds — escalation rate > 20% signals criteria are too vague, human override rate > 5% signals judge too permissive.
+
+---
+
+#### 45.9 — Action-Level Judge Expansion (PENDING) — HORIZON 2
+
+Extends judge layer to the next action boundaries beyond GitHub commit:
+
+**Stripe API boundary (Phase 46 prerequisite):**
+Every Stripe API call produces an `ActionProposal` evaluated by a Payment Judge before execution. Criteria: confirmed order linkage, amount within HBR bounds, idempotency key present, customer consent documented. Action class: `HIGH_STAKES`.
+
+**Production Firestore write boundary (Phase 46-47 prerequisite):**
+Writes to `local2local-prod` collections require `ActionProposal` evaluated by a Data Judge. Criteria: schema compliance, snake_case field naming, no PII in non-PII fields, regulatory data handling. Action class: `EXTERNAL_IMPACT`.
+
+**Scraped data ingestion boundary (Phase 48 prerequisite):**
+Scraped data entering `unclaimed_listings/` evaluated by a Quality + Safety Judge. Criteria: data quality score, source reliability, adversarial content screening (scraped data can contain prompt injection). Claimed listing merge evaluated separately as `EXTERNAL_IMPACT`. Action class: `REVERSIBLE_WRITE` → `EXTERNAL_IMPACT` on merge.
 
 ---
 
 ### Phase 46: Payments Infrastructure (Stripe Connect) — HORIZON 2
 
-Backend-first. No marketplace UI until the payment layer is solid. All work uses ASSISTED or MANUAL methods. Each sub-phase maps to one or more design intent documents (Phase 45.4 format) that feed the autonomous coding loop.
+Backend-first. Stripe API boundary judge (Phase 45.9) must be deployed before Stripe API calls are made in production.
 
-**46.1 — Platform account setup**
-Stripe Connect platform account wired to `local2local-prod`. `stripeWebhookHandler` Cloud Function with signature verification. Firestore schema: `stripe_accounts/{sellerId}`, `payment_intents/{orderId}`, `payouts/{payoutId}`.
-
-**46.2 — Vendor onboarding**
-`connectStripeAccount` callable Cloud Function. Stripe Connect Express onboarding URL generation. Webhook handler for `account.updated`. Agent bus event `STRIPE_ACCOUNT_CREATED`.
-
-**46.3 — Payment intents**
-`createPaymentIntent` callable Cloud Function with platform application fee (configurable per tenant via HBR). Webhook handler for `payment_intent.succeeded` and `payment_intent.payment_failed`. Order status updates.
-
-**46.4 — Payouts and reconciliation**
-`payoutReconciliationAgent` Cloud Function. Nightly reconciliation of Stripe payout records against Firestore orders. Dispute and refund handling.
+**46.1** Platform account + `stripeWebhookHandler` Cloud Function + Firestore schema.
+**46.2** Vendor onboarding — `connectStripeAccount` callable, Stripe Express onboarding, `STRIPE_ACCOUNT_CREATED` agent bus event.
+**46.3** Payment intents — `createPaymentIntent` callable, platform fee via HBR, webhook handler for payment events.
+**46.4** Payouts and reconciliation — nightly `payoutReconciliationAgent`, dispute and refund handling.
 
 ---
 
 ### Phase 47: Adding Marketplace Tenant — HORIZON 2
 
-Framework phase — runs once per marketplace, produces reusable infrastructure. Kaskflow, Moonlitely, and PROOF each go through this process.
+Framework phase producing reusable infrastructure for all three marketplaces.
 
-**47.1 — Tenant configuration schema**
-`artifacts/{tenantId}/config/tenant_config` Firestore document. HBR files for tax rules (GST/PST/HST), platform fee percentage, and category-specific regulatory rules.
-
-**47.2 — Claim-your-listing framework**
-`unclaimed_listings/{listingId}` Firestore collection. `claimListing` callable Cloud Function transferring ownership. Email notification on listing creation. Ownership verification step. Agent bus event `LISTING_CLAIMED`.
-
-**47.3 — Scraping infrastructure**
-`marketplaceScraperV2` Cloud Function with Cloud Scheduler. Per-tenant scraper configuration in Firestore. Conflict detection for claimed listings where scraped data diverges from owner data.
-
-**47.4 — Tax and regulatory HBR setup**
-Per-tenant HBR files in `functions/src/logic/taxes/{tenantId}/`. GST (5%) universal. Province-specific PST/HST by geography. Category-specific rules (AGLC markup schedule, age gate).
+**47.1** Tenant configuration schema — `artifacts/{tenantId}/config/`, HBR files for tax and regulatory rules.
+**47.2** Claim-your-listing framework — `unclaimed_listings/`, `claimListing` callable, ownership verification.
+**47.3** Scraping infrastructure — `marketplaceScraperV2` Cloud Function, Cloud Scheduler, per-tenant config.
+**47.4** Tax and regulatory HBR setup — per-tenant HBR files, GST/PST/HST rules, category-specific regulation.
 
 ---
 
 ### Phase 48: Kaskflow Listing Population — HORIZON 2
 
-Scrape liquor, non-liquor, and services data for the Kaskflow marketplace.
+Scraped data ingestion boundary judge (Phase 45.9) must be deployed before scraped data enters the system.
 
-**Data sources:** AGLC liquor store registry, Alberta business registry, Google Places API, Yellow Pages / Canada411.
-
-**Categories:** Liquor retail (AGLC-licensed), specialty food, local services, artisan goods, farm-direct produce.
-
-**48.1** Liquor store scraping — AGLC public registry. Licence number stored as verified field.
-**48.2** Non-liquor and services scraping — Google Places + Alberta business registry. Deduplication on name + postal code.
-**48.3** Refresh and maintenance — monthly Cloud Scheduler job. Diff against existing records. Claimed listing divergence flagging.
+**Data sources:** AGLC liquor store registry, Alberta business registry, Google Places API, Yellow Pages.
+**48.1** Liquor store scraping — AGLC registry, licence number as verified field.
+**48.2** Non-liquor and services — Google Places + Alberta registry, deduplication.
+**48.3** Refresh and maintenance — monthly scheduler, diff-based update, claimed listing divergence flagging.
 
 ---
 
@@ -295,76 +226,67 @@ Scrape liquor, non-liquor, and services data for the Kaskflow marketplace.
 
 Dreamflow-heavy. All UI uses `[DREAM]` method.
 
-**49.1** Discovery and browsing — product/service grid, category filters, distance sorting, map view, search.
-**49.2** Product detail and seller contact — image gallery, availability, chat with seller.
-**49.3** Cart and checkout — session-scoped Riverpod cart, Stripe payment sheet, age verification gate for liquor.
-**49.4** Order management (buyer) — status timeline, dispute initiation, reorder.
-**49.5** Seller dashboard — order management, revenue summary, listing management, claim flow.
+**49.1** Discovery and browsing — grid, filters, distance sort, map view, search.
+**49.2** Product detail and seller contact — gallery, availability, chat.
+**49.3** Cart and checkout — Riverpod cart, Stripe payment, age gate for liquor.
+**49.4** Order management (buyer) — status timeline, dispute, reorder.
+**49.5** Seller dashboard — order management, revenue, listing management, claim flow.
 
 ---
 
 ### Phase 50: Moonlitely Listing Population — HORIZON 3
 
-Scrape local entertainment data for the Moonlitely marketplace.
-
-**Data sources:** Eventbrite API, Ticketmaster Discovery API, Google Places, Facebook Events, municipal event calendars (Edmonton, Calgary).
-
-**50.1** Venue scraping — Google Places + Eventbrite venue data.
-**50.2** Event scraping — Eventbrite and Ticketmaster API. Events linked to venue records.
-**50.3** Performer scraping — extracted from event listings. Genre classification.
+**Data sources:** Eventbrite API, Ticketmaster Discovery, Google Places, Facebook Events, municipal calendars.
+**50.1** Venue scraping. **50.2** Event scraping. **50.3** Performer scraping.
 
 ---
 
 ### Phase 51: Moonlitely Marketplace UI/UX — HORIZON 3
 
-**51.1** Event discovery — grid and map view, date/category/genre filters, featured events.
-**51.2** Event detail and ticketing — ticket tier selection, Stripe payment, QR code delivery.
-**51.3** Attendee experience — My Tickets, QR display for venue scan, post-event review.
-**51.4** Organiser dashboard — event creation, attendee management, revenue summary, discount codes.
+**51.1** Event discovery. **51.2** Event detail and ticketing. **51.3** Attendee experience. **51.4** Organiser dashboard.
 
 ---
 
 ### Phase 52: PROOF Marketplace Listing Population — HORIZON 3
 
-PROOF is a dedicated liquor store marketplace with deeper AGLC integration at the SKU level.
-
-**Data sources:** AGLC product catalogue (full SKU database, weekly refresh), AGLC licensee registry, distillery/winery/brewery public data.
-
-**52.1** AGLC product catalogue scraping — SKU-level data, weekly refresh.
-**52.2** Store inventory mapping — SKU availability per store. `store_inventory/{storeId}/{sku}` Firestore subcollection.
-**52.3** Producer profiles — distillery, winery, brewery profiles from AGLC registry.
+SKU-level AGLC integration. **52.1** Product catalogue (weekly refresh). **52.2** Store inventory mapping. **52.3** Producer profiles.
 
 ---
 
 ### Phase 53: PROOF Marketplace UI/UX — HORIZON 3
 
-**53.1** Product discovery — browse by category, producer, region, price, ABV. "In stock near me" filter. Age gate on entry.
-**53.2** Product detail — full AGLC data, producer profile, store availability map.
-**53.3** Store locator — map view of licensed stores with in-stock product list.
-**53.4** Order and delivery — click-and-collect and delivery (AGLC delivery regulations enforced via HBR). Age verification at delivery.
+**53.1** Product discovery with age gate. **53.2** Product detail with AGLC data. **53.3** Store locator. **53.4** Order and delivery with AGLC delivery regulation enforcement.
 
 ---
 
 ### Phase 54: Mobile — HORIZON 3
 
-**54.1** Platform build pipeline — GitHub Actions matrix for web + iOS + Android. Bundle IDs per marketplace.
-**54.2** Mobile UX — bottom navigation, FCM push notifications, camera for photos and QR scanning, GPS, Apple Pay / Google Pay.
-**54.3** HITL mobile buttons — HTTP endpoint at `https://local2local.ca/chat-bot-hook` replacing current `openLink` pattern.
+**54.1** iOS + Android build pipeline. **54.2** Mobile UX — FCM, camera, GPS, Apple/Google Pay. **54.3** HITL mobile buttons via `https://local2local.ca/chat-bot-hook`.
 
 ---
 
 ### Phase 55+: Advanced Autonomy — HORIZON 3
 
-Directional only — specifics emerge from learnings across Phases 45-54.
+- System proposes its own design intents (Phase 45.8 provides the infrastructure)
+- Autonomous pricing from Evolution Engine learning
+- Fraud detection agent
+- Cross-tenant unified seller profile
+- Full AGLC/CRA regulatory automation
+- Autonomous listing quality agent
+- Market expansion agent
 
-- System proposes its own design intents based on telemetry, usage patterns, and HBR drift
-- Autonomous pricing recommendations from Evolution Engine sales pattern learning
-- Demand forecasting for inventory management
-- Fraud detection agent on agent bus
-- Cross-tenant unified seller profile (Kaskflow vendor also runs Moonlitely events)
-- Full regulatory automation (AGLC/CRA filings from transaction data)
-- Autonomous listing quality agent (detects and corrects stale scraped data)
-- Market expansion agent (proposes new geographies from demand signals)
+---
+
+## Judge layer boundary expansion sequence
+
+| Boundary | Action class | Phase | Judge | Status |
+|---|---|---|---|---|
+| GitHub commit | EXTERNAL_IMPACT | 45.1 | Gemini Validator + Claude QA | 45.1 partial, 45.5 full |
+| Stripe API calls | HIGH_STAKES | 45.9 / 46 | Payment Judge | Planned |
+| Production Firestore writes | EXTERNAL_IMPACT | 45.9 / 46-47 | Data Judge | Planned |
+| Scraped data ingestion | REVERSIBLE_WRITE | 45.9 / 48 | Quality + Safety Judge | Planned |
+| Claimed listing merge | EXTERNAL_IMPACT | 47-48 | Data Judge | Planned |
+| Agent-to-agent handoffs | Varies | 55+ | Handoff Judge | Future |
 
 ---
 
@@ -372,22 +294,9 @@ Directional only — specifics emerge from learnings across Phases 45-54.
 
 | Tenant ID | Marketplace | Focus | Status |
 |---|---|---|---|
-| `local2local-kaskflow` | Kaskflow | Local goods, liquor, and services | Infrastructure only |
+| `local2local-kaskflow` | Kaskflow | Local goods, liquor, services | Infrastructure only |
 | `local2local-moonlitely` | Moonlitely | Local entertainment and events | Infrastructure only |
 | `local2local-proof` | PROOF | Liquor specialist (SKU-level AGLC) | Not started |
-
----
-
-## Autonomous coding loop (Phase 45.4-45.7)
-
-When complete, the human operator's role in each development cycle is:
-
-1. Write design intent document in SuperAdmin dashboard (or review system-proposed intent)
-2. Select next intent to process
-3. Watch pipeline — Gemini codes → Claude QA reviews → HITL card arrives
-4. Read card: what was built, QA status (CLEARED/BLOCKED+corrected), impact level, validator critique
-5. PROMOTE TO PROD or KEEP IN DEV
-6. System marks intent SATISFIED and suggests next intent
 
 ---
 
@@ -406,7 +315,7 @@ When complete, the human operator's role in each development cycle is:
 |---|---|---|
 | `local2local-dev` | Development environment, CI/CD source of truth | Active |
 | `local2local-prod` | Production environment | Active |
-| `local2local-internal` | Governance hub (Registry, Policy, Vector DB) | Active |
+| `local2local-internal` | Governance hub (Registry, Policy, Vector DB, Lessons Learned) | Active |
 | `n8n-bot-prod` | n8n chat handler service account host | Active |
 
 ---
