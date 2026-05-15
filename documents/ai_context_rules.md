@@ -54,6 +54,19 @@ Never remove these filters from `deploy.yml`.
 
 ---
 
+## Assisted Method: Payload Generation
+
+**Rule:** Always instruct Gemini to generate the logic payload into a
+file named `logic_payload.js` (not as plain text output). Copy from
+the Gemini code canvas to `scripts/logic_payload.txt` in Cursor.
+
+**Why:** Both Gemini and Cursor canvases normalize line endings to CRLF
+when handling plain text. A .js extension forces both to treat the
+content as source code and preserve LF line endings, which patcher.js
+requires.
+
+---
+
 ## n8n: NEVER replace the orchestrator
 
 **Context:** Any change to `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json` or `l2laaf_autonomous_orchestrator.main.json`
