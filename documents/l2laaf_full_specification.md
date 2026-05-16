@@ -47,6 +47,8 @@ Graph-based dependency mapping prevents Agent A's changes from breaking Agent B'
 ### 4.4 Evolution Engine
 - **Mutex Locks:** `logic_locks/{hbrId}` prevents race conditions during logic refinement
 - **Global Memory:** `lessons_learned` collection archives the semantic reasoning of every committed HBR change to maintain system context across sessions
+- **Bitemporal HBR Versioning:** Regulatory HBR files (tax, alcohol, trade policy) are version-tracked in `artifacts/system_status/public/data/hbr_versions/` with valid time (regulatory effective date) and decision time (when the system recorded the rule). This supports future-dated regulatory changes, historical audit of transactions, and scheduled rule activation. See `documents/project_plan.md` Phase 45.3 for the full schema.
+- **Regulatory Drift Automation:** Compliance monitoring agent (Phase 45.3) scrapes regulatory source documents, detects drift from active HBR versions, and proposes updates through the Evolution Engine pipeline. Proposed changes are `provenance: GENERATED` until human-confirmed at the HITL gate.
 
 ### 4.5 Shadow Mode Validation (SMV)
 Production traffic is forked to the `shadow_bus` for validation before new logic goes live.
@@ -91,3 +93,33 @@ See the individual method documents in `documents/` for full step-by-step instru
 | `relay.sh` | `scripts/relay.sh` | Validates TypeScript, Flutter, and n8n JSON, then commits and pushes the payload |
 | `audit.sh` | `scripts/audit.sh` | Bundles recently changed files into a context payload for AI sessions |
 | `deploy.sh` | `scripts/deploy.sh` | Convenience wrapper for the Manual method — runs analysis and commits |
+
+---
+
+## 8. Regulatory HBR Directory Structure
+
+Hard Business Rules for regulatory compliance are stored in `functions/src/logic/hbr/` with a hierarchical directory structure:
+
+```
+functions/src/logic/hbr/
+├── alcohol/
+│   ├── ca_iila/           # Federal — Importation of Intoxicating Liquors Act
+│   │   ├── policy.md      # Human-readable policy summary
+│   │   └── rules.json     # Machine-readable rules with typed values
+│   └── ca_ab_aglc/        # Provincial — Alberta Gaming, Liquor and Cannabis
+│       ├── policy.md
+│       └── rules.json
+└── taxes/
+    └── ca_cra/            # Federal — Canada Revenue Agency (GST)
+        ├── policy.md
+        └── rules.json
+```
+
+**Naming convention:** `{category}/{region_scope}_{rule_maker}/`
+
+- `region_scope`: `ca` = national, `ca_ab` = Alberta, `ca_bc` = British Columbia, etc.
+- `rule_maker`: lowercase abbreviation of the regulatory body
+
+Each directory contains a `policy.md` (human-readable policy summary with L2LAAF implementation notes) and a `rules.json` (machine-readable rules with typed values, source references, and version metadata). The `rules.json` files are the baseline that the Regulatory Drift Automation agent (Phase 45.3) monitors for drift against regulatory source documents.
+
+Every `rules.json` carries `hbr_version`, `valid_from`, and `status` fields for bitemporal version tracking. The full version history is maintained in Firestore at `artifacts/system_status/public/data/hbr_versions/`.

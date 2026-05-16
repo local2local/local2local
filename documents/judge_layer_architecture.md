@@ -248,6 +248,35 @@ If the action complies with both, return ALLOW..."
 
 When an HBR version increments, the affected judge prompts are updated in the same commit. The `judge_events` record captures `hbr_versions_at_decision` so decisions can be audited against the policy that was in effect at the time.
 
+### Bitemporal HBR Versioning (Phase 45.3)
+
+Regulatory HBR files (tax, alcohol, trade policy) require a stronger versioning model than code-level HBRs because:
+
+1. **Regulators publish future-dated changes.** A new AGLC markup rate announced in February with an April 1 effective date must coexist with the current rate until the effective date arrives.
+2. **Transactions must be auditable against the rules that governed them.** CRA may ask what GST rate was applied to a specific order on a specific date.
+3. **Future-dated rules can be amended or revoked before taking effect.** The system must handle a scheduled rule being pushed back, modified, or withdrawn entirely.
+
+The bitemporal model adds two time dimensions to every regulatory HBR version:
+
+- **Valid time** (`valid_from` / `valid_until`): when the rule governs transactions in the real world. This is the regulatory effective date, not the deployment date.
+- **Decision time** (`decision_recorded_at`): when the system first recorded the rule. Required for audit to prove what the system knew at any given point.
+
+Every regulatory HBR version carries a `status` field:
+
+| Status | Meaning | Judge behaviour |
+|---|---|---|
+| `ACTIVE` | Currently governing | Judge evaluates against this version for current actions |
+| `SCHEDULED` | Published with future effective date | Judge evaluates against this version only for actions with a future target date ≥ `valid_from` |
+| `SUPERSEDED` | Replaced by a newer version | Judge references only for historical audit of past decisions |
+| `REVOKED` | Withdrawn before taking effect | Judge ignores; retained for audit trail |
+| `AMENDED` | Modified before taking effect; replaced by corrected `SCHEDULED` version | Judge ignores; retained for audit trail |
+
+**Judge integration:** When a judge evaluates an `ActionProposal` involving a regulated domain (tax calculation, alcohol compliance, delivery eligibility), it must resolve the applicable HBR version using the transaction's target date, not the current system time. The `hbr_versions_at_decision` field in `judge_events` records the resolved version IDs, linking the judgment to the exact policy state that was in effect.
+
+**Drift-triggered judge prompt updates:** When the Regulatory Drift Automation agent (Phase 45.3) proposes a new HBR version, the judge prompts that reference that HBR must be updated in the same commit. The `SCHEDULED` → `ACTIVE` promotion workflow (daily cron) also triggers judge prompt updates if the newly active version changes any criteria the judge evaluates.
+
+See `project_plan.md` Phase 45.3 for the full Firestore schema, version lifecycle, and drift agent specification.
+
 ---
 
 ## What to Build First

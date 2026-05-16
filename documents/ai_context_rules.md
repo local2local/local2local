@@ -229,3 +229,33 @@ Provide test data as a full path with no spaces and a JSON object:
 PATH: artifacts/local2local-kaskflow/public/data/agent_bus/test_msg_001
 JSON: { "status": "dispatched", "provenance": { "receiver_id": "EVOLUTION_WORKER" } }
 ```
+
+---
+
+## HBR: Regulatory file versioning
+
+**Context:** Any change to files in `functions/src/logic/hbr/`
+
+**Rule:** Regulatory HBR files use bitemporal versioning. Every `rules.json` file carries `hbr_version`, `valid_from`, and `status` fields. When updating a regulatory HBR file:
+
+1. **Never overwrite a `rules.json` without archiving the current version first.** The current version must be written to Firestore at `artifacts/system_status/public/data/hbr_versions/{versionId}` with `status: SUPERSEDED` and `valid_until` set before the new version is committed.
+2. **Always set `valid_from` to the regulatory effective date, not the commit date.** If AGLC publishes new markup rates effective April 1, `valid_from` is `2026-04-01T00:00:00Z` regardless of when the code is deployed.
+3. **Future-dated rules are `SCHEDULED`, not `ACTIVE`.** If a regulator announces a change that takes effect in the future, create the new version with `status: SCHEDULED`. Do not modify the current `ACTIVE` version. The daily activation cron promotes `SCHEDULED` → `ACTIVE` when `valid_from` arrives.
+4. **Increment `hbr_version` on every change.** Use semantic versioning: PATCH for rate/value changes, MINOR for new rules added, MAJOR for structural changes or new regulatory categories.
+
+---
+
+## HBR: Regulatory rules.json field requirements
+
+**Rule:** Every `rules.json` in `functions/src/logic/hbr/` must include these top-level fields:
+
+- `rule_maker` — uppercase abbreviation of the regulatory body (e.g. `AGLC`, `CRA`, `IILA`)
+- `region_scope` — geographic scope (`ca` = national, `ca_ab` = Alberta)
+- `category` — rule category (e.g. `alcohol`, `tax`)
+- `hbr_version` — current version string (e.g. `1.0`)
+- `valid_from` — ISO 8601 datetime when this version takes regulatory effect
+- `status` — one of `ACTIVE`, `SCHEDULED`, `SUPERSEDED`, `REVOKED`, `AMENDED`
+- `last_verified` — date the rules were last verified against the regulatory source
+- `rules` — object containing typed rule entries
+
+Every rule entry in the `rules` object must include `description`, `value`, and `type`. Source references (`statute_ref`, `handbook_ref`, `source`, or `policy_ref`) are strongly recommended.

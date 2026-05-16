@@ -72,7 +72,147 @@ Requires: Vertex AI text-embedding-004 pipeline, `semanticRetrievalV1` Cloud Fun
 ---
 
 #### 45.3 — Regulatory Drift Automation (PENDING)
-Compliance monitoring agent tracks AGLC and CRA regulatory source documents. Detects drift from current HBRs. Proposes corrective updates through the Evolution Engine pipeline. HBR changes produced by this agent are tagged `provenance: GENERATED` in lessons_learned and require human confirmation before becoming instruction-grade.
+
+Compliance monitoring agent tracks AGLC, CRA, and IILA regulatory source documents. Detects drift from current HBRs. Proposes corrective updates through the Evolution Engine pipeline. HBR changes produced by this agent are tagged `provenance: GENERATED` in lessons_learned and require human confirmation before becoming instruction-grade.
+
+**This phase also establishes bitemporal HBR versioning** — the infrastructure that allows the system to answer "what rules applied at time T?" and to handle future-dated regulatory changes (rules announced now with an effective date in the future).
+
+##### Bitemporal HBR Versioning Model
+
+Every HBR version carries two time dimensions:
+
+- **Valid time** (`valid_from` / `valid_until`): when the rule applies in the real world. This is the regulatory effective date, not the deployment date. A markup rate with `valid_from: 2027-04-01` does not apply to a March 31 order regardless of when the system learned about it.
+- **Decision time** (`decision_recorded_at`): when the system recorded the rule. This answers "what did the system know on date X?" — required for audit if CRA or AGLC questions a historical transaction.
+
+##### HBR Version Lifecycle
+
+Every HBR version has a `status` field that governs how the system treats it:
+
+| Status | Meaning | Applied to transactions? |
+|---|---|---|
+| `SCHEDULED` | Published by regulator with future effective date. Exists in registry, not yet governing. | Only for orders with fulfillment date ≥ `valid_from` |
+| `ACTIVE` | Current governing version. `valid_from` has arrived. | Yes |
+| `SUPERSEDED` | A newer version has taken effect. Immutable, queryable for audit. | Only for historical lookups at timestamps within its valid range |
+| `REVOKED` | Regulator withdrew the rule before it took effect. Never applied. Retained for audit trail. | No |
+| `AMENDED` | Regulator changed a scheduled rule before it took effect (e.g. pushed effective date). Replaced by a corrected `SCHEDULED` version. | No |
+
+##### Firestore Schema — HBR Version Registry
+
+**Collection:** `artifacts/system_status/public/data/hbr_versions/{versionId}`
+
+```json
+{
+  "version_id": "HBR-AGLC-001-v1.0",
+  "hbr_path": "functions/src/logic/hbr/alcohol/ca_ab_aglc/rules.json",
+  "rule_maker": "AGLC",
+  "region_scope": "ca_ab",
+  "category": "alcohol",
+  "version": "1.0",
+  "status": "ACTIVE",
+
+  "valid_from": "2026-05-16T00:00:00Z",
+  "valid_until": null,
+
+  "decision_recorded_at": "2026-05-16T00:00:00Z",
+  "decision_source": "AGLC Liquor Markup Rate Schedule",
+  "decision_source_url": "https://aglc.ca/liquor/agencies-suppliers-manufacturers/liquor-markup-rate-schedule",
+
+  "supersedes_version": null,
+  "superseded_by_version": null,
+
+  "rules_snapshot": { "/* full rules object at this version */" : true },
+
+  "change_summary": "Initial population with April 2026 markup rates and delivery rules",
+  "source_commit": "abc123",
+  "source_phase": "45.3.1",
+  "provenance": "CONFIRMED",
+  "confirmed_by": "todd.herron@local2local.ca",
+  "created_at": "2026-05-16T00:00:00Z",
+
+  "amendment_history": [
+    {
+      "amended_at": "2026-05-16T00:00:00Z",
+      "action": "CREATED",
+      "note": "Initial population"
+    }
+  ]
+}
+```
+
+##### Runtime Resolution: `resolveHBR(ruleMaker, targetDate)`
+
+Cloud Function that resolves the correct HBR version for a given target date. Used by pricing, checkout, and order validation.
+
+```
+Query: status IN [ACTIVE, SCHEDULED] AND valid_from <= targetDate AND (valid_until > targetDate OR valid_until == null)
+```
+
+For current transactions, `targetDate` is now. For future-dated orders (scheduled deliveries, pre-orders), `targetDate` is the fulfillment date. This means a user placing an order today for delivery after a scheduled rate change sees the correct future pricing.
+
+##### Drift Agent Monitoring Scope
+
+The compliance monitoring agent scrapes regulatory sources on a scheduled basis and compares against active HBR versions:
+
+| Source | URL / Method | Check frequency | Monitored rules |
+|---|---|---|---|
+| AGLC markup schedule | `aglc.ca/liquor/.../liquor-markup-rate-schedule` | Weekly | Markup rates by category and ABV band |
+| AGLC liquor bulletins | `aglc.ca/liquor/.../liquor-bulletins` | Weekly | Delivery policy, licensing changes, operational rules |
+| CRA excise duty rates | `canada.ca/.../excise-duty-rates` | Monthly | Federal excise duty rates on alcohol |
+| CRA GST/HST guidance | `canada.ca/.../digital-economy` | Monthly | Platform operator obligations, rate changes |
+| IILA statute text | `laws-lois.justice.gc.ca/eng/acts/i-3/` | Monthly | Interprovincial transport exceptions |
+| Canada Gazette | `gazette.gc.ca` | Weekly | Proposed and enacted regulatory changes with future effective dates |
+
+When the drift agent detects a change:
+
+1. **Immediate change** (already in effect): proposes a new `ACTIVE` HBR version. The pipeline archives the current version as `SUPERSEDED` before writing the new one.
+2. **Future-dated change** (announced but not yet effective): proposes a `SCHEDULED` HBR version with the correct `valid_from`. The current `ACTIVE` version is not modified.
+3. **Amendment to a scheduled change**: proposes marking the existing `SCHEDULED` version as `AMENDED` and creating a corrected `SCHEDULED` version.
+4. **Revocation of a scheduled change**: proposes marking the `SCHEDULED` version as `REVOKED`.
+
+All proposals go through the HITL gate. The drift agent's proposals are `provenance: GENERATED` until human-confirmed.
+
+##### Scheduled Version Activation
+
+An n8n scheduled workflow runs daily at 00:05 UTC. It queries for `SCHEDULED` versions where `valid_from <= now`. For each match:
+
+1. The current `ACTIVE` version for that `rule_maker` + `region_scope` is marked `SUPERSEDED` with `valid_until` set to the scheduled version's `valid_from`
+2. The scheduled version's `status` is updated to `ACTIVE`
+3. The on-disk `rules.json` is updated via a pipeline commit: `[AUTO] CHORE(hbr): Activate scheduled HBR version {version_id}`
+4. A notification is posted to the Google Chat space
+
+##### Transaction-Pinned HBR References
+
+Every order document records which HBR versions were applied at transaction time. This is implemented in Phase 46.3 (payment intents) and Phase 49.3 (checkout):
+
+```json
+{
+  "hbr_versions_applied": {
+    "ca_ab_aglc": "HBR-AGLC-001-v1.0",
+    "ca_cra": "HBR-CRA-001-v1.0",
+    "ca_iila": "HBR-IILA-001-v1.0"
+  }
+}
+```
+
+##### User-Facing Implications
+
+When a `SCHEDULED` version exists and a user is browsing or ordering with a fulfillment date after `valid_from`:
+
+- Pricing reflects the future rules, not the current rules
+- A notice is displayed: "Pricing reflects [rule_maker] rates effective [valid_from date]"
+- For category-level changes (e.g. interprovincial beer becomes legal): listings that will become available can be shown with an "Available starting [date]" badge and pre-order capability
+
+These UI elements are implemented in Phase 49 (Kaskflow UI) and Phase 53 (PROOF UI).
+
+##### Deliverables for Phase 45.3
+
+1. `resolveHBR` Cloud Function (TypeScript, 2nd Gen)
+2. `hbr_versions` Firestore collection with initial documents for all 3 rule makers
+3. Compliance monitoring n8n workflow with scheduled scraping nodes
+4. Scheduled version activation n8n workflow (daily cron)
+5. Drift detection logic: compare scraped data against active HBR `rules_snapshot`
+6. HBR archive-before-update pipeline logic in `deploy.yml` or relay.sh
+7. SuperAdmin dashboard panel: HBR version timeline, scheduled versions, drift alerts
 
 ---
 
