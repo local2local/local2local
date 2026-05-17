@@ -199,6 +199,7 @@ gemini_start() {
     "documents/judge_layer_architecture.md"
   )
   case $SESSION_TYPE in
+    1) DOCS+=("documents/l2laaf_full_specification.md") ;;
     2) DOCS+=("n8n_workflows/l2laaf_autonomous_orchestrator.develop.json"
               "n8n_workflows/l2laaf_autonomous_orchestrator.main.json") ;;
     3) DOCS+=("documents/development_method_dreamflow.md"

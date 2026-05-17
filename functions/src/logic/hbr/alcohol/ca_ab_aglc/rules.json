@@ -1,1 +1,816 @@
-{ "rule_maker": "AGLC", "region_scope": "ca_ab", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+{
+  "rule_maker": "AGLC",
+  "region_scope": "ca_ab",
+  "category": "alcohol",
+  "governing_act": "Gaming, Liquor and Cannabis Act (Alberta)",
+  "last_verified": "2026-05-16",
+  "hbr_version": "1.2",
+  "valid_from": "2026-04-01T00:00:00Z",
+  "status": "ACTIVE",
+  "decision_recorded_at": "2026-05-16T00:00:00Z",
+  "rules": {
+    "legal_drinking_age": {
+      "description": "Minimum age to purchase, possess, or consume alcohol in Alberta",
+      "value": 18,
+      "type": "integer",
+      "statute_ref": "Gaming, Liquor and Cannabis Act",
+      "policy_ref": "policy.md"
+    },
+    "age_verification_required": {
+      "description": "Age verification must be performed at point of sale and at point of delivery",
+      "value": true,
+      "type": "boolean",
+      "policy_ref": "policy.md",
+      "handbook_ref": "Liquor Licensee Handbook s.3.1, 3.2"
+    },
+    "age_verification_id_check_threshold": {
+      "description": "Licensees must request ID from anyone who appears under this age",
+      "value": 25,
+      "type": "integer",
+      "source": "AGLC Inspections program guidance"
+    },
+    "proserve_certification_required": {
+      "description": "All staff working under a liquor licence authority, including delivery drivers, must hold valid ProServe Liquor Staff Training certification",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Licensee Handbook s.3.1, 3.2",
+      "policy_ref": "policy.md"
+    },
+    "proserve_validity_years": {
+      "description": "ProServe certification expires after this many years from the completion date",
+      "value": 5,
+      "type": "integer",
+      "source": "AGLC SMART Programs"
+    },
+    "delivery_sealed_container": {
+      "description": "All liquor delivered must be in a sealed, tamper-proof commercial container with contents clearly identified on the label",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Licensee Handbook s.3.1, 3.2; Liquor Manufacturer Handbook s.3.7, 3.8"
+    },
+    "delivery_within_alberta": {
+      "description": "Liquor delivery licensees must deliver within Alberta",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC Liquor Delivery Service bulletin (2024-05-10)"
+    },
+    "delivery_common_carrier_permitted": {
+      "description": "Licensees may use a common carrier for liquor delivery",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC Liquor Delivery Service bulletin (2024-05-10)"
+    },
+    "off_sales_hours": {
+      "description": "Maximum hours for off-premises liquor sales (takeout/delivery)",
+      "start": "09:00",
+      "end": "02:50",
+      "type": "time_range",
+      "timezone": "America/Edmonton",
+      "handbook_ref": "Liquor Licensee Handbook"
+    },
+    "drive_through_sales_prohibited": {
+      "description": "Off sales from a drive-through window are not allowed",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Licensee Handbook"
+    },
+    "class_a_off_premises_delivery": {
+      "description": "Class A licensees are permitted to sell liquor for off-site consumption via takeout or delivery, with or without food purchase",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC Modernization amendments"
+    },
+    "class_a_mixed_drinks_delivery": {
+      "description": "Class A licensees may sell mixed drinks from their in-house menu for delivery and off-premises consumption",
+      "value": true,
+      "type": "boolean",
+      "conditions": [
+        "drinks_made_only_after_order_received",
+        "sealed_tamperproof_container",
+        "contents_labelled",
+        "driver_has_proserve",
+        "age_verification_at_delivery"
+      ],
+      "source": "AGLC Class A Off Sales bulletin, Modernization amendments"
+    },
+    "markup_rates_effective_date": {
+      "description": "Date the current AGLC markup rate schedule took effect",
+      "value": "2026-04-01",
+      "type": "date"
+    },
+    "markup_spirits_gt60_abv": {
+      "description": "Standard markup rate for spirits greater than 60% ABV",
+      "value": 20.16,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.60 }
+    },
+    "markup_spirits_gt22_lte60_abv": {
+      "description": "Standard markup rate for spirits greater than 22% and up to 60% ABV",
+      "value": 13.76,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.22, "lte": 0.60 }
+    },
+    "markup_spirits_lte22_abv": {
+      "description": "Standard markup rate for spirits up to 22% ABV",
+      "value": 9.32,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "lte": 0.22 }
+    },
+    "markup_refreshment_gt8_lte16_abv": {
+      "description": "Standard markup rate for refreshment beverages greater than 8% and up to 16% ABV",
+      "value": 4.96,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.08, "lte": 0.16 }
+    },
+    "markup_refreshment_gt1_lte8_abv": {
+      "description": "Standard markup rate for refreshment beverages greater than 1% and up to 8% ABV",
+      "value": 1.72,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.01, "lte": 0.08 }
+    },
+    "markup_wine_gt16_abv": {
+      "description": "Standard markup rate for wine (incl. fruit wine, mead, sake) greater than 16% ABV",
+      "value": 7.46,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.16 }
+    },
+    "markup_wine_lte16_abv": {
+      "description": "Standard markup rate for wine (incl. fruit wine, mead, sake) up to 16% ABV",
+      "value": 4.69,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "lte": 0.16 }
+    },
+    "markup_beer_gt22_lte60_abv": {
+      "description": "Standard markup rate for beer greater than 22% and up to 60% ABV",
+      "value": 13.76,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.22, "lte": 0.60 }
+    },
+    "markup_beer_gt16_lte22_abv": {
+      "description": "Standard markup rate for beer greater than 16% and up to 22% ABV",
+      "value": 10.36,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.16, "lte": 0.22 }
+    },
+    "markup_beer_gt119_lte16_abv": {
+      "description": "Standard markup rate for beer greater than 11.9% and up to 16% ABV",
+      "value": 4.51,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "gt": 0.119, "lte": 0.16 }
+    },
+    "markup_beer_lte119_abv": {
+      "description": "Standard markup rate for beer up to 11.9% ABV",
+      "value": 1.25,
+      "type": "currency_per_litre_cad",
+      "abv_range": { "lte": 0.119 }
+    },
+    "markup_wine_ad_valorem_tier1": {
+      "description": "Additional ad valorem markup on wine with invoice price greater than $15/L and up to $20/L",
+      "value": 0.05,
+      "type": "percentage",
+      "invoice_price_range_per_litre": { "gt": 15, "lte": 20 },
+      "source": "AGLC Liquor Markup Rates and Services bulletin (2025-02-28)"
+    },
+    "markup_wine_ad_valorem_tier2": {
+      "description": "Additional ad valorem markup on wine with invoice price greater than $20/L and up to $25/L",
+      "value": 0.10,
+      "type": "percentage",
+      "invoice_price_range_per_litre": { "gt": 20, "lte": 25 }
+    },
+    "markup_wine_ad_valorem_tier3": {
+      "description": "Additional ad valorem markup on wine with invoice price greater than $25/L",
+      "value": 0.15,
+      "type": "percentage",
+      "invoice_price_range_per_litre": { "gt": 25 }
+    },
+    "non_alcoholic_exempt": {
+      "description": "Products containing 0.5% ABV or less are not subject to AGLC markup or excise duty",
+      "value": 0.005,
+      "type": "percentage_threshold",
+      "source": "AGLC markup schedule, Excise Act 2001"
+    },
+    "all_products_must_be_registered": {
+      "description": "All liquor products sold in Alberta must be registered with AGLC",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC Sales and Pricing"
+    },
+    "canadian_labelling_required": {
+      "description": "All liquor products sold in Alberta must meet Canadian labelling requirements for alcoholic beverages",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC Sales and Pricing",
+      "handbook_ref": "Liquor Agency Handbook s.3.1"
+    },
+
+    "aglc_is_importer_of_record": {
+      "description": "All liquor products in Alberta must be sold through AGLC. AGLC is the legal purchaser (importer of record); the liquor agency is the seller",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1"
+    },
+    "agency_registration_required": {
+      "description": "A supplier must either appoint a registered agency or register its own company as a liquor agency to represent its products in Alberta",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.1"
+    },
+    "agency_registration_term_years": {
+      "description": "A liquor agency registration has a fixed term, after which it must be renewed",
+      "value": 2,
+      "type": "integer",
+      "unit": "years",
+      "handbook_ref": "Liquor Agency Handbook s.2.1"
+    },
+    "agency_registration_fee": {
+      "description": "Fee for liquor agency registration or renewal",
+      "value": 200,
+      "type": "currency_cad",
+      "handbook_ref": "Liquor Agency Handbook s.2.1"
+    },
+    "agency_inactive_termination_months": {
+      "description": "Registration may be terminated if the agency has not shipped a liquor product to the Alberta marketplace for this many months",
+      "value": 6,
+      "type": "integer",
+      "unit": "months",
+      "handbook_ref": "Liquor Agency Handbook s.2.1"
+    },
+    "product_registration_processing_weeks": {
+      "description": "AGLC product registration takes up to this many weeks to process. Issues identified during review must be resolved before completion and may further delay.",
+      "value": 3,
+      "type": "integer",
+      "unit": "weeks",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.7"
+    },
+    "product_code_six_digit": {
+      "description": "Each registered product receives a unique 6-digit AGLC product code for ordering and inventory tracking",
+      "value": 6,
+      "type": "integer",
+      "unit": "digits",
+      "handbook_ref": "Liquor Agency Handbook s.3.1"
+    },
+    "container_registration_bcmb_required": {
+      "description": "All beverage containers must be registered with the Beverage Container Management Board (BCMB) before LAP product registration. Exempt containers (kegs, wooden casks/barrels) still require information provided to AGLC",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.4",
+      "statute_ref": "Alberta Recycling Regulation"
+    },
+    "price_change_frequency": {
+      "description": "Product price changes are permitted on a weekly basis. Changes submitted by 4:00 PM Wednesday take effect Friday of the following week",
+      "value": "weekly",
+      "type": "enum",
+      "submission_deadline": "Wednesday 16:00",
+      "effective_lag": "Friday of following week",
+      "handbook_ref": "Liquor Agency Handbook s.3.8"
+    },
+    "uniform_wholesale_pricing": {
+      "description": "All licensees pay the same wholesale price for a given liquor product, regardless of quantity purchased or licensee type",
+      "value": true,
+      "type": "boolean",
+      "source": "AGLC About Liquor in Alberta",
+      "handbook_ref": "Liquor Agency Handbook s.3.8"
+    },
+    "wholesale_price_composition": {
+      "description": "The wholesale price paid by licensees is composed of the invoice price plus recycling fee, excise duty (if applicable), provincial markup, GST, and container deposit",
+      "value": ["invoice_price", "recycling_fee", "excise_duty", "provincial_markup", "gst", "container_deposit"],
+      "type": "component_list",
+      "source": "AGLC About Liquor in Alberta"
+    },
+    "consignment_basis": {
+      "description": "All liquor advanced shipping notices to the AGLC warehouse are on a consignment basis only",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.14"
+    },
+    "product_cannot_ship_out_of_alberta": {
+      "description": "Product held at the AGLC warehouse cannot be shipped out of Alberta",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.17"
+    },
+    "aglc_retains_sample_analysis_right": {
+      "description": "AGLC retains the right to request a sample of any product for analysis. Products found to be unsafe may be discontinued",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1"
+    },
+    "prohibited_inducements": {
+      "description": "Liquor suppliers and agencies are prohibited from offering or giving licensees inducements to favour their products. Licensees are prohibited from accepting or requesting such inducements. Penalties range from licence cancellation to a fine up to the entire value of the inducement",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "Gaming, Liquor and Cannabis Regulation s.81(e), s.82(2)",
+      "handbook_ref": "Liquor Agency Handbook s.5.2"
+    },
+    "advertising_must_not_encourage_irresponsible_use": {
+      "description": "All marketing and promotion of liquor products sold in Alberta must not encourage the irresponsible use, consumption, or service of liquor. Advertising must encourage legal, moderate, and safe consumption",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1, s.4.5"
+    },
+    "advertising_no_minors": {
+      "description": "No minor, or anyone who may reasonably be mistaken for a minor, may appear in advertising for a liquor product",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.5"
+    },
+    "advertising_no_minor_appeal_personalities": {
+      "description": "No well-known personality or look-alike with strong appeal to minors may be featured in liquor advertising",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.5"
+    },
+    "advertising_no_vehicle_operation": {
+      "description": "Advertising must not show any scene of a person with liquor before or while operating a vehicle (motorized or not) or doing any activity considered dangerous",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.5"
+    },
+    "advertising_comparative_allowed": {
+      "description": "Comparative price advertising is allowed but must not disparage a competitor or competitor's product",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.5"
+    },
+    "delivery_service_advertising_restriction": {
+      "description": "Class D liquor delivery service advertising must not promote the use, sale, or consumption of liquor",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Licensee Handbook s.3.7.6"
+    },
+    "delivery_not_to_intoxicated_person": {
+      "description": "Liquor must not be delivered to an intoxicated person",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Licensee Handbook s.3.7.4(d)"
+    },
+    "delivery_order_leave_during_business_hours": {
+      "description": "A liquor delivery order must leave the licensed premises during regular business hours; however, delivery may continue for 30 minutes after closing",
+      "value": true,
+      "type": "boolean",
+      "delivery_grace_period_minutes": 30,
+      "handbook_ref": "Liquor Licensee Handbook s.3.7.5"
+    },
+    "delivery_service_storage_on_premises": {
+      "description": "Delivery service licensees are permitted to store liquor on their licensed premises or another location specified on their licence. They must still purchase liquor from a retail liquor store, general merchandise store, or off-sales licensee",
+      "value": true,
+      "type": "boolean",
+      "effective_date": "2025-12-01",
+      "source": "AGLC Bulletin: Delivery Service Licence Storage (Dec 2025)",
+      "handbook_ref": "Liquor Licensee Handbook s.3.7 (amended Dec 2025)"
+    },
+    "delivery_purchase_source": {
+      "description": "Delivery service licensees must purchase their liquor from a retail liquor store, general merchandise store, or an off-sales licensee",
+      "value": ["retail_liquor_store", "general_merchandise_store", "off_sales_licensee"],
+      "type": "category_list",
+      "handbook_ref": "Liquor Licensee Handbook s.3.7"
+    },
+    "no_third_party_delivery_platforms_restriction": {
+      "description": "AGLC rules require delivery to be conducted by the licensee's staff, contracted drivers, or common carriers. There is no explicit prohibition on third-party delivery platforms for liquor (unlike cannabis), but all delivery personnel must hold ProServe certification and verify age at delivery",
+      "value": false,
+      "type": "boolean",
+      "l2laaf_note": "L2LAAF marketplace drivers delivering alcohol must hold ProServe and perform age verification regardless of employment relationship"
+    },
+    "class_e_manufacturer_agency_automatic": {
+      "description": "A liquor supplier licensed as a Class E manufacturer in Alberta is automatically registered as a liquor agency and does not need a separate agency application",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.1"
+    },
+    "letter_of_authorization_required": {
+      "description": "When a supplier engages a registered agency to represent its products, the supplier must complete a Letter of Authorization designating the agency, and the agency must complete a Letter of Understanding confirming the agreement",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.2, s.3.1.3"
+    },
+
+    "default_deny_principle": {
+      "description": "An activity not specifically permitted under the AGLC handbook guidelines is prohibited",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.1.1.8",
+      "l2laaf_note": "Any marketplace feature involving liquor must be explicitly permitted by AGLC policy. If unclear, assume prohibited and flag for legal review."
+    },
+
+    "proserve_mandatory_delivery_drivers": {
+      "description": "ProServe certification is mandatory for delivery service drivers under all licence classes (A, B, D, E, F and Duty Free)",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.3.2(a)(ii)"
+    },
+    "proserve_new_hire_grace_period_days": {
+      "description": "New hires to positions requiring ProServe must be certified within this many days of their employment start date",
+      "value": 30,
+      "type": "integer",
+      "unit": "days",
+      "handbook_ref": "Liquor Agency Handbook s.2.3.4(a)"
+    },
+    "proserve_proof_forms": {
+      "description": "Acceptable proof of ProServe certification: printed certificate with QR code, or a clear digital image (screenshot) saved on the staff member's mobile device",
+      "value": ["printed_certificate_with_qr", "digital_image_on_mobile"],
+      "type": "category_list",
+      "handbook_ref": "Liquor Agency Handbook s.2.3.6"
+    },
+    "proserve_conditional_status_violations": {
+      "description": "ProServe certificate placed into conditional status when worker violates: supplying liquor to a minor (GLCA s.75), supplying to intoxicated person (GLCA s.75.1), or failure to check ID for persons appearing under 25",
+      "value": ["supply_to_minor", "supply_to_intoxicated", "failure_to_check_id_under_25"],
+      "type": "violation_list",
+      "handbook_ref": "Liquor Agency Handbook s.2.3.7"
+    },
+    "proserve_conditional_recertify_days": {
+      "description": "Worker with conditional ProServe status must retake the program and pay fees within this many days of AGLC notification, or certificate is cancelled",
+      "value": 30,
+      "type": "integer",
+      "unit": "days",
+      "handbook_ref": "Liquor Agency Handbook s.2.3.8"
+    },
+    "proserve_permanent_ban_violation_count": {
+      "description": "A worker who incurs this many violations within a 5-year period is permanently ineligible for ProServe certification",
+      "value": 3,
+      "type": "integer",
+      "period_years": 5,
+      "handbook_ref": "Liquor Agency Handbook s.2.3.11",
+      "l2laaf_note": "L2LAAF must track violation count per driver and permanently bar drivers who reach 3 violations in 5 years from alcohol delivery assignments"
+    },
+    "proserve_equivalency_other_provinces": {
+      "description": "ProServe equivalency may be granted for certificates issued by other provinces if acquired within the last 5 years. Worker must apply to info@smartprograms.aglc.ca",
+      "value": true,
+      "type": "boolean",
+      "max_age_years": 5,
+      "handbook_ref": "Liquor Agency Handbook s.2.3.1"
+    },
+
+    "ownership_change_reporting_threshold": {
+      "description": "A sale, assignment or transfer of 5% or more of a liquor business must be reported to and approved by AGLC prior to the effective date",
+      "value": 0.05,
+      "type": "percentage",
+      "handbook_ref": "Liquor Agency Handbook s.2.4.2"
+    },
+    "registration_not_transferable": {
+      "description": "An agency registration is not transferable",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.4.1"
+    },
+
+    "competitive_relationship_required": {
+      "description": "The relationship between a supplier or agency and a licensee must be competitive in nature",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.5.1"
+    },
+    "licensee_cannot_own_agency": {
+      "description": "A licensee, a licensee's associates, or employee of the licensee is not permitted to own, operate or manage a supplier or agency",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.5.2",
+      "statute_ref": "GLCR s.1(7)"
+    },
+    "licensee_cannot_advise_or_finance_agency": {
+      "description": "A licensee, licensee's associates or employee is not permitted to act as an advisor or provide financial support to a supplier or agency",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.5.4"
+    },
+    "no_exclusive_product_via_allocation": {
+      "description": "A supplier or agency cannot be set up to provide an exclusive product to a licensee or group of licensees through the allocation process or any other means",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.5.5",
+      "l2laaf_note": "PROOF marketplace must not facilitate exclusive product arrangements between agencies and specific licensees"
+    },
+
+    "one_agency_per_product": {
+      "description": "Each product must not be represented by more than one agency at the same time",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.4"
+    },
+    "agency_prohibited_selling_outside_aglc": {
+      "description": "A liquor agency is prohibited from selling liquor other than through AGLC",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.1.7",
+      "l2laaf_note": "All PROOF marketplace transactions for agency-represented products must flow through the AGLC wholesale system"
+    },
+    "no_deposits_except_futures": {
+      "description": "An agency may not accept deposits for liquor aside from futures (products purchased min. 12 months prior to bottling)",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.1.8, s.3.21"
+    },
+    "sub_agents_permitted": {
+      "description": "An agency may contract or employ the services of a different registered agency (sub-agent) to represent its products",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.2.1.4"
+    },
+
+    "no_minimum_order_quantity": {
+      "description": "Agencies are not permitted to impose a minimum order quantity per product per licensee",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.6.5",
+      "l2laaf_note": "PROOF marketplace must not enforce minimum order quantities on behalf of agencies"
+    },
+    "maximum_order_quantity_permitted": {
+      "description": "Agencies may impose a maximum order quantity per product per licensee",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.6.7"
+    },
+    "product_allocation_limit": {
+      "description": "Allocation of a product is limited to 1,000 cases per product code per calendar year. Not allowed if product had >2,000 case sales in the previous year or attains 2,000 in the current year. Private label products may exceed this limit.",
+      "value": 1000,
+      "type": "integer",
+      "unit": "cases_per_product_code_per_year",
+      "handbook_ref": "Liquor Agency Handbook s.3.9.2, s.3.11.2"
+    },
+
+    "wine_standard_container_sizes": {
+      "description": "Wine may only be offered for sale to licensees in standard container sizes. Non-standard sizes only for food service, special event licensees, or promotional purposes.",
+      "value": [50, 100, 200, 250, 375, 500, 750, 1000, 1500, 2000, 3000, 4000],
+      "type": "integer_list",
+      "unit": "ml",
+      "handbook_ref": "Liquor Agency Handbook s.3.4.1",
+      "statute_ref": "Federal Consumer Packaging and Labelling Regulation s.36(1)(c)"
+    },
+
+    "abandoned_product_criteria": {
+      "description": "Product is considered abandoned in the AGLC Central Warehouse if: agency registration lapses >90 days, agency has not responded to AGLC communication within 90 days, or no sales for 24 consecutive months. Abandoned product may be destroyed.",
+      "value": true,
+      "type": "boolean",
+      "lapse_days": 90,
+      "no_sales_months": 24,
+      "handbook_ref": "Liquor Agency Handbook s.3.14.1, s.3.14.2",
+      "statute_ref": "GLCA s.114(2)"
+    },
+    "product_auto_archive_months": {
+      "description": "Products with no activity for 12 months are automatically updated to Archive status by AGLC",
+      "value": 12,
+      "type": "integer",
+      "unit": "months",
+      "handbook_ref": "Liquor Agency Handbook s.3.3.3"
+    },
+    "consignment_payment_frequency": {
+      "description": "Payments for consignment orders are made weekly for all product sold the previous week",
+      "value": "weekly",
+      "type": "enum",
+      "handbook_ref": "Liquor Agency Handbook s.3.7.1"
+    },
+
+    "product_description_accuracy": {
+      "description": "Product description must accurately reflect the actual product: consistency between registered name and label name, consistent names across size configurations, and organic products must include 'organic' in the name",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.9"
+    },
+    "one_product_code_per_registration": {
+      "description": "Each product must have its own unique product registration. One AGLC product code cannot be used for different, multiple product registrations or sales entries",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.1.10"
+    },
+    "private_label_rules": {
+      "description": "Private label products (bearing a licensee's name or trademark) must be approved by AGLC, priced at or above the lowest general listed product in the same category, and may only be sold by the licensee whose name appears on the label. Cannot be sold between Class D licensees. Agencies cannot accept deposits for private labels.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.11",
+      "l2laaf_note": "PROOF marketplace must enforce private label product visibility restrictions — only the named licensee can purchase"
+    },
+
+    "advertising_must_not_encourage_non_drinkers": {
+      "description": "Advertising must not encourage non-drinkers to consume liquor",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1.4(a)"
+    },
+    "advertising_no_heavy_consumption": {
+      "description": "Advertising must not show heavy or prolonged liquor consumption",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1.4(c)"
+    },
+    "advertising_no_health_benefit_claims": {
+      "description": "Advertising must not give the impression that liquor benefits a person's health",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1.4(d)"
+    },
+    "advertising_no_childrens_content": {
+      "description": "The use or imitation of children's fairy tales, jingles, nursery rhymes, songs, musical themes, or fictional characters from children's books is prohibited in liquor advertising",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1.5(c)"
+    },
+    "advertising_max_one_drink_per_person": {
+      "description": "In drinking scenes depicted in brand advertising, the quantity of liquor shown in a social setting must not exceed one drink per person",
+      "value": 1,
+      "type": "integer",
+      "unit": "drinks_per_person",
+      "handbook_ref": "Liquor Agency Handbook s.4.2.1(b)"
+    },
+    "agency_cannot_pay_licensee_advertising": {
+      "description": "An agency is not allowed to pay any advertising costs for a licensee, either directly or indirectly",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.1.9",
+      "l2laaf_note": "PROOF and Kaskflow must not facilitate agency-funded advertising that appears to come from a licensee"
+    },
+    "cooperative_advertising_licensee_pays": {
+      "description": "Co-operative advertising (mentioning specific agencies/suppliers) is permitted only if the licensee pays all costs and keeps records for 2 years",
+      "value": true,
+      "type": "boolean",
+      "record_retention_years": 2,
+      "handbook_ref": "Liquor Agency Handbook s.4.1.8"
+    },
+
+    "prohibited_inducements_no_loyalty_programs": {
+      "description": "An agency is prohibited from participating in any way in a licensee's customer loyalty program, and a licensee may not request agency participation",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.2.3",
+      "l2laaf_note": "If PROOF or Kaskflow implements a loyalty program, agency/supplier participation must be blocked"
+    },
+    "prohibited_inducements_no_recreational_activities": {
+      "description": "An agency is prohibited from paying for a licensee's activities that are recreational or leisurely in nature",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.2.5"
+    },
+    "prohibited_inducements_specific_items": {
+      "description": "An agency may not offer or provide to a licensee: cash/rebates/coupons/credits, deposits into licensee accounts, free liquor (except for sampling per s.5.6), or compensation for interior decorating, renovations, furniture, kitchen/bar equipment, fixtures, refrigeration/dispensing equipment (with exceptions), or building infrastructure/utilities",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.2.6"
+    },
+    "permitted_non_essential_items": {
+      "description": "Items an agency MAY provide to licensees: aprons/hats, bar towels, bottle openers, branded interior signs (not showing licensee name), clocks, coasters, condiment caddies, draught tap handles, drip mats, flags/pennants/banners, fruit slicers, glasses/mugs, ice buckets, inflatables, lapel pins, menu printing, mirrors, napkins, patio umbrellas, place mats, portable patio heaters, posters, promotional fridges (per s.5.2.10a), promotional racks (per s.5.2.10b), sandwich boards, sanitation stations, serving trays, tent cards/inserts",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.2.13"
+    },
+    "promotional_agreements_record_retention": {
+      "description": "Records of promotional agreements must be kept by both agency and licensee for a minimum of 2 years and provided to AGLC on request",
+      "value": 2,
+      "type": "integer",
+      "unit": "years",
+      "handbook_ref": "Liquor Agency Handbook s.5.3.2"
+    },
+    "promotional_items_no_cash": {
+      "description": "Cash, cheques, gift cards, or prepaid credit cards are prohibited as promotional items",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.3.3"
+    },
+    "promotional_agreements_no_exclusion": {
+      "description": "Promotional agreements cannot result in excluding or prohibiting any competitor's product(s)",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.3.4",
+      "l2laaf_note": "PROOF marketplace promotional features must not allow exclusion of competitor products"
+    },
+
+    "tasting_max_sizes": {
+      "description": "Maximum tasting sizes per serving",
+      "value": {
+        "beer_cider_ml": 112,
+        "refreshment_beverages_ml": 112,
+        "wine_ml": 56,
+        "spirits_ml": 28,
+        "liqueurs_ml": 28
+      },
+      "type": "object",
+      "handbook_ref": "Liquor Agency Handbook s.5.5.2"
+    },
+    "tastings_agencies_cannot_charge": {
+      "description": "Agencies are not licensed to sell liquor and may not charge a fee to customers for liquor tastings, including tastings conducted by a Class D licensee on behalf of the agency",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.5.3"
+    },
+    "tastings_not_outside_premises": {
+      "description": "Tastings by agencies must not be conducted outside of the licensed premises (e.g. on a patio outside the store, in a tent outside the store)",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.5.5.5"
+    },
+    "tasting_staffing_max_hourly_rate": {
+      "description": "When a Class D licensee conducts tastings on behalf of an agency, staffing costs charged to the agency are capped at this hourly rate (wages, benefits, and admin costs)",
+      "value": 25,
+      "type": "currency_cad",
+      "unit": "per_hour",
+      "handbook_ref": "Liquor Agency Handbook s.5.5.6(a)(iii)"
+    },
+
+    "added_value_max_percentage": {
+      "description": "The cost of an added value (on-pack) promotional item must not exceed 20% of the wholesale price of the liquor product being promoted",
+      "value": 0.20,
+      "type": "percentage",
+      "handbook_ref": "Liquor Agency Handbook s.5.9.4(b)"
+    },
+
+    "warehouse_central_cls_scope": {
+      "description": "The Central AGLC Authorized Warehouse (CLS, St. Albert) stores and distributes spirits, wine, coolers, and beer. Other Authorized Warehouses distribute domestic beer and specified refreshment beverages only.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.1.2.1(b)"
+    },
+    "warehouse_charges_auto_deducted": {
+      "description": "All warehousing charges are automatically deducted from the consignment payee's account. If consignment payments do not equal or exceed warehouse charges, the agency must pay the outstanding difference to AGLC.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.13.1, s.3.13.3"
+    },
+    "warehouse_non_registered_surcharges": {
+      "description": "Non-Registered Advanced Shipping Notice Surcharge and Non-Registered Product Listing Surcharge are incurred when an agency ships product without following proper registration and ASN procedures",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.13.1"
+    },
+    "warehouse_unpaid_charges_abandonment": {
+      "description": "If an agency does not pay outstanding warehouse charges within the specified notification period, the agency's remaining product will be deemed abandoned by AGLC and may be destroyed. The agency will be prohibited from bringing new inventory into the Central Warehouse.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.13.4"
+    },
+    "warehouse_insurance_coverage": {
+      "description": "AGLC insures liquor under all-risk property coverage from acceptance at the Central Warehouse (signed delivery receipt) until loaded for outbound shipment (bill of lading). Settlement basis is the agency's invoice price.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.10.1, s.3.10.2"
+    },
+
+    "faulty_product_claim_deadline_days": {
+      "description": "Claim for refund on faulty product must be received by AGLC within 30 days of delivery. Customer returns may be refunded up to 1 year from date of invoice.",
+      "value": 30,
+      "type": "integer",
+      "unit": "days",
+      "customer_return_days": 365,
+      "handbook_ref": "Liquor Agency Handbook s.3.23.4"
+    },
+    "faulty_product_destruction_requirements": {
+      "description": "Faulty product destruction requires: AGLC written consent, destruction by licensee employee on premises with at least one witness, and video recording retained for minimum 90 days",
+      "value": true,
+      "type": "boolean",
+      "video_retention_days": 90,
+      "handbook_ref": "Liquor Agency Handbook s.3.23.8"
+    },
+    "product_recall_immediate_suspension": {
+      "description": "When AGLC issues a product recall, licensees must immediately suspend sales and remove products from shelves",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.23.12"
+    },
+
+    "personal_importation_interprovincial": {
+      "description": "An adult may import liquor purchased in another province for personal use in any quantity if in direct possession or as baggage on the same conveyance. An adult may also cause liquor to be brought in via a Class D retailer or registered agency.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.26.1",
+      "statute_ref": "GLCR s.89",
+      "l2laaf_note": "Kaskflow could facilitate personal importation requests by connecting consumers with Class D retailers or agencies, but the product must still be registered with AGLC and go through the Central Warehouse"
+    },
+
+    "board_to_board_transfers_permitted": {
+      "description": "An agency may initiate transfer of product from Alberta to another provincial liquor jurisdiction at any time by obtaining a purchase order from the receiving jurisdiction. Board to Board transfers are not paid through consignment as the product is not sold in Alberta.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.3.19"
+    },
+
+    "event_team_agreements_eligible_events": {
+      "description": "Event/Team Agreements are permitted only for events open to the general public where the primary purpose is not liquor consumption: community-based entertainment, professional/semi-pro sports, or broad-based cultural events",
+      "value": ["community_entertainment", "professional_sports", "cultural_events"],
+      "type": "category_list",
+      "handbook_ref": "Liquor Agency Handbook s.4.3.3"
+    },
+    "sponsorship_no_free_liquor": {
+      "description": "Agencies and suppliers may not provide free liquor or exclusively provide liquor products under a sponsorship",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.3.13"
+    },
+    "contest_no_purchase_required": {
+      "description": "Participation in a contest or raffle must not be conditional on the purchase or consumption of liquor",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.4.3.12(a), s.5.4.1(c)"
+    },
+
+    "criminal_charge_reporting_obligation": {
+      "description": "An agency must notify AGLC immediately if they or key employees/directors/shareholders are charged or convicted under: Criminal Code, Excise Act, Food and Drugs Act, Controlled Drugs and Substances Act, Income Tax Act, equivalent foreign acts, GLCA, or GLCR. May result in suspension or cancellation.",
+      "value": true,
+      "type": "boolean",
+      "handbook_ref": "Liquor Agency Handbook s.1.4.3, s.1.4.4"
+    },
+
+    "liquor_definition_abv_threshold": {
+      "description": "AGLC defines 'liquor' as beverages intended for human consumption containing over 1% alcohol by volume (spirits, wine, liqueur, coolers, cider, beer)",
+      "value": 0.01,
+      "type": "percentage_threshold",
+      "handbook_ref": "Liquor Agency Handbook s.1.2.1(j)",
+      "l2laaf_note": "Products between 0.5% and 1% ABV are not subject to excise duty but ARE subject to AGLC regulation as they exceed the 1% liquor definition — verify against AGLC's interpretation"
+    }
+  }
+}

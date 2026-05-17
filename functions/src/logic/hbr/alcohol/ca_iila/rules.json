@@ -1,1 +1,77 @@
-{ "rule_maker": "IILA", "region_scope": "ca", "category": "alcohol", "last_verified": "2026-05-13", "rules": {} }
+{
+  "rule_maker": "IILA",
+  "region_scope": "ca",
+  "category": "alcohol",
+  "statute": "Importation of Intoxicating Liquors Act, RSC 1985, c I-3",
+  "last_verified": "2026-05-16",
+  "hbr_version": "1.0",
+  "valid_from": "2026-05-16T00:00:00Z",
+  "status": "ACTIVE",
+  "decision_recorded_at": "2026-05-16T00:00:00Z",
+  "rules": {
+    "interprovincial_import_default": {
+      "description": "All interprovincial imports of intoxicating liquor must be made by the provincial liquor authority or a designated private corporation",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.3(1)",
+      "policy_ref": "policy.md"
+    },
+    "wine_personal_use_exception": {
+      "description": "Individuals may import wine interprovincially for personal use, subject to receiving province's quantity limits",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.3(2), Bill C-311 (2012)",
+      "applies_to": "wine_only",
+      "policy_ref": "policy.md"
+    },
+    "wine_personal_use_scope": {
+      "description": "Personal use wine exception applies only to wine; beer and spirits remain restricted to provincial authority import",
+      "value": ["wine"],
+      "type": "category_list",
+      "excluded": ["beer", "spirits", "refreshment_beverages"],
+      "statute_ref": "IILA s.3(2)"
+    },
+    "transit_sealed_container": {
+      "description": "Liquor transported through a province to another destination must remain in sealed, unopened containers for the entire transit",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.3(1)(a)"
+    },
+    "provincial_authority_supremacy": {
+      "description": "Provinces retain full jurisdiction to regulate possession, movement, and sale of liquor within their borders regardless of federal exceptions",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA general principle"
+    },
+    "international_import_authority": {
+      "description": "International importation of liquor into Canada must be made by or under the authority of the provincial liquor board",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.3(1)"
+    },
+    "licensed_distiller_blending_exception": {
+      "description": "Licensed distillers and brewers may import interprovincially solely for blending or flavouring, in accordance with the Excise Act 2001 and provincial law",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.3(1)(b)"
+    },
+    "sacramental_medicinal_exception": {
+      "description": "Importation for sacramental or medicinal purposes is exempted from the general prohibition",
+      "value": true,
+      "type": "boolean",
+      "statute_ref": "IILA s.8"
+    },
+    "contravention_penalty_first_offence": {
+      "description": "First offence penalty: fine not exceeding $200, default imprisonment up to 3 months",
+      "value": 200,
+      "type": "currency_cad",
+      "statute_ref": "IILA s.5(a)"
+    },
+    "marketplace_implication": {
+      "description": "A marketplace facilitating alcohol sales across provincial boundaries must ensure all transactions comply with both IILA and the receiving province's liquor authority requirements",
+      "value": true,
+      "type": "boolean",
+      "l2laaf_note": "For L2LAAF: all alcohol transactions must be intra-provincial unless the receiving province's rules explicitly permit the import category"
+    }
+  }
+}

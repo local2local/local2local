@@ -3,8 +3,118 @@
   "region_scope": "ca",
   "category": "tax",
   "tax_type": "GST",
-  "last_verified": "2026-05-13",
+  "governing_statute": "Excise Tax Act (ETA)",
+  "last_verified": "2026-05-16",
+  "hbr_version": "1.0",
+  "valid_from": "2026-05-16T00:00:00Z",
+  "status": "ACTIVE",
+  "decision_recorded_at": "2026-05-16T00:00:00Z",
   "rules": {
-    "gst_rate": { "value": 0.05, "type": "percentage", "policy_ref": "policy.md" }
+    "gst_rate": {
+      "description": "Federal Goods and Services Tax rate applicable to taxable supplies in Canada",
+      "value": 0.05,
+      "type": "percentage",
+      "policy_ref": "policy.md"
+    },
+    "alberta_pst_rate": {
+      "description": "Alberta has no Provincial Sales Tax; only federal GST applies",
+      "value": 0,
+      "type": "percentage",
+      "l2laaf_note": "For Alberta transactions, total consumption tax equals GST rate only"
+    },
+    "alberta_total_tax_rate": {
+      "description": "Combined consumption tax rate for transactions with place of supply in Alberta (GST only, no PST/HST)",
+      "value": 0.05,
+      "type": "percentage",
+      "policy_ref": "policy.md"
+    },
+    "registration_threshold": {
+      "description": "Mandatory GST/HST registration threshold: total taxable revenue from worldwide sales",
+      "value": 30000,
+      "type": "currency_cad",
+      "period": "single_calendar_quarter_or_four_consecutive_quarters",
+      "policy_ref": "policy.md"
+    },
+    "voluntary_registration_permitted": {
+      "description": "Businesses below the $30,000 threshold may register voluntarily to claim Input Tax Credits",
+      "value": true,
+      "type": "boolean"
+    },
+    "alcohol_zero_rated": {
+      "description": "Alcoholic beverages are NOT zero-rated; they are fully taxable at the standard GST rate",
+      "value": false,
+      "type": "boolean",
+      "l2laaf_note": "All alcohol transactions on Kaskflow and PROOF must collect GST"
+    },
+    "basic_groceries_zero_rated": {
+      "description": "Basic groceries are generally zero-rated (taxable at 0%); alcoholic beverages are explicitly excluded from this category",
+      "value": true,
+      "type": "boolean",
+      "excludes": ["alcoholic_beverages"]
+    },
+    "place_of_supply_physical_goods": {
+      "description": "For physical goods, the applicable tax rate is determined by the delivery destination (province), not the seller's location",
+      "value": "destination_based",
+      "type": "enum",
+      "policy_ref": "policy.md"
+    },
+    "platform_operator_collection_obligation": {
+      "description": "Distribution platform operators facilitating taxable supplies may be required to collect and remit GST/HST on behalf of third-party sellers",
+      "value": true,
+      "type": "boolean",
+      "effective_date": "2021-07-01",
+      "policy_ref": "policy.md"
+    },
+    "platform_operator_reporting_obligation": {
+      "description": "Platform operators must report information to CRA on third-party vendors using their platforms",
+      "value": true,
+      "type": "boolean",
+      "effective_date": "2021-07-01"
+    },
+    "filing_frequency_annual_threshold": {
+      "description": "Annual filing for businesses with taxable supplies under this amount",
+      "value": 1500000,
+      "type": "currency_cad",
+      "filing_frequency": "annual"
+    },
+    "filing_frequency_quarterly_threshold": {
+      "description": "Quarterly filing for businesses with taxable supplies between $1.5M and $6M",
+      "value": 6000000,
+      "type": "currency_cad",
+      "filing_frequency": "quarterly"
+    },
+    "filing_frequency_monthly_threshold": {
+      "description": "Monthly filing for businesses with taxable supplies over $6M",
+      "value": 6000000,
+      "type": "currency_cad",
+      "filing_frequency": "monthly",
+      "condition": "gt"
+    },
+    "hst_rates_by_province": {
+      "description": "HST rates for provinces that combine GST with provincial component; used when place of supply is outside Alberta",
+      "type": "lookup_table",
+      "values": {
+        "AB": { "rate": 0.05, "type": "GST_ONLY" },
+        "BC": { "rate": 0.05, "type": "GST_ONLY", "note": "BC has separate 7% PST" },
+        "SK": { "rate": 0.05, "type": "GST_ONLY", "note": "SK has separate 6% PST" },
+        "MB": { "rate": 0.05, "type": "GST_ONLY", "note": "MB has separate 7% RST" },
+        "ON": { "rate": 0.13, "type": "HST" },
+        "QC": { "rate": 0.05, "type": "GST_ONLY", "note": "QC has separate 9.975% QST" },
+        "NB": { "rate": 0.15, "type": "HST" },
+        "NS": { "rate": 0.15, "type": "HST" },
+        "PE": { "rate": 0.15, "type": "HST" },
+        "NL": { "rate": 0.15, "type": "HST" },
+        "NT": { "rate": 0.05, "type": "GST_ONLY" },
+        "NU": { "rate": 0.05, "type": "GST_ONLY" },
+        "YT": { "rate": 0.05, "type": "GST_ONLY" }
+      },
+      "l2laaf_note": "Initial launch is Alberta-only (5% GST). This table is included for future multi-province expansion (Phase 47.4)"
+    },
+    "digital_services_tax_status": {
+      "description": "Canadian DST was rescinded June 29, 2025; Bill C-15 repeals retroactively. Not applicable to L2LAAF.",
+      "value": "REPEALED",
+      "type": "enum",
+      "effective_date": "2025-06-29"
+    }
   }
 }
