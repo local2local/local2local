@@ -1,90 +1,189 @@
-L2LAAF_BLOCK_START(FIX:Semantic Retrieval Type Fixes:functions/src/logic/semanticRetrieval.ts)
+L2LAAF_BLOCK_START(COMMIT_MSG:Commit Message:COMMIT_MSG)
+[ASSISTED] FEAT(hbr): Add Bitemporal HBR Types, ResolveHBR, And ActivateScheduledHBRs [BUMP: MINOR]
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(FILE:HBR Types:functions/src/logic/hbr/types.ts)
+export type HBRStatus = 'ACTIVE' | 'SCHEDULED' | 'SUPERSEDED' | 'REVOKED' | 'AMENDED';
+
+export interface HBRVersion {
+  version_id: string;
+  hbr_path: string;
+  rule_maker: string;
+  region_scope: string;
+  category: string;
+  version: string;
+  status: HBRStatus;
+  valid_from: string;
+  valid_until: string | null;
+  decision_recorded_at: string;
+  decision_source?: string;
+  decision_source_url?: string;
+  supersedes_version: string | null;
+  superseded_by_version: string | null;
+  rules_snapshot: Record<string, any>;
+  change_summary: string;
+  source_commit: string;
+  source_phase: string;
+  provenance: 'OBSERVED' | 'CONFIRMED' | 'INFERRED' | 'GENERATED';
+  confirmed_by?: string;
+  created_at: string;
+  amendment_history: any[];
+}
+L2LAAF_BLOCK_END
+
+L2LAAF_BLOCK_START(FILE:Resolve HBR:functions/src/logic/resolveHBR.ts)
+import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { HBRVersion } from "./hbr/types";
 
-let internalDb: admin.firestore.Firestore;
+/**
+ * Resolves the applicable HBR version for a given rule maker and target date.
+ * Enforces bitemporal precedence: SCHEDULED wins if its valid_from <= targetDate.
+ */
+export async function resolveHBRInternal(ruleMaker: string, targetDate: Date): Promise<HBRVersion | null> {
+  const db = getFirestore();
+  const snapshot = await db.collection("artifacts/system_status/public/data/hbr_versions")
+    .where("rule_maker", "==", ruleMaker)
+    .where("status", "in", ["ACTIVE", "SCHEDULED"])
+    .get();
 
-export const semanticRetrievalV1 = onCall(async (request) => {
-  const queryText = request.data.query;
-  if (!queryText) throw new HttpsError("invalid-argument", "Query text is required");
+  let activeVersion: HBRVersion | null = null;
+  let scheduledVersion: HBRVersion | null = null;
 
-  if (!internalDb) {
-    try {
-      const internalApp = admin.app('internal');
-      internalDb = internalApp.firestore();
-    } catch (e) {
-      const internalApp = admin.initializeApp({ projectId: 'local2local-internal' }, 'internal');
-      internalDb = internalApp.firestore();
+  snapshot.forEach((doc) => {
+    const data = doc.data() as HBRVersion;
+    const validFrom = new Date(data.valid_from);
+    const validUntil = data.valid_until ? new Date(data.valid_until) : null;
+
+    if (validFrom <= targetDate && (!validUntil || validUntil > targetDate)) {
+      if (data.status === "ACTIVE") {
+        activeVersion = data;
+      } else if (data.status === "SCHEDULED") {
+        // In the event of multiple scheduled versions (e.g. cascading future changes),
+        // we take the one with the latest valid_from that is still <= targetDate.
+        if (!scheduledVersion || new Date(data.valid_from) > new Date(scheduledVersion.valid_from)) {
+          scheduledVersion = data;
+        }
+      }
     }
-  }
-
-  const token = await admin.credential.applicationDefault().getAccessToken();
-  const aiUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/local2local-internal/locations/us-central1/publishers/google/models/text-embedding-004:predict`;
-
-  const aiRes = await fetch(aiUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token.access_token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      instances: [{ task_type: "RETRIEVAL_DOCUMENT", title: "", content: queryText }]
-    })
   });
 
-  if (!aiRes.ok) {
-    throw new HttpsError('internal', `Failed to get embedding: ${await aiRes.text()}`);
+  return scheduledVersion || activeVersion || null;
+}
+
+export const resolveHBR = onCall(async (request) => {
+  const data = request.data as Record<string, string>;
+  const ruleMaker = data.ruleMaker;
+  const targetDateStr = data.targetDate;
+
+  if (!ruleMaker || !targetDateStr) {
+    throw new HttpsError("invalid-argument", "ruleMaker and targetDate are required.");
   }
 
-  const aiData = await aiRes.json() as any;
-  const queryVector = aiData.predictions[0].embeddings.values;
+  const targetDate = new Date(targetDateStr);
+  const version = await resolveHBRInternal(ruleMaker, targetDate);
 
-  const fetchAndSort = async (useAs: string) => {
-      try {
-          const snap = await internalDb.collection('lessons_learned')
-              .where('use_as', '==', useAs)
-              .findNearest('embedding', FieldValue.vector(queryVector), { limit: 5, distanceMeasure: 'COSINE' })
-              .get();
-          return snap.docs.map(d => {
-              const data = d.data();
-              delete data.embedding;
-              return data;
-          });
-      } catch (e) {
-          const snap = await internalDb.collection('lessons_learned').where('use_as', '==', useAs).get();
+  if (!version) {
+    throw new HttpsError("not-found", `No applicable HBR version found for ${ruleMaker} on ${targetDateStr}`);
+  }
 
-          const docs = snap.docs.map(d => d.data()).filter(d =>
-              d.embedding && (Array.isArray(d.embedding) || typeof d.embedding.toArray === 'function')
-          );
-
-          const getVec = (val: any) => typeof val.toArray === 'function' ? val.toArray() : val;
-          const dotProduct = (a: number[], b: number[]) => a.reduce((sum, val, i) => sum + val * b[i], 0);
-          const magnitude = (vec: number[]) => Math.sqrt(vec.reduce((sum, val) => sum + val * val, 0));
-
-          const scored = docs.map(d => {
-              const vecB = getVec(d.embedding);
-              const magA = magnitude(queryVector);
-              const magB = magnitude(vecB);
-              const similarity = magA && magB ? dotProduct(queryVector, vecB) / (magA * magB) : 0;
-              return { ...d, similarity };
-          });
-
-          scored.sort((a, b) => b.similarity - a.similarity);
-          return scored.slice(0, 5).map(d => {
-              const { similarity, embedding, ...rest } = d as any;
-              return rest;
-          });
-      }
-  };
-
-  const instructions = await fetchAndSort('INSTRUCTION');
-  const evidence = await fetchAndSort('EVIDENCE');
-
-  return { instructions, evidence };
+  return version;
 });
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(FIX:Commit Message:COMMIT_MSG)
-[ASSISTED] FIX(orchestration): Fix TypeScript Type Errors In Semantic Retrieval Function
+L2LAAF_BLOCK_START(FILE:Compliance Functions:functions/src/logic/compliance.ts)
+import { onDocumentWritten, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { getFirestore } from "firebase-admin/firestore";
+import { HBRVersion } from "./hbr/types";
+
+export const complianceAgentV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}" }, async (event) => {
+  // Logic visibility maintained. Renamed to match V2 export.
+  const snapshot = event.data?.after as QueryDocumentSnapshot | undefined;
+  if (!snapshot || !snapshot.exists) return;
+});
+
+/**
+ * Handles the archive-before-update requirement for HBR drift automation.
+ * Called by the pipeline or n8n to safely apply a new version while superseding the old.
+ */
+export const archiveAndCreateHBRVersion = onCall(async (request) => {
+  if (!request.auth?.token.admin && !request.auth?.token.superadmin) {
+    throw new HttpsError("permission-denied", "Must be an admin to update HBR versions.");
+  }
+
+  const data = request.data as Record<string, any>;
+  const newVersion = data.newVersion as HBRVersion;
+  const currentActiveId = data.currentActiveId as string | undefined;
+
+  const db = getFirestore();
+  const batch = db.batch();
+
+  if (currentActiveId) {
+    const currentRef = db.collection("artifacts/system_status/public/data/hbr_versions").doc(currentActiveId);
+    batch.update(currentRef, {
+      status: "SUPERSEDED",
+      valid_until: newVersion.valid_from,
+      superseded_by_version: newVersion.version_id
+    });
+    newVersion.supersedes_version = currentActiveId;
+  }
+
+  const newRef = db.collection("artifacts/system_status/public/data/hbr_versions").doc(newVersion.version_id);
+  batch.set(newRef, newVersion);
+
+  await batch.commit();
+  return { success: true, version_id: newVersion.version_id };
+});
+
+/**
+ * Daily cron target for n8n HBR Version Activator.
+ * Promotes SCHEDULED rules to ACTIVE when valid_from is reached.
+ */
+export const activateScheduledHBRs = onCall(async (request) => {
+  const db = getFirestore();
+  const now = new Date();
+
+  const scheduledSnap = await db.collection("artifacts/system_status/public/data/hbr_versions")
+    .where("status", "==", "SCHEDULED")
+    .get();
+
+  const batch = db.batch();
+  let activatedCount = 0;
+  const activatedIds: string[] = [];
+
+  for (const doc of scheduledSnap.docs) {
+    const data = doc.data() as HBRVersion;
+    if (new Date(data.valid_from) <= now) {
+      // Find current active for this rule_maker + region_scope
+      const activeSnap = await db.collection("artifacts/system_status/public/data/hbr_versions")
+        .where("rule_maker", "==", data.rule_maker)
+        .where("region_scope", "==", data.region_scope)
+        .where("status", "==", "ACTIVE")
+        .get();
+
+      activeSnap.forEach((activeDoc) => {
+        batch.update(activeDoc.ref, {
+          status: "SUPERSEDED",
+          valid_until: data.valid_from,
+          superseded_by_version: data.version_id
+        });
+      });
+
+      batch.update(doc.ref, {
+        status: "ACTIVE",
+        supersedes_version: activeSnap.empty ? null : activeSnap.docs[0].id
+      });
+
+      activatedCount++;
+      activatedIds.push(data.version_id);
+    }
+  }
+
+  if (activatedCount > 0) {
+    await batch.commit();
+  }
+
+  return { success: true, activatedCount, activatedIds };
+});
 L2LAAF_BLOCK_END

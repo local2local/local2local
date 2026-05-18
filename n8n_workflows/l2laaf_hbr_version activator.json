@@ -1,0 +1,199 @@
+{
+  "name": "L2LAAF: HBR Version Activator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5 0 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily 00:05 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1456,
+        160
+      ],
+      "id": "877cd684-5657-489e-aee0-d9c3ce22f8e4"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    requestBody: JSON.stringify({ data: {} })\n  }\n}];"
+      },
+      "name": "Prepare Activation Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        160
+      ],
+      "id": "c3f450ad-2b04-4d8f-b725-c3c171bfee41"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://us-central1-local2local-dev.cloudfunctions.net/activateScheduledHBRs",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "name": "Trigger Activator Function",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1056,
+        160
+      ],
+      "id": "0c797118-4df5-4d16-8b0e-ac38d8373b02"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "act-cond-1",
+              "leftValue": "={{ $json.result.activatedCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "larger",
+                "name": "is larger than"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Were Any Activated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        160
+      ],
+      "id": "02953968-6b70-41d2-a1bb-bc8b1083c8ee"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    chatBody: JSON.stringify({\n      text: `🚀 HBR Activation Complete! Promoted ${$json.result.activatedCount} scheduled rule(s) to ACTIVE. IDs: ${$json.result.activatedIds.join(', ')}`\n    })\n  }\n};"
+      },
+      "name": "Prepare Alert Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        48
+      ],
+      "id": "cb1c171b-f3fb-4e7a-9bdc-73be284d5c49"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/SPACE_ID/messages?key=KEY&token=TOKEN",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.chatBody }}",
+        "options": {}
+      },
+      "name": "Post Google Chat Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -464,
+        48
+      ],
+      "id": "ddb114ac-ed53-4ebd-9ae8-ced79152b60d",
+      "credentials": {
+        "googleApi": {
+          "id": "eFKQbbqJ5990rW1A",
+          "name": "Chat account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 00:05 UTC": {
+      "main": [
+        [
+          {
+            "node": "Prepare Activation Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Activation Body": {
+      "main": [
+        [
+          {
+            "node": "Trigger Activator Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Activator Function": {
+      "main": [
+        [
+          {
+            "node": "Were Any Activated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Were Any Activated?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Alert Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Alert Body": {
+      "main": [
+        [
+          {
+            "node": "Post Google Chat Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e758e15a-da66-461d-9051-577116f433c2",
+  "meta": {
+    "instanceId": "261923412a3ee3006949a29e9b78a6fe94c5bdde95bd10a5978cc61dac3a65e0"
+  },
+  "id": "88A3VDht3msaBD3Y",
+  "tags": []
+}

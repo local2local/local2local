@@ -1,0 +1,254 @@
+{
+  "name": "L2LAAF: Regulatory Drift Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "name": "Weekly Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1696,
+        80
+      ],
+      "id": "057c5923-878d-4482-9dd8-1296ff79693d"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    rule_maker: 'AGLC',\n    url: 'https://aglc.ca/liquor/agencies-suppliers-manufacturers/liquor-markup-rate-schedule',\n    mock_scraped_markup: 20.50\n  }\n};"
+      },
+      "name": "Configure Scrape Target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1504,
+        80
+      ],
+      "id": "273d0324-af7d-468b-8924-0e8afb4bab73"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    requestBody: JSON.stringify({\n      data: { ruleMaker: $json.rule_maker, targetDate: new Date().toISOString() }\n    })\n  }\n};"
+      },
+      "name": "Prepare Fetch Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        80
+      ],
+      "id": "81162043-68cc-49cf-899b-b29ada7c7c71"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://us-central1-local2local-dev.cloudfunctions.net/resolveHBR",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "name": "Fetch Active HBR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -1104,
+        80
+      ],
+      "id": "eaa5ef84-a1fa-4051-8457-186bddc20776"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const activeHbr = $json.result || {};\nconst currentMarkup = activeHbr.rules_snapshot?.markup_spirits_gt60_abv?.value || 20.16;\nconst driftFound = currentMarkup !== $json.mock_scraped_markup;\n\nreturn {\n  json: {\n    ...$json,\n    driftFound,\n    alertText: driftFound ? `Regulatory Drift Detected for ${$json.rule_maker}! Current: $${currentMarkup}, Scraped: $${$json.mock_scraped_markup}` : 'No drift'\n  }\n};"
+      },
+      "name": "Compare Values",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        80
+      ],
+      "id": "87182ce8-cfa4-4019-9ea9-2dfef31063e4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "drift-cond-1",
+              "leftValue": "={{ $json.driftFound }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "name": "is true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Drift Detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        80
+      ],
+      "id": "08a271c5-b6b3-4dff-8b94-9bfcc78f586e"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    chatBody: JSON.stringify({\n      text: $json.alertText\n    })\n  }\n};"
+      },
+      "name": "Prepare Alert Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        -32
+      ],
+      "id": "1e643c0a-2304-49da-93ad-5e4c92b2f239"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/SPACE_ID/messages?key=KEY&token=TOKEN",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.chatBody }}",
+        "options": {}
+      },
+      "name": "Post Google Chat Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -304,
+        -32
+      ],
+      "id": "90cd2515-2b18-42dd-8065-cbd46039ab06",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        },
+        "googleApi": {
+          "id": "eFKQbbqJ5990rW1A",
+          "name": "Chat account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Configure Scrape Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configure Scrape Target": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fetch Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fetch Body": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active HBR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active HBR": {
+      "main": [
+        [
+          {
+            "node": "Compare Values",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Values": {
+      "main": [
+        [
+          {
+            "node": "Drift Detected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Drift Detected?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Alert Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Alert Body": {
+      "main": [
+        [
+          {
+            "node": "Post Google Chat Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "56c065eb-2577-4bcd-9bc3-96b41063b110",
+  "meta": {
+    "instanceId": "261923412a3ee3006949a29e9b78a6fe94c5bdde95bd10a5978cc61dac3a65e0"
+  },
+  "id": "6HfY1MSQ8mt1x7Lv",
+  "tags": []
+}

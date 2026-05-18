@@ -8,7 +8,7 @@ Attach all of the following documents to the Gemini session before sending this 
 2. `project_plan.md` — (amended) full project plan with expanded Phase 45.3 specification
 3. `judge_layer_architecture.md` — (amended) judge layer with bitemporal policy versioning
 4. `l2laaf_full_specification.md` — (amended) system spec with HBR directory structure and Evolution Engine updates
-5. `cicd_pipeline_reference.md` — (unchanged) CI/CD pipeline reference
+5. `cicd_pipeline_reference.md` — (amended) CI/CD pipeline reference
 6. `functions/src/logic/hbr/alcohol/ca_iila/rules.json` — federal IILA rules (populated)
 7. `functions/src/logic/hbr/alcohol/ca_iila/policy.md` — federal IILA policy (populated)
 8. `functions/src/logic/hbr/alcohol/ca_ab_aglc/rules.json` — Alberta AGLC rules (populated)
