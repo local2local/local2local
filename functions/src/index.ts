@@ -10,3 +10,5 @@ export { unifiedActivityWorkerV2 } from "./logic/orchestration";
 export { deleteSubcollectionV2 } from "./utilities/deleteSubcollection";
 export { listSubcollectionsV2 } from "./utilities/listSubcollections";
 export { semanticRetrievalV1 } from "./logic/semanticRetrieval";
+
+export * from "./logic/resolveHBR";

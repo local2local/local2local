@@ -149,7 +149,7 @@ PATH: artifacts/system_status/public/data/hbr_versions/HBR-AGLC-001-v1.2
 JSON: { "version_id": "HBR-AGLC-001-v1.2", "status": "ACTIVE", ... }
 ```
 
-**Why:** Phase 45.3 was promoted to prod without testing because no structured test plan existed. This rule ensures every delivery includes a verifiable test plan that the operator can execute before approving promotion at the HITL gate.
+**Why:** Phase 45.4 was promoted to prod without testing because no structured test plan existed. This rule ensures every delivery includes a verifiable test plan that the operator can execute before approving promotion at the HITL gate.
 
 ---
 

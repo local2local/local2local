@@ -22,6 +22,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.semanticRetrievalV1 = exports.listSubcollectionsV2 = exports.deleteSubcollectionV2 = exports.unifiedActivityWorkerV2 = exports.facilityMatchingWorkerV2 = exports.carrierBoardWorkerV2 = exports.gpsTelemetryWorkerV2 = exports.stripeOnboardingWorker = exports.taxWorkerV2 = exports.financeAgentV2 = exports.complianceAgentV2 = exports.ingestWebErrorV2 = exports.evolutionProposalFinalizerV2 = exports.autonomousFixerV2 = exports.ombudsmanValidatorV2 = exports.evolutionOrchestratorV2 = void 0;
 const admin = __importStar(require("firebase-admin"));
@@ -52,4 +55,5 @@ var listSubcollections_1 = require("./utilities/listSubcollections");
 Object.defineProperty(exports, "listSubcollectionsV2", { enumerable: true, get: function () { return listSubcollections_1.listSubcollectionsV2; } });
 var semanticRetrieval_1 = require("./logic/semanticRetrieval");
 Object.defineProperty(exports, "semanticRetrievalV1", { enumerable: true, get: function () { return semanticRetrieval_1.semanticRetrievalV1; } });
+__exportStar(require("./logic/resolveHBR"), exports);
 //# sourceMappingURL=index.js.map

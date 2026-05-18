@@ -1,6 +1,6 @@
 # L2LAAF Project Plan
 
-**Current version:** 45.1.3
+**Current version:** 45.4.2
 **System status:** 🟢 OPERATIONAL
 **Tech stack:** Flutter 3.38.5 + Node.js 24 (2nd Gen Firebase Functions) + TypeScript
 
@@ -51,29 +51,48 @@ Full automated deploy-to-dev, human-approve, promote-to-prod system. See `docume
 ---
 
 ### Phase 45: Advanced Intelligence — IN PROGRESS
-**Current sub-phase:** 45.1 complete (45.1.3)
+**Current sub-phase:** 45.4 complete (45.4.2)
 
 ---
 
 #### 45.1 — Multi-Agent Consensus ✅ COMPLETE
 Impact Classifier and Validator Agent inserted into HITL path. All deployments classified HIGH_IMPACT or ROUTINE. HIGH_IMPACT changes receive a Gemini risk assessment in the Google Chat card under "Impact Assessment".
 
-**Known limitation:** Both Impact Classifier and Validator Agent use Gemini — same model family as the actor. This is the correlated judgment failure mode identified in the judge layer reference paper. Mitigated by Claude QA (Phase 45.5) which uses a different model family. The current Gemini-only validation catches surface errors; Claude catches the category errors Gemini shares with the actor.
+**Known limitation:** Both Impact Classifier and Validator Agent use Gemini — same model family as the actor. This is the correlated judgment failure mode identified in the judge layer reference paper. Mitigated by Claude QA (Phase 45.8) which uses a different model family. The current Gemini-only validation catches surface errors; Claude catches the category errors Gemini shares with the actor.
 
 ---
 
-#### 45.2 — Semantic Retrieval (PENDING)
-Agents query `lessons_learned` in `local2local-internal` via vector search before proposing changes.
+#### 45.2 — Bitemporal HBR Versioning & Regulatory Data ✅ COMPLETE
 
-**Critical constraint from judge layer architecture:** Retrieved lessons must be filtered by `use_as` field before being included in agent context. Only lessons with `use_as: INSTRUCTION` (provenance `OBSERVED` or `CONFIRMED`) can be treated as policy. Lessons with `use_as: EVIDENCE` (provenance `INFERRED` or `GENERATED`) can be referenced but not acted on directly. This filtering must be implemented before semantic retrieval goes live, not after.
+Established the bitemporal HBR versioning architecture and populated all regulatory HBR files with real data:
 
-Requires: Vertex AI text-embedding-004 pipeline, `semanticRetrievalV1` Cloud Function, provenance-aware query filters, n8n orchestrator context enrichment node before Gemini Code Fixer.
+- Bitemporal versioning model (valid time + decision time) for regulatory HBR files
+- HBR version lifecycle: SCHEDULED → ACTIVE → SUPERSEDED, plus REVOKED and AMENDED paths
+- Firestore `hbr_versions` collection schema at `artifacts/system_status/public/data/hbr_versions/`
+- Populated AGLC rules (v1.2, 120 rules from December 2025 Liquor Agency Handbook), CRA GST rules (v1.0, 15 rules), IILA interprovincial transport rules (v1.0, 10 rules)
+- `policy.md` + `rules.json` pair pattern for all three HBR directories
+- HBR versioning rules added to `ai_context_rules.md`
+- HBR directory structure documented in `l2laaf_full_specification.md` §8
 
 ---
 
-#### 45.3 — Regulatory Drift Automation (PENDING)
+#### 45.3 — Three-Option HITL Gate Architecture ✅ COMPLETE
 
-Compliance monitoring agent tracks AGLC, CRA, and IILA regulatory source documents. Detects drift from current HBRs. Proposes corrective updates through the Evolution Engine pipeline. HBR changes produced by this agent are tagged `provenance: GENERATED` in lessons_learned and require human confirmation before becoming instruction-grade.
+Replaced the binary HITL gate (PROMOTE TO PROD / KEEP IN DEV) with a three-option model:
+
+- **PROMOTE TO PROD** — ships entire dev stack, card lists all stacked commits
+- **SAVE IN DEV STACK** — keeps on develop, recorded in `deferred_phases` (not `abandoned_phases`)
+- **ARCHIVE CHANGES** — reverts on develop, preserves in `archive/{phase_version}` branch for cherry-picking
+
+Architecture documents updated: `cicd_pipeline_reference.md`, `ai_context_rules.md`, `l2laaf_full_specification.md`, `judge_layer_architecture.md`. Firestore tracking collections: `promoted_phases`, `deferred_phases`, `archived_phases`.
+
+**Implementation status:** Architecture documents complete. n8n orchestrator implementation in Phase 45.5.
+
+---
+
+#### 45.4 — Regulatory Drift Automation & CI/CD Hardening ✅ COMPLETE
+
+Compliance monitoring agent tracks AGLC, CRA, and IILA regulatory source documents. Detects drift from current HBRs. Proposes corrective updates through the Evolution Engine pipeline. HBR changes produced by this agent are tagged `provenance: GENERATED` in lessons_learned and require human confirmation before becoming instruction-grade. Also added patcher v8.2 block format rule and implementation guide requirement for all Assisted method deliveries.
 
 **This phase also establishes bitemporal HBR versioning** — the infrastructure that allows the system to answer "what rules applied at time T?" and to handle future-dated regulatory changes (rules announced now with an effective date in the future).
 
@@ -204,7 +223,7 @@ When a `SCHEDULED` version exists and a user is browsing or ordering with a fulf
 
 These UI elements are implemented in Phase 49 (Kaskflow UI) and Phase 53 (PROOF UI).
 
-##### Deliverables for Phase 45.3
+##### Deliverables for Phase 45.4
 
 1. `resolveHBR` Cloud Function (TypeScript, 2nd Gen)
 2. `hbr_versions` Firestore collection with initial documents for all 3 rule makers
@@ -214,17 +233,47 @@ These UI elements are implemented in Phase 49 (Kaskflow UI) and Phase 53 (PROOF 
 6. HBR archive-before-update pipeline logic in `deploy.yml` or relay.sh
 7. SuperAdmin dashboard panel: HBR version timeline, scheduled versions, drift alerts
 
-##### Known Gaps (Phase 45.3)
+##### Known Gaps (Phase 45.4)
 
-These items were identified during pre-flight audit and must be resolved before Phase 45.3 workflows are activated in production:
+These items were identified during pre-flight audit and must be resolved before Phase 45.4 workflows are activated in production:
 
 1. **Prod Cloud Function URL.** The `activateScheduledHBRs` Cloud Function URL in the HBR Version Activator n8n workflow targets `local2local-dev`. Before production activation, a parameterised version (or a separate prod workflow) must target `local2local-prod`. The prod version elevates the action to `EXTERNAL_IMPACT` per the judge layer tier table.
 2. **Google Chat webhook credentials.** The `SPACE_ID`, `KEY`, and `TOKEN` placeholders in the Google Chat notification URLs in both n8n workflows must be substituted with the L2LAAF-Orchestrator space credentials before activation.
-3. **Judge prompt update on HBR activation.** When `activateScheduledHBRs` promotes a `SCHEDULED` version to `ACTIVE`, any judge prompts that reference the superseded HBR version must be updated to reference the new version. This is required by `judge_layer_architecture.md` §Policy Versioning §Bitemporal HBR Versioning ("SCHEDULED → ACTIVE promotion workflow also triggers judge prompt updates"). Track implementation in Phase 45.5 (Claude QA as formal judge).
+3. **Judge prompt update on HBR activation.** When `activateScheduledHBRs` promotes a `SCHEDULED` version to `ACTIVE`, any judge prompts that reference the superseded HBR version must be updated to reference the new version. This is required by `judge_layer_architecture.md` §Policy Versioning §Bitemporal HBR Versioning ("SCHEDULED → ACTIVE promotion workflow also triggers judge prompt updates"). Track implementation in Phase 45.8 (Claude QA as formal judge).
 
 ---
 
-#### 45.4 — Design Intent Infrastructure (PENDING) — HORIZON 2
+#### 45.5 — Three-Option HITL Gate Implementation (PENDING)
+
+Implements the three-option HITL gate architecture (designed in Phase 45.3) in the n8n orchestrator. Also fixes two known bugs in the current orchestrator.
+
+**n8n orchestrator changes (type 2 session — requires current orchestrator JSON per Rule 2):**
+
+1. **Three-button Google Chat card:** Replace the current two-button card (PROMOTE TO PROD / KEEP IN DEV) with three buttons: PROMOTE TO PROD, SAVE IN DEV STACK, ARCHIVE CHANGES
+2. **Approval webhook routing:** Update the approval webhook handler to route three ways instead of two
+3. **SAVE IN DEV STACK path:** Write to `deferred_phases` in Firestore (replaces `abandoned_phases`), post confirmation card
+4. **ARCHIVE CHANGES path:** Create `archive/{phase_version}` branch via GitHub API, revert commit on develop with `[skip ci]`, write to `archived_phases` in Firestore, post confirmation card
+5. **Dev stack visibility on PROMOTE:** Query develop commit history since last `promoted_phases` timestamp, list all stacked commits on the PROMOTE card so the operator sees everything shipping to prod
+6. **Deferred phases update on PROMOTE:** When PROMOTE fires, update any `deferred_phases` records for commits in the stack with `promoted_in: {phase_version}`
+
+**Bug fixes (same orchestrator session):**
+
+7. **Duplicate promotion messages:** The orchestrator currently posts two identical "Promoted to PROD" cards. Identify and remove the duplicate Chat notification node.
+8. **Premature promotion confirmation:** The "Promoted to PROD" card posts immediately when the `main` ref is force-updated, before the GitHub Actions build/deploy completes. The confirmation should post only after the prod deployment succeeds — either by polling the GitHub Actions run status or by receiving a callback from the `main` branch pipeline.
+
+---
+
+#### 45.6 — Semantic Retrieval (PENDING) — HORIZON 2
+
+Agents query `lessons_learned` in `local2local-internal` via vector search before proposing changes.
+
+**Critical constraint from judge layer architecture:** Retrieved lessons must be filtered by `use_as` field before being included in agent context. Only lessons with `use_as: INSTRUCTION` (provenance `OBSERVED` or `CONFIRMED`) can be treated as policy. Lessons with `use_as: EVIDENCE` (provenance `INFERRED` or `GENERATED`) can be referenced but not acted on directly. This filtering must be implemented before semantic retrieval goes live, not after.
+
+Requires: Vertex AI text-embedding-004 pipeline, `semanticRetrievalV1` Cloud Function, provenance-aware query filters, n8n orchestrator context enrichment node before Gemini Code Fixer.
+
+---
+
+#### 45.7 — Design Intent Infrastructure (PENDING) — HORIZON 2
 
 Establishes the structured input mechanism for feeding design specifications into the autonomous coding pipeline. Includes the `ActionProposal` schema that all judged actions must produce.
 
@@ -258,7 +307,7 @@ Every autonomously generated commit appends a structured `action_proposal` field
 
 ---
 
-#### 45.5 — Claude QA Integration (PENDING) — HORIZON 2
+#### 45.8 — Claude QA Integration (PENDING) — HORIZON 2
 
 Integrates Claude Opus as the primary QA judge for `EXTERNAL_IMPACT` and `HIGH_STAKES` actions. Claude uses a different model family than Gemini, providing structural protection against correlated judgment failure.
 
@@ -282,7 +331,7 @@ Integrates Claude Opus as the primary QA judge for `EXTERNAL_IMPACT` and `HIGH_S
 
 ---
 
-#### 45.6 — Intent Dispatcher (PENDING) — HORIZON 2
+#### 45.9 — Intent Dispatcher (PENDING) — HORIZON 2
 
 New n8n workflow (`L2LAAF: Intent Dispatcher`) activated when human selects a design intent. Fetches context files from GitHub, builds Gemini coding prompt, calls Gemini to generate a `logic_payload` bundle including the structured `ActionProposal`, writes to agent bus, feeds existing orchestrator.
 
@@ -290,7 +339,7 @@ Multi-file handling: bundles with more than 3 files are automatically split into
 
 ---
 
-#### 45.7 — Autonomous Coding Loop Completion (PENDING) — HORIZON 2
+#### 45.10 — Autonomous Coding Loop Completion (PENDING) — HORIZON 2
 
 Closes the feedback loop after HITL promotion. On PROMOTE:
 
@@ -316,7 +365,7 @@ On ARCHIVE CHANGES: intent marked `ARCHIVED`, commit preserved in `archive/{phas
 
 ---
 
-#### 45.8 — Judge Ops Dashboard (PENDING) — HORIZON 2
+#### 45.11 — Judge Ops Dashboard (PENDING) — HORIZON 2
 
 SuperAdmin dashboard panel for monitoring judge performance. Tracks metrics defined in `documents/judge_layer_architecture.md`: escalation rate, human override rate, revision success rate, BLOCK rate, latency per action class.
 
@@ -324,7 +373,7 @@ Alerts when metrics exceed thresholds — escalation rate > 20% signals criteria
 
 ---
 
-#### 45.9 — Action-Level Judge Expansion (PENDING) — HORIZON 2
+#### 45.12 — Action-Level Judge Expansion (PENDING) — HORIZON 2
 
 Extends judge layer to the next action boundaries beyond GitHub commit:
 
@@ -341,7 +390,7 @@ Scraped data entering `unclaimed_listings/` evaluated by a Quality + Safety Judg
 
 ### Phase 46: Payments Infrastructure (Stripe Connect) — HORIZON 2
 
-Backend-first. Stripe API boundary judge (Phase 45.9) must be deployed before Stripe API calls are made in production.
+Backend-first. Stripe API boundary judge (Phase 45.12) must be deployed before Stripe API calls are made in production.
 
 **46.1** Platform account + `stripeWebhookHandler` Cloud Function + Firestore schema.
 **46.2** Vendor onboarding — `connectStripeAccount` callable, Stripe Express onboarding, `STRIPE_ACCOUNT_CREATED` agent bus event.
@@ -363,7 +412,7 @@ Framework phase producing reusable infrastructure for all three marketplaces.
 
 ### Phase 48: Kaskflow Listing Population — HORIZON 2
 
-Scraped data ingestion boundary judge (Phase 45.9) must be deployed before scraped data enters the system.
+Scraped data ingestion boundary judge (Phase 45.12) must be deployed before scraped data enters the system.
 
 **Data sources:** AGLC liquor store registry, Alberta business registry, Google Places API, Yellow Pages.
 **48.1** Liquor store scraping — AGLC registry, licence number as verified field.
@@ -417,7 +466,7 @@ SKU-level AGLC integration. **52.1** Product catalogue (weekly refresh). **52.2*
 
 ### Phase 55+: Advanced Autonomy — HORIZON 3
 
-- System proposes its own design intents (Phase 45.8 provides the infrastructure)
+- System proposes its own design intents (Phase 45.7 provides the infrastructure)
 - Autonomous pricing from Evolution Engine learning
 - Fraud detection agent
 - Cross-tenant unified seller profile
@@ -431,10 +480,10 @@ SKU-level AGLC integration. **52.1** Product catalogue (weekly refresh). **52.2*
 
 | Boundary | Action class | Phase | Judge | Status |
 |---|---|---|---|---|
-| GitHub commit | EXTERNAL_IMPACT | 45.1 | Gemini Validator + Claude QA | 45.1 partial, 45.5 full |
-| Stripe API calls | HIGH_STAKES | 45.9 / 46 | Payment Judge | Planned |
-| Production Firestore writes | EXTERNAL_IMPACT | 45.9 / 46-47 | Data Judge | Planned |
-| Scraped data ingestion | REVERSIBLE_WRITE | 45.9 / 48 | Quality + Safety Judge | Planned |
+| GitHub commit | EXTERNAL_IMPACT | 45.1 | Gemini Validator + Claude QA | 45.1 partial, 45.8 full |
+| Stripe API calls | HIGH_STAKES | 45.12 / 46 | Payment Judge | Planned |
+| Production Firestore writes | EXTERNAL_IMPACT | 45.12 / 46-47 | Data Judge | Planned |
+| Scraped data ingestion | REVERSIBLE_WRITE | 45.12 / 48 | Quality + Safety Judge | Planned |
 | Claimed listing merge | EXTERNAL_IMPACT | 47-48 | Data Judge | Planned |
 | Agent-to-agent handoffs | Varies | 55+ | Handoff Judge | Future |
 

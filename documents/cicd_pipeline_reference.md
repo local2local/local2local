@@ -1,7 +1,7 @@
 # CI/CD Pipeline Reference
 
-**Version:** 45.1.x
-**Last updated:** 2026-05-14
+**Version:** 45.4.x
+**Last updated:** 2026-05-18
 **Source of truth:** `.github/workflows/deploy.yml`, `n8n_workflows/`
 
 ---
@@ -14,9 +14,10 @@ The L2LAAF CI/CD pipeline is a fully automated deploy-to-dev, human-approve, pro
 Developer pushes to develop
     → GitHub Actions: Build → Deploy to dev → Notify n8n
     → n8n: Evaluate system status → Classify impact → Post HITL card to Google Chat
-    → Operator: PROMOTE TO PROD or KEEP IN DEV
+    → Operator: PROMOTE TO PROD, SAVE IN DEV STACK, or ARCHIVE CHANGES
         → PROMOTE: Force-update main → Promotion commit → Deploy to prod → Record in Firestore
-        → KEEP IN DEV: Record abandoned phase in Firestore
+        → SAVE IN DEV STACK: Record in deferred_phases in Firestore
+        → ARCHIVE: Create archive branch → Revert on develop → Record in archived_phases
 ```
 
 ---

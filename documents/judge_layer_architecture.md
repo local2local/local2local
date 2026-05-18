@@ -1,6 +1,6 @@
 # L2LAAF Judge Layer Architecture
 
-**Status:** Active design — implemented at Phase 45.1, expanding through Phase 45.9
+**Status:** Active design — implemented at Phase 45.1, expanding through Phase 45.12
 **Last updated:** 2026-05-14
 **Reference:** Nate's Substack, "You gave your AI agent real tools. Here's the 4-part control layer it's missing" (May 2026)
 
@@ -26,7 +26,7 @@ Every judged action boundary in L2LAAF uses a structured `ActionProposal` object
 interface ActionProposal {
   action_id: string;             // Unique ID for this proposal
   action_type: ActionClass;      // READ_ONLY | REVERSIBLE_WRITE | EXTERNAL_IMPACT | HIGH_STAKES
-  intent_id?: string;            // Design intent this action satisfies (Phase 45.4)
+  intent_id?: string;            // Design intent this action satisfies (Phase 45.7)
   
   // What the actor wants to do
   description: string;           // Plain English statement of the action
@@ -146,7 +146,7 @@ Phase 48. Scraped data entering `unclaimed_listings/` is a REVERSIBLE_WRITE. Scr
 
 ## Memory Provenance
 
-The paper's most critical point for L2LAAF: **agent-generated lessons must be evidence, not instruction.** Once the Lessons Learned vault is queried by semantic retrieval (Phase 45.2), retrieved lessons can silently become future instructions for agents. Without provenance, the system cannot distinguish between what was confirmed by a human and what was inferred by an agent.
+The paper's most critical point for L2LAAF: **agent-generated lessons must be evidence, not instruction.** Once the Lessons Learned vault is queried by semantic retrieval (Phase 45.6), retrieved lessons can silently become future instructions for agents. Without provenance, the system cannot distinguish between what was confirmed by a human and what was inferred by an agent.
 
 ### Provenance labels for `lessons_learned` entries
 
@@ -180,7 +180,7 @@ Every document written to `local2local-internal/lessons_learned/` carries a `pro
 }
 ```
 
-When Phase 45.2 (Semantic Retrieval) queries `lessons_learned`, it filters by `use_as: INSTRUCTION` for lessons it can act on directly, and `use_as: EVIDENCE` for lessons it can reference but must not treat as policy.
+When Phase 45.6 (Semantic Retrieval) queries `lessons_learned`, it filters by `use_as: INSTRUCTION` for lessons it can act on directly, and `use_as: EVIDENCE` for lessons it can reference but must not treat as policy.
 
 ---
 
@@ -215,7 +215,7 @@ The `human_outcome` field records the operator's HITL decision: `PROMOTE_TO_PROD
 
 ## Judge Performance Metrics
 
-Track these in the SuperAdmin dashboard (Phase 45.4 dashboard panel):
+Track these in the SuperAdmin dashboard (Phase 45.11 dashboard panel):
 
 | Metric | Target | Action if exceeded |
 |---|---|---|
@@ -250,7 +250,7 @@ If the action complies with both, return ALLOW..."
 
 When an HBR version increments, the affected judge prompts are updated in the same commit. The `judge_events` record captures `hbr_versions_at_decision` so decisions can be audited against the policy that was in effect at the time.
 
-### Bitemporal HBR Versioning (Phase 45.3)
+### Bitemporal HBR Versioning (Phase 45.4)
 
 Regulatory HBR files (tax, alcohol, trade policy) require a stronger versioning model than code-level HBRs because:
 
@@ -275,9 +275,9 @@ Every regulatory HBR version carries a `status` field:
 
 **Judge integration:** When a judge evaluates an `ActionProposal` involving a regulated domain (tax calculation, alcohol compliance, delivery eligibility), it must resolve the applicable HBR version using the transaction's target date, not the current system time. The `hbr_versions_at_decision` field in `judge_events` records the resolved version IDs, linking the judgment to the exact policy state that was in effect.
 
-**Drift-triggered judge prompt updates:** When the Regulatory Drift Automation agent (Phase 45.3) proposes a new HBR version, the judge prompts that reference that HBR must be updated in the same commit. The `SCHEDULED` → `ACTIVE` promotion workflow (daily cron) also triggers judge prompt updates if the newly active version changes any criteria the judge evaluates.
+**Drift-triggered judge prompt updates:** When the Regulatory Drift Automation agent (Phase 45.4) proposes a new HBR version, the judge prompts that reference that HBR must be updated in the same commit. The `SCHEDULED` → `ACTIVE` promotion workflow (daily cron) also triggers judge prompt updates if the newly active version changes any criteria the judge evaluates.
 
-See `project_plan.md` Phase 45.3 for the full Firestore schema, version lifecycle, and drift agent specification.
+See `project_plan.md` Phase 45.4 for the full Firestore schema, version lifecycle, and drift agent specification.
 
 ---
 
@@ -285,15 +285,15 @@ See `project_plan.md` Phase 45.3 for the full Firestore schema, version lifecycl
 
 The paper's practical guidance: one workflow, one real action boundary, one proposal format, one judge, one eval set, one write-back loop.
 
-L2LAAF has already done this. The GitHub commit boundary has a judge (Phase 45.1), a four-outcome routing structure (planned Phase 45.5), and a write-back loop (planned Phase 45.7).
+L2LAAF has already done this. The GitHub commit boundary has a judge (Phase 45.1), a four-outcome routing structure (planned Phase 45.8), and a write-back loop (planned Phase 45.10).
 
 **The expansion sequence:**
 
 1. ✅ GitHub commit boundary (Phase 45.1) — EXTERNAL_IMPACT, Gemini + Claude judges
-2. 🔲 Claude QA as formal judge with four outcomes (Phase 45.5)
-3. 🔲 Structured ActionProposal in agent bus payload (Phase 45.4 update)
-4. 🔲 Memory provenance for lessons_learned (Phase 45.7 update)
-5. 🔲 Judge events audit collection (Phase 45.9)
+2. 🔲 Claude QA as formal judge with four outcomes (Phase 45.8)
+3. 🔲 Structured ActionProposal in agent bus payload (Phase 45.7 update)
+4. 🔲 Memory provenance for lessons_learned (Phase 45.10 update)
+5. 🔲 Judge events audit collection (Phase 45.12)
 6. 🔲 Stripe API boundary (Phase 46) — HIGH_STAKES, payment judge
 7. 🔲 Production Firestore write boundary (Phase 46-47) — EXTERNAL_IMPACT, data judge
 8. 🔲 Scraped data ingestion boundary (Phase 48) — REVERSIBLE_WRITE → EXTERNAL_IMPACT, quality + safety judge
