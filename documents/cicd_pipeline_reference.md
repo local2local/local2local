@@ -238,7 +238,7 @@ Workflow JSON files are stored in `n8n_workflows/` and deployed automatically on
 | `pubspec.yaml` | Single source of truth for version |
 | `.l2laaf/state.json` | Operational state (no version) |
 | `scripts/relay.sh` | Entry point for Assisted method (v6.4) |
-| `scripts/patcher.js` | Extracts L2LAAF_BLOCK sections from payload |
+| `scripts/patcher.js` | Extracts L2LAAF_BLOCK sections from payload (v8.2 — inline format only) |
 | `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json` | DEV orchestrator (45 base nodes + 6 Phase 45 nodes) |
 | `n8n_workflows/l2laaf_autonomous_orchestrator.main.json` | PROD orchestrator (same structure) |
 

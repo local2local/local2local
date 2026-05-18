@@ -214,6 +214,14 @@ These UI elements are implemented in Phase 49 (Kaskflow UI) and Phase 53 (PROOF 
 6. HBR archive-before-update pipeline logic in `deploy.yml` or relay.sh
 7. SuperAdmin dashboard panel: HBR version timeline, scheduled versions, drift alerts
 
+##### Known Gaps (Phase 45.3)
+
+These items were identified during pre-flight audit and must be resolved before Phase 45.3 workflows are activated in production:
+
+1. **Prod Cloud Function URL.** The `activateScheduledHBRs` Cloud Function URL in the HBR Version Activator n8n workflow targets `local2local-dev`. Before production activation, a parameterised version (or a separate prod workflow) must target `local2local-prod`. The prod version elevates the action to `EXTERNAL_IMPACT` per the judge layer tier table.
+2. **Google Chat webhook credentials.** The `SPACE_ID`, `KEY`, and `TOKEN` placeholders in the Google Chat notification URLs in both n8n workflows must be substituted with the L2LAAF-Orchestrator space credentials before activation.
+3. **Judge prompt update on HBR activation.** When `activateScheduledHBRs` promotes a `SCHEDULED` version to `ACTIVE`, any judge prompts that reference the superseded HBR version must be updated to reference the new version. This is required by `judge_layer_architecture.md` §Policy Versioning §Bitemporal HBR Versioning ("SCHEDULED → ACTIVE promotion workflow also triggers judge prompt updates"). Track implementation in Phase 45.5 (Claude QA as formal judge).
+
 ---
 
 #### 45.4 — Design Intent Infrastructure (PENDING) — HORIZON 2
