@@ -294,14 +294,16 @@ Closes the feedback loop after HITL promotion. On PROMOTE:
    - System-generated pattern recognition: `provenance: GENERATED`, `use_as: EVIDENCE`
 4. Next `PENDING` intent surfaced as suggestion in Final Alert card
 
-On KEEP IN DEV: intent marked `ABANDONED`, judge event recorded, lesson written as `provenance: GENERATED`, `use_as: EVIDENCE`.
+On SAVE IN DEV STACK: intent marked `DEFERRED`, judge event recorded with `human_outcome: SAVE_IN_DEV_STACK`, lesson written as `provenance: GENERATED`, `use_as: EVIDENCE`. The deferred commit remains on `develop` and is included in the next PROMOTE.
+
+On ARCHIVE CHANGES: intent marked `ARCHIVED`, commit preserved in `archive/{phase_version}` branch, commit reverted on `develop` with `[skip ci]`, judge event recorded with `human_outcome: ARCHIVE_CHANGES`. Cherry-picking from the archive branch later enters the pipeline as a fresh commit.
 
 **Human's role in the completed loop:**
 1. Write or review design intent documents
 2. Select next intent
 3. Watch pipeline — Gemini codes → Gemini validates → Claude judges → HITL card
 4. Read card: what was built, QA outcome (ALLOW/REVISE count/ESCALATE), impact tier, validator critique
-5. PROMOTE, KEEP IN DEV, REQUEST REVISION, or ESCALATE
+5. PROMOTE TO PROD, SAVE IN DEV STACK, ARCHIVE CHANGES, REQUEST REVISION, or ESCALATE
 6. System records, learns, suggests next intent
 
 ---

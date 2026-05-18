@@ -59,9 +59,11 @@ All commits follow this format:
 
 The deploy job is skipped when:
 
-- The commit message contains `[skip ci]` — used by the auto-version bump commit
+- The commit message contains `[skip ci]` — used by auto-version bump commits and archive revert commits
 - The commit message starts with `Merge branch` — merge commits are never deployed
 - The actor is `github-actions[bot]`
+
+Never remove these filters from `deploy.yml`.
 
 ---
 
@@ -139,21 +141,44 @@ Impact Switch
 | Build Details | Full versioned commit message |
 | Throttle Evaluation | Output of Throttling Evaluator node |
 | Impact Assessment | `impact_level` + optional `validator_critique` from Phase 45 consensus nodes |
+| Dev Stack | List of commits on `develop` since the last promotion (commit SHA, message, originator) — shown only when stack depth > 1 |
 
-### PROMOTE TO PROD
+### Three-Option HITL Decision
 
-1. n8n gets the current `develop` HEAD SHA via GitHub API
-2. Force-updates `main` ref to point to that SHA
-3. Creates a promotion commit on `main` — triggers GitHub Actions on `main`
-4. GitHub Actions on `main`: Build → Deploy to `local2local-prod` → Deploy PROD n8n workflow
-5. n8n writes a `promoted_phases` record to Firestore
-6. Version is bumped in `pubspec.yaml` on `develop` via GitHub Contents API
-7. Final Alert card posted to Google Chat
+The deployment card presents three buttons. Each captures explicit operator intent.
 
-### KEEP IN DEV
+#### PROMOTE TO PROD
 
-1. n8n writes an `abandoned_phases` record to Firestore
-2. Decision card and Final Alert plain text posted to Google Chat
+Promotes the **entire dev stack** (all commits on `develop` since the last promotion) to production. The card lists all stacked commits so the operator sees everything that will ship — not just the latest commit.
+
+1. n8n queries `develop` commit history since the last `promoted_phases` timestamp to build the stack list
+2. n8n gets the current `develop` HEAD SHA via GitHub API
+3. Force-updates `main` ref to point to that SHA
+4. Creates a promotion commit on `main` — triggers GitHub Actions on `main`
+5. GitHub Actions on `main`: Build → Deploy to `local2local-prod` → Deploy PROD n8n workflow
+6. n8n writes a `promoted_phases` record to Firestore (includes the full list of commit SHAs promoted)
+7. Any `deferred_phases` records for commits in this stack are updated with `promoted_in: {phase_version}`
+8. Version is bumped in `pubspec.yaml` on `develop` via GitHub Contents API
+9. Final Alert card posted to Google Chat — lists all commits promoted
+
+#### SAVE IN DEV STACK
+
+Acknowledges the deployment and keeps it on `develop` for inclusion in a future promotion. The change remains on the `develop` branch and will be included the next time PROMOTE TO PROD is selected.
+
+1. n8n writes a `deferred_phases` record to Firestore with `status: STACKED`
+2. Decision card posted to Google Chat confirming the change is stacked
+3. The dev stack counter increments — the next deployment card will show the updated stack depth
+
+#### ARCHIVE CHANGES
+
+Removes the change from `develop` but preserves it in a named archive branch for potential cherry-picking later. Use this when a change is not ready for prod and should not be carried forward in the dev stack.
+
+1. n8n creates a branch `archive/{phase_version}` from the commit SHA being archived via GitHub API
+2. n8n reverts the commit on `develop` via GitHub Contents API with message: `[AUTO] CHORE(archive): Revert {phase_version} — archived [skip ci]`
+3. The `[skip ci]` tag prevents the revert from triggering another pipeline run
+4. n8n writes an `archived_phases` record to Firestore with the archive branch name, original commit SHA, original commit message, and timestamp
+5. Decision card posted to Google Chat confirming the archive branch name and revert
+6. To recover an archived change later: `git cherry-pick <SHA>` from the archive branch onto `develop` — the cherry-pick enters the pipeline as a fresh commit with a fresh HITL review
 
 ---
 
@@ -164,8 +189,17 @@ All tracking records are written to `local2local-dev`.
 ### Promoted Phases
 `artifacts/system_status/public/data/promoted_phases/{auto-id}`
 
-### Abandoned Phases
-`artifacts/system_status/public/data/abandoned_phases/{auto-id}`
+Records which commits were promoted and when. Includes the full list of commit SHAs in the dev stack at promotion time, so it's clear exactly what shipped to prod in each promotion.
+
+### Deferred Phases
+`artifacts/system_status/public/data/deferred_phases/{auto-id}`
+
+Records commits where the operator chose SAVE IN DEV STACK. Each record carries `status: STACKED` initially. When the commit is eventually included in a PROMOTE, the record is updated with `promoted_in: {phase_version}` and `status: PROMOTED`. This creates an audit trail showing that a deferred commit was explicitly reviewed at deferral time and again at promotion time.
+
+### Archived Phases
+`artifacts/system_status/public/data/archived_phases/{auto-id}`
+
+Records commits where the operator chose ARCHIVE CHANGES. Includes the archive branch name (`archive/{phase_version}`), the original commit SHA, and the original commit message. If the archive is later cherry-picked back onto `develop`, a new commit enters the pipeline with its own HITL review — the archived record is not modified.
 
 ### Version
 `artifacts/system_status/public/data/version`

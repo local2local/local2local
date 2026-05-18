@@ -39,7 +39,7 @@ Every agent decision is grounded in three reference layers:
 - **Security:** Zero-Trust Information Barrier scrubs PII using Regex/NER before dispatching to workers
 
 ### 4.2 Human-in-the-Loop (HITL) Gate
-All agent-proposed code changes pass through a mandatory human approval step before reaching production. The HITL gate is implemented in n8n and surfaces as a Google Chat card with `PROMOTE TO PROD` and `KEEP IN DEV` buttons. See `documents/cicd_pipeline_reference.md` for the full gate flow.
+All agent-proposed code changes pass through a mandatory human approval step before reaching production. The HITL gate is implemented in n8n and surfaces as a Google Chat card with three buttons: `PROMOTE TO PROD` (ship the entire dev stack to production), `SAVE IN DEV STACK` (keep on develop for a future promotion), and `ARCHIVE CHANGES` (remove from develop and preserve in an archive branch for cherry-picking later). See `documents/cicd_pipeline_reference.md` for the full gate flow.
 
 ### 4.3 Logic Collision Detection (LCD)
 Graph-based dependency mapping prevents Agent A's changes from breaking Agent B's calculations or creating circular instructional loops.

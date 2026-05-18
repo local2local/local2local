@@ -46,11 +46,23 @@ This document contains hard-won rules that AI assistants must follow when workin
 ## CI/CD: Pipeline loop prevention
 
 The pipeline skips runs when:
-- Commit message contains `[skip ci]` — used by auto-version bump commits
+- Commit message contains `[skip ci]` — used by auto-version bump commits and archive revert commits
 - Commit message starts with `Merge branch` — merge commits are never deployed
 - Actor is `github-actions[bot]`
 
 Never remove these filters from `deploy.yml`.
+
+---
+
+## CI/CD: HITL gate decisions
+
+**Rule:** The HITL gate has three options. Each must be used for its intended purpose:
+
+- **PROMOTE TO PROD** — ship the entire dev stack to production. All commits on `develop` since the last promotion go to `main`.
+- **SAVE IN DEV STACK** — keep the change on `develop` for inclusion in a future promotion. Recorded in `deferred_phases`, not `abandoned_phases`.
+- **ARCHIVE CHANGES** — remove the change from `develop` and preserve it in a branch `archive/{phase_version}`. The revert commit on `develop` must use `[skip ci]` to prevent a pipeline cascade. To recover: cherry-pick from the archive branch.
+
+The archive revert commit format is: `[AUTO] CHORE(archive): Revert {phase_version} — archived [skip ci]`
 
 ---
 

@@ -124,13 +124,13 @@ Design Intent → Gemini Actor generates ActionProposal + code bundle
         → Claude QA Agent (Claude Opus) — policy + quality + correlated-failure check
         → Extract QA Result — ALLOW / BLOCK / REVISE / ESCALATE
         → QA Gate (If node)
-            ALLOW / ESCALATE → Google Chat HITL card (4 buttons)
+            ALLOW / ESCALATE → Google Chat HITL card (3 buttons: PROMOTE / SAVE IN DEV STACK / ARCHIVE)
             REVISE → Gemini Correction Pass (up to 3 retries)
             BLOCK → Block Alert → Human notification
     
     REVERSIBLE_WRITE:
         → Lightweight audit log only
-        → Google Chat HITL card (standard)
+        → Google Chat HITL card (3 buttons: PROMOTE / SAVE IN DEV STACK / ARCHIVE)
 ```
 
 ### Planned boundary: Stripe API (HIGH_STAKES)
@@ -208,6 +208,8 @@ Every judgment decision is stored in `artifacts/system_status/public/data/judge_
 ```
 
 This creates the operational data needed to improve the judge over time: false allow rate, false block rate, revision rate, escalation rate, human override rate by action class and judge.
+
+The `human_outcome` field records the operator's HITL decision: `PROMOTE_TO_PROD`, `SAVE_IN_DEV_STACK`, or `ARCHIVE_CHANGES`. This replaces the earlier binary `PROMOTE_TO_PROD` / `KEEP_IN_DEV` model.
 
 ---
 
