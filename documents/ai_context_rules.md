@@ -116,6 +116,43 @@ This old multiline comment-wrapped format was used before patcher v8.2 and will 
 
 ---
 
+## Assisted Method: Implementation Guide
+
+**Context:** Every Assisted method delivery from Gemini
+
+**Rule:** Every Assisted method delivery must include an `implementation_guide.md` file alongside the `logic_payload.js`. This guide is the test plan — nothing is promoted to prod until every test step passes. Gemini must generate this file as part of the delivery, not as an afterthought.
+
+**Required sections:**
+
+### 1. Pre-Test Setup
+Step-by-step instructions to prepare the environment before testing. Includes:
+- Firestore seed documents with **full document path** and **complete JSON content**
+- Environment variables or secrets that must be set
+- n8n workflow activation steps (webhook URLs, credential substitutions)
+- Any manual configuration (e.g. Google Chat space webhook URLs)
+
+### 2. Test Steps
+Numbered test cases, each with:
+- **Action:** What the tester does (e.g. "Call the `resolveHBR` Cloud Function with `ruleMaker: 'AGLC'` and `targetDate: '2026-05-18'`")
+- **Method:** How to execute (e.g. Firebase console, `curl` command, n8n manual trigger, Firestore console query)
+- **Expected result:** The specific output, Firestore document state, or Chat message that confirms success
+
+### 3. Rollback Steps
+How to undo the deployment if testing fails. Includes:
+- Firestore documents to delete
+- n8n workflows to deactivate
+- Git revert command if needed
+
+**Firestore test data format (same as ai_context_rules standard):**
+```
+PATH: artifacts/system_status/public/data/hbr_versions/HBR-AGLC-001-v1.2
+JSON: { "version_id": "HBR-AGLC-001-v1.2", "status": "ACTIVE", ... }
+```
+
+**Why:** Phase 45.3 was promoted to prod without testing because no structured test plan existed. This rule ensures every delivery includes a verifiable test plan that the operator can execute before approving promotion at the HITL gate.
+
+---
+
 ## n8n: NEVER replace the orchestrator
 
 **Context:** Any change to `n8n_workflows/l2laaf_autonomous_orchestrator.develop.json` or `l2laaf_autonomous_orchestrator.main.json`
