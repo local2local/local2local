@@ -1,189 +1,3042 @@
-L2LAAF_BLOCK_START(COMMIT_MSG:Commit Message:COMMIT_MSG)
-[ASSISTED] FEAT(hbr): Add Bitemporal HBR Types, ResolveHBR, And ActivateScheduledHBRs [BUMP: MINOR]
+L2LAAF_BLOCK_START(FILE:Implementation Guide:implementation_guide.md)
+# Phase 45.5 Three-Option HITL Gate Implementation Guide
+
+## Pre-Test Setup
+Seed the `deferred_phases` collection in Firestore (`local2local-dev`) with a mock document to simulate a stacked proposal waiting for promotion.
+- **Path**: `artifacts/system_status/public/data/deferred_phases/mock_deferred`
+- **JSON Payload**:
+  ```json
+  {
+    "commit_sha": "mock_sha_123",
+    "phase": "0.0.0",
+    "status": "STACKED"
+  }
+  ```
+
+## Test Step 1: PROMOTE TO PROD
+- **Action**: Execute the promote path.
+- **Method**: In Google Chat, click the "PROMOTE TO PROD" button on the HITL card, or trigger the Approval Listener test webhook manually via shell:
+  ```
+  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20promote&bump_type=MINOR&hbrId="
+  ```
+- **Expected Result**:
+  1. `Calculate New Version` outputs the bumped version (e.g. 45.5.0).
+  2. `promoted_phases` record written to Firestore with `dev_stack` array populated.
+  3. CI/CD polling loop (`Wait 10s` → `Poll Main GH Actions` → `Is Run Complete`) loops until the GitHub Action completes.
+  4. `Final Alert` posts the "🚀 Promoted to PROD" confirmation card in Google Chat only after the GH Actions run concludes.
+
+## Test Step 2: SAVE IN DEV STACK
+- **Action**: Execute the save/defer path.
+- **Method**: In Google Chat, click the "SAVE IN DEV STACK" button, or trigger via shell:
+  ```
+  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=save&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20save&bump_type=MINOR&hbrId="
+  ```
+- **Expected Result**:
+  1. Execution routes down the `SAVE` branch of `HITL Decision Switch`.
+  2. New record created in `deferred_phases` at `artifacts/system_status/public/data/deferred_phases/{auto-id}` with `status: "STACKED"`.
+  3. Save Confirmation card posts to Google Chat with phase and commit SHA.
+
+## Test Step 3: ARCHIVE CHANGES
+- **Action**: Execute the archive/revert path.
+- **Method**: In Google Chat, click the "ARCHIVE CHANGES" button, or trigger via shell:
+  ```
+  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=archive&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20archive&bump_type=MINOR&hbrId="
+  ```
+- **Expected Result**:
+  1. Branch `archive/45.4.2` created on GitHub at the commit SHA.
+  2. Revert commit pushed to `develop` with message containing `[skip ci]` — confirm no new pipeline run triggers.
+  3. New record created in `archived_phases` with `archive_branch: "archive/45.4.2"` and `status: "ARCHIVED"`.
+  4. Archive Confirmation card posts to Google Chat.
+
+## Test Step 4: PROMOTE with Stacked Commits
+- **Action**: Promote after multiple commits exist on `develop` ahead of `main`.
+- **Method**:
+  1. Ensure at least two commits exist on `develop` ahead of `main` (push a trivial change if needed).
+  2. Trigger approval via shell using the SHA of the latest commit:
+     ```
+     curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=<latest_sha>&phase=45.4.2&method=manual&summary=Test%20stacked&bump_type=MINOR&hbrId="
+     ```
+- **Expected Result**:
+  1. Deployment card in Google Chat lists the Dev Stack Commits section (only visible when stack depth > 1).
+  2. The pre-seeded `mock_deferred` document in `deferred_phases` (from Pre-Test Setup) is patched to `status: "PROMOTED"` with `promoted_in` set to the new version.
+
+## Rollback Steps
+If any test case fails, perform the following before retrying:
+1. Delete any created Firestore test documents in `deferred_phases`, `archived_phases`, and `promoted_phases` via the Firestore console.
+2. Delete any `archive/*` branches created on GitHub during testing.
+3. If `main` was force-updated during a PROMOTE test, reset it to the prior SHA via:
+   ```
+   git push origin <prior_sha>:refs/heads/main --force
+   ```
+4. Revert `pubspec.yaml` on `develop` to version `45.4.2` if the version bump was written.
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(FILE:HBR Types:functions/src/logic/hbr/types.ts)
-export type HBRStatus = 'ACTIVE' | 'SCHEDULED' | 'SUPERSEDED' | 'REVOKED' | 'AMENDED';
-
-export interface HBRVersion {
-  version_id: string;
-  hbr_path: string;
-  rule_maker: string;
-  region_scope: string;
-  category: string;
-  version: string;
-  status: HBRStatus;
-  valid_from: string;
-  valid_until: string | null;
-  decision_recorded_at: string;
-  decision_source?: string;
-  decision_source_url?: string;
-  supersedes_version: string | null;
-  superseded_by_version: string | null;
-  rules_snapshot: Record<string, any>;
-  change_summary: string;
-  source_commit: string;
-  source_phase: string;
-  provenance: 'OBSERVED' | 'CONFIRMED' | 'INFERRED' | 'GENERATED';
-  confirmed_by?: string;
-  created_at: string;
-  amendment_history: any[];
-}
-L2LAAF_BLOCK_END
-
-L2LAAF_BLOCK_START(FILE:Resolve HBR:functions/src/logic/resolveHBR.ts)
-import { getFirestore } from "firebase-admin/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { HBRVersion } from "./hbr/types";
-
-/**
- * Resolves the applicable HBR version for a given rule maker and target date.
- * Enforces bitemporal precedence: SCHEDULED wins if its valid_from <= targetDate.
- */
-export async function resolveHBRInternal(ruleMaker: string, targetDate: Date): Promise<HBRVersion | null> {
-  const db = getFirestore();
-  const snapshot = await db.collection("artifacts/system_status/public/data/hbr_versions")
-    .where("rule_maker", "==", ruleMaker)
-    .where("status", "in", ["ACTIVE", "SCHEDULED"])
-    .get();
-
-  let activeVersion: HBRVersion | null = null;
-  let scheduledVersion: HBRVersion | null = null;
-
-  snapshot.forEach((doc) => {
-    const data = doc.data() as HBRVersion;
-    const validFrom = new Date(data.valid_from);
-    const validUntil = data.valid_until ? new Date(data.valid_until) : null;
-
-    if (validFrom <= targetDate && (!validUntil || validUntil > targetDate)) {
-      if (data.status === "ACTIVE") {
-        activeVersion = data;
-      } else if (data.status === "SCHEDULED") {
-        // In the event of multiple scheduled versions (e.g. cascading future changes),
-        // we take the one with the latest valid_from that is still <= targetDate.
-        if (!scheduledVersion || new Date(data.valid_from) > new Date(scheduledVersion.valid_from)) {
-          scheduledVersion = data;
+L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomous_orchestrator.develop.json)
+{
+  "name": "L2LAAF: Autonomous Orchestrator - DEV",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.5\n**Feature:** Phase 45.5 Three-Option HITL Gate & Polling",
+        "height": 150,
+        "width": 926,
+        "color": 6
+      },
+      "id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        96,
+        -272
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e45a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        112,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_error_gate\", \"card\": { \"header\": { \"title\": \"\ud83d\udea8 n8n Workflow Error\", \"subtitle\": \"L2LAAF Autonomous Orchestrator\" }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Failing Node:</b><br>\" + $json.execution.lastNodeExecuted + \"<br><br><b>Error Message:</b><br>\" + $json.execution.error.message + \"<br><br><b>Error Description:</b><br>\" + ($json.execution.error.description || \\\"none\\\") + \"<br><br><b>Cause:</b><br>\" + (JSON.stringify($json.execution.error.cause || {}) || \\\"none\\\") } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-a5b6-4870-981a-b7c6errornode",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        336,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b8f49bcc-cb60-4c00-9f8c-ae008be7b5b3",
+        "options": {}
+      },
+      "id": "f8a44b1c-9e62-4299-90b5-4db9d51e7c02",
+      "name": "MCP Code Payload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -192
+      ],
+      "webhookId": "b8f49bcc-cb60-4c00-9f8c-ae008be7b5b3"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": "local2local",
+        "repository": "local2local",
+        "filePath": ".l2laaf/state.json",
+        "additionalParameters": {}
+      },
+      "id": "c7e2b1fa-8a56-4f40-811a-6d0e9a7e6b03",
+      "name": "Fetch Main State",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        336,
+        -192
+      ],
+      "webhookId": "34e5b124-b6ea-472c-83c0-244f09fefe5d",
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "return (async () => {\n  const webhookNode = $(\"MCP Code Payload\").first();\n  const meta = webhookNode.json?.body || webhookNode.json || {};\n\n  if (meta.commits || meta.pusher || meta.probe) return [];\n\n  const currentVersion = meta.incoming_phase || \"0.0.0\";\n  const bumpType = (meta.bump_type || 'PATCH').toUpperCase();\n\n  const stateNode = $(\"Fetch Main State\").first();\n  let stateRaw = null;\n  if (stateNode.json && typeof stateNode.json.content === 'string') { stateRaw = stateNode.json.content; }\n  if (!stateRaw && stateNode.binary && stateNode.binary.data) {\n    const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n    stateRaw = buffer.toString('utf8');\n  }\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n\n  let updatedState = { ...state };\n  delete updatedState.current_phase;\n\n  return [{ json: { updated_state: updatedState, meta: { ...meta, current_version: currentVersion, bump_type: bumpType } } }];\n})();"
+      },
+      "id": "b25c3891-76a0-4b21-8f5d-1c8a5f3e9b04",
+      "name": "State Manager",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($json.meta.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/system_status/public/data/telemetry\" }}",
+        "options": {}
+      },
+      "id": "2bc59b88-1250-4824-b152-dc72de6f3d1b",
+      "name": "Fetch System Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        784,
+        -192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const stateManager = $(\"State Manager\").first().json;\nconst systemStatusData = $(\"Fetch System Status\").first().json || {};\nlet currentStatus = \"GREEN\";\nif (systemStatusData.documents && Array.isArray(systemStatusData.documents)) {\n  const currentDoc = systemStatusData.documents.find(doc => doc.name.endsWith('telemetry/current'));\n  if (currentDoc && currentDoc.fields && currentDoc.fields.status) {\n    currentStatus = currentDoc.fields.status.stringValue || \"GREEN\";\n  }\n}\nconst summary = stateManager.meta?.summary || \"\";\nconst isBugFix = summary.toLowerCase().startsWith(\"fix\") || summary.toLowerCase().startsWith(\"hotfix\") || summary.toLowerCase().includes(\"fix(\");\nconst intent = isBugFix ? \"BUG_FIX\" : \"FUNCTIONALITY\";\nlet throttleDecision = \"PROCEED\";\nlet throttleMessage = \"Proceeding with deployment.\";\nif (currentStatus === \"RED\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"BLOCKED\";\n    throttleMessage = \"System is in RED state (Fatal Errors). Feature deployments are BLOCKED. Only Bug Fixes are permitted.\";\n  } else {\n    throttleMessage = \"System is in RED state. Bug Fix prioritized and proceeding.\";\n  }\n} else if (currentStatus === \"YELLOW\") {\n  if (intent === \"FUNCTIONALITY\") {\n    throttleDecision = \"DELAYED\";\n    throttleMessage = \"System is in YELLOW state (Elevated Warnings). Feature deployment throttled (delayed by 60 seconds).\";\n  } else {\n    throttleMessage = \"System is in YELLOW state. Bug Fix proceeding normally.\";\n  }\n}\nreturn [{ json: { ...stateManager, throttle_decision: throttleDecision, throttle_message: throttleMessage, system_status: currentStatus, intent: intent } }];"
+      },
+      "id": "f512dbb9-6b5d-4f11-9ab0-9b4ef0f9ebc7",
+      "name": "Throttling Evaluator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        -192
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.throttle_decision }}",
+                    "rightValue": "PROCEED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "PROCEED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.throttle_decision }}",
+                    "rightValue": "DELAYED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "DELAYED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.throttle_decision }}",
+                    "rightValue": "BLOCKED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "BLOCKED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "42d3c909-543e-48a5-ab65-c3ccdf9e7d98",
+      "name": "Throttle Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1232,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "unit": "minutes"
+      },
+      "id": "cd972eb0-ec9a-4c22-b8e7-0bd5c5f88b43",
+      "name": "Throttle Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        -192
+      ],
+      "webhookId": "cd972eb0-ec9a-4c22-b8e7-0bd5c5f88b43"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"cardsV2\": [ { \"cardId\": \"l2laaf_blocked_gate\", \"card\": { \"header\": { \"title\": \"\u26d4 L2LAAF Deployment BLOCKED: Phase \" + $json.meta.current_version }, \"sections\": [{ \"widgets\": [ { \"textParagraph\": { \"text\": \"<b>Originator:</b><br>\" + ($json.meta.method || \\\"UNKNOWN\\\") + \"<br><br><b>Status:</b><br>\" + ($json.system_status === \\\"GREEN\\\" ? \\\"\ud83d\udfe2  \\\" : ($json.system_status === \\\"YELLOW\\\" ? \\\"\ud83d\udfe1  \\\" : \\\"\ud83d\udd34  \\\")) + $json.system_status + \"<br><br><b>Intent:</b><br>\" + $json.intent } }, { \"decoratedText\": { \"topLabel\": \"Reason\", \"text\": $json.throttle_message, \"wrapText\": true } }, { \"decoratedText\": { \"topLabel\": \"Blocked Payload\", \"text\": $json.meta.summary, \"wrapText\": true } } ] }] } } ] } }}",
+        "options": {}
+      },
+      "id": "1ab4792c-67ad-4560-912b-b9d9df3c0e14",
+      "name": "Blocked Chat Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1456,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"contents\": [{ \"parts\": [{ \"text\": \"Classify this software change as HIGH_IMPACT or ROUTINE for the L2LAAF autonomous agent platform.\\nHIGH_IMPACT criteria: affects authentication, financial transactions, regulatory compliance (AGLC/CRA), agent orchestration logic, Firestore security rules, or core database schema.\\nROUTINE criteria: UI changes, documentation, refactoring, minor bug fixes, logging, testing infrastructure, dependency updates.\\n\\nChange summary: \" + $json.meta.summary + \"\\nMethod: \" + ($json.meta.method || 'UNKNOWN') + \"\\nIntent: \" + $json.intent + \"\\n\\nReturn ONLY valid JSON with no markdown: {\\\\\"impact\\\\\": \\\\\"HIGH_IMPACT\\\\\" or \\\\\"ROUTINE\\\\\", \\\\\"reason\\\\\": \\\\\"one sentence reason\\\\\"}\" }] }] } }}",
+        "options": {}
+      },
+      "id": "p45-impact-classifier",
+      "name": "Impact Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        -272
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const throttleData = $('Throttling Evaluator').first().json;\nlet impact_level = 'ROUTINE';\ntry {\n  const response = $input.first().json;\n  const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';\n  const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();\n  const parsed = JSON.parse(clean);\n  if (parsed.impact === 'HIGH_IMPACT') impact_level = 'HIGH_IMPACT';\n} catch (e) {}\nreturn [{ json: { ...throttleData, impact_level, validator_critique: '' } }];"
+      },
+      "id": "p45-extract-impact",
+      "name": "Extract Impact",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.impact_level }}",
+              "rightValue": "HIGH_IMPACT",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "p45-impact-switch",
+      "name": "Impact Switch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const summary = $json.meta?.summary || '';\nconst method = $json.meta?.method || 'UNKNOWN';\nconst intent = $json.intent || 'FUNCTIONALITY';\nreturn { \n  json: { \n    ...$json, \n    validatorBody: JSON.stringify({\n      contents: [{\n        parts: [{\n          text: 'You are a senior software auditor for the L2LAAF autonomous agent platform. This change has been classified as HIGH_IMPACT. Provide a concise 1-2 sentence risk assessment identifying any regulatory, security, or operational concerns the human operator should consider before approving.\\n\\nChange summary: ' + summary + '\\nMethod: ' + method + '\\nIntent: ' + intent\n        }]\n      }]\n    })\n  }\n};"
+      },
+      "id": "094997c8-89ce-4d8a-a151-dcf774e7a4bc",
+      "name": "Prepare Validator Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.validatorBody }}",
+        "options": {}
+      },
+      "id": "p45-validator-agent",
+      "name": "Validator Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2576,
+        -336
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const extractImpactData = $('Extract Impact').first().json;\nlet critique = '';\ntry {\n  const response = $input.first().json;\n  critique = response.candidates?.[0]?.content?.parts?.[0]?.text || '';\n} catch (e) {\n  critique = 'Validator assessment unavailable.';\n}\nreturn [{ json: { ...extractImpactData, validator_critique: critique } }];"
+      },
+      "id": "p45-extract-critique",
+      "name": "Extract Critique",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/compare/main...develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "dev-stack-fetch",
+      "name": "Fetch Dev Stack Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3024,
+        -272
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const data = $('Extract Impact').first().json;\nconst meta = data.meta || {};\nconst system_status = data.system_status || 'GREEN';\nconst intent = data.intent || 'FUNCTIONALITY';\nconst env = data.updated_state?.active_environment || 'dev';\nconst version = meta.current_version || '0.0.0';\nconst summary = meta.summary || 'No summary provided.';\nconst build_id = meta.build_id || 'unknown';\nconst bump_type = meta.bump_type || 'PATCH';\nconst hbrId = meta.hbrId || 'manual';\nconst method = meta.method || 'UNKNOWN';\nlet critique = '';\ntry { critique = $('Extract Critique').first().json.validator_critique || ''; } catch(e) {}\nconst impact_level = data.impact_level || 'ROUTINE';\nconst throttle_message = data.throttle_message || 'Proceeding';\nconst commits = $json.commits || [];\n\nconst cardWidgets = [];\n\ncardWidgets.push({\n  textParagraph: {\n    text: `<b>Originator:</b> ${method} | <b>System Status:</b> ${system_status} | <b>Intent:</b> ${intent}<br><b>Version:</b> ${version} (${bump_type})<br><b>Environment:</b> ${env.toUpperCase()} | <b>Build ID:</b> ${build_id}<br><b>HBR ID:</b> ${hbrId} | <b>Impact Level:</b> ${impact_level}`\n  }\n});\n\ncardWidgets.push({\n  textParagraph: { text: `<b>Summary:</b><br>${summary}` }\n});\n\ncardWidgets.push({\n  decoratedText: { topLabel: 'Throttle Evaluation', text: throttle_message, wrapText: true }\n});\n\nif (critique) {\n  cardWidgets.push({\n    textParagraph: { text: `<font color='#ff0000'><b>Validator Critique:</b></font><br>${critique}` }\n  });\n}\n\nif (commits.length > 1) {\n  const commitsText = commits.map(c => `\u2022 <code>${c.sha.substring(0,7)}</code>: ${c.commit.message.split('\\n')[0]}`).join('<br>');\n  cardWidgets.push({\n    textParagraph: { text: `<b>Dev Stack Commits (${commits.length}):</b><br>${commitsText}` }\n  });\n}\n\nconst baseUrl = `https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb`;\nconst commonQuery = `env=${env}&build_id=${build_id}&phase=${version}&method=${method}&summary=${encodeURIComponent(summary)}&bump_type=${bump_type}&hbrId=${hbrId}`;\n\ncardWidgets.push({\n  buttonList: {\n    buttons: [\n      {\n        text: 'PROMOTE TO PROD',\n        color: { red: 0.1, green: 0.6, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=approve&${commonQuery}` } }\n      },\n      {\n        text: 'SAVE IN DEV STACK',\n        color: { red: 1.0, green: 0.6, blue: 0.0, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=save&${commonQuery}` } }\n      },\n      {\n        text: 'ARCHIVE CHANGES',\n        color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=archive&${commonQuery}` } }\n      }\n    ]\n  }\n});\n\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: `deployment_card_${build_id}`,\n        card: {\n          header: {\n            title: `\ud83d\ude80 L2LAAF Deployment: Phase ${version}`,\n            subtitle: `Release Candidate: ${version}`\n          },\n          sections: [{ widgets: cardWidgets }]\n        }\n      }]\n    })\n  }\n};"
+      },
+      "id": "prepare-deployment-card",
+      "name": "Prepare Deployment Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3248,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "893b160b-80bc-47e2-89fc-a7e112d711a3",
+      "name": "Google Chat Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3472,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "path": "ea64f359-a428-46e4-9dc1-d5c643f385eb",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "5cb8107c-9b51-40e8-8a8b-12d8cf129bb8",
+      "name": "Approval Listener",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        112,
+        416
+      ],
+      "webhookId": "ea64f359-a428-46e4-9dc1-d5c643f385eb"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<html><head><script>window.close();</script></head><body></body></html>",
+        "options": {}
+      },
+      "id": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        336,
+        224
+      ],
+      "webhookId": "a67d028e-5b12-4d6b-b2eb-d1cf82e17cb9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data:runQuery\" }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"structuredQuery\": { \"from\": [ { \"collectionId\": \"agent_bus\" } ], \"where\": { \"fieldFilter\": { \"field\": { \"fieldPath\": \"correlation_id\" }, \"op\": \"EQUAL\", \"value\": { \"stringValue\": $('Approval Listener').first().json.query.build_id } } }, \"limit\": 1 } } }}",
+        "options": {}
+      },
+      "id": "e2c34a9b-6d8b-4b72-b8ec-f2307c8d9e2a",
+      "name": "Fetch Proposal Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        336,
+        608
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://logging.googleapis.com/v2/entries:list",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"resourceNames\": [ \"projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') ], \"filter\": \"textPayload:\\\"Null check operator used on a null value\\\"\", \"pageSize\": 10 } }}",
+        "options": {}
+      },
+      "id": "3b2a1c9d-8e7f-4b60-91c8-e3df5a6b7c89",
+      "name": "Log Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        560,
+        608
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "7c8b9a1d-2e4f-4a70-8b1c-d5e3f7a8b9c0",
+      "name": "Fetch Latest State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        784,
+        608
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return (async () => {\n  const stateNode = $(\"Fetch Latest State\").first();\n  let stateRaw = stateNode.json?.content || null;\n  if (stateRaw) stateRaw = Buffer.from(stateRaw, 'base64').toString('utf8');\n  if (!stateRaw || stateRaw === \"undefined\") throw new Error(\"FATAL: state.json content is missing.\");\n  let state;\n  try { state = JSON.parse(stateRaw); } catch (e) { state = JSON.parse(Buffer.from(stateRaw, 'base64').toString('utf8')); }\n  const action = $(\"Approval Listener\").first().json.query.action;\n  const approvedPhase = $(\"Approval Listener\").first().json.query.phase;\n  const rawHbrId = $(\"Approval Listener\").first().json.query.hbrId;\n  const buildId = $(\"Approval Listener\").first().json.query.build_id;\n  let filePath = \"\"; let fileContent = \"\"; let extractedReason = \"\";\n  try {\n    const resp = $(\"Fetch Proposal Data\").first().json;\n    let firestoreData = {};\n    if (Array.isArray(resp) && resp.length > 0 && resp[0].document) firestoreData = resp[0].document;\n    else if (resp && resp.document) firestoreData = resp.document;\n    else if (resp && resp.fields) firestoreData = resp;\n    const payloadFields = firestoreData.fields?.payload?.mapValue?.fields?.manifest?.mapValue?.fields || {};\n    if (payloadFields.targetPath?.stringValue) filePath = payloadFields.targetPath.stringValue;\n    if (payloadFields.proposedLogic?.stringValue) fileContent = payloadFields.proposedLogic.stringValue;\n    if (payloadFields.reason?.stringValue) extractedReason = payloadFields.reason.stringValue;\n  } catch (e) {}\n  let originalMeta = {};\n  try { originalMeta = $(\"State Manager\").first().json.meta || {}; } catch (e) {}\n  let updatedState = { ...state };\n  if (approvedPhase) { updatedState.current_version = approvedPhase; }\n  const logResponse = $(\"Log Scraper\").first().json || {};\n  let auditPassed = (logResponse.entries || []).length === 0;\n  const isProposal = !!rawHbrId && !['', 'undefined', 'null'].includes(rawHbrId);\n  let finalFilePath = originalMeta.filePath || filePath;\n  if (!finalFilePath || finalFilePath === 'null' || finalFilePath.includes('does_not_exist')) finalFilePath = 'IGNORE';\n  else finalFilePath = finalFilePath.trim().replace(/^\\/+/, '');\n  let finalFileContent = originalMeta.fileContent || fileContent;\n  if (!finalFileContent || finalFileContent === 'null') finalFileContent = '';\n  let summary = extractedReason || originalMeta.summary || \"No reason provided.\";\n  return [{ json: {\n    action: action,\n    audit_passed: auditPassed,\n    updated_state: { ...updatedState, meta: originalMeta, current_version: approvedPhase },\n    is_proposal: isProposal,\n    hbrId: rawHbrId || '',\n    buildId: buildId,\n    filePath: finalFilePath,\n    fileContent: finalFileContent,\n    reason: summary\n  } }];\n})();"
+      },
+      "id": "1d2e3f4a-5b6c-4870-9b8a-e7c6d5b4a3f2",
+      "name": "Automated Testing Suite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "PROMOTE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "save",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "SAVE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "archive",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ARCHIVE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hitl-decision-switch",
+      "name": "HITL Decision Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1232,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  fields: {\n    phase: { stringValue: meta.phase || \"\" },\n    commit_sha: { stringValue: meta.build_id || \"\" },\n    summary: { stringValue: decodeURIComponent(meta.summary || \"\") },\n    originator: { stringValue: meta.method || \"UNKNOWN\" },\n    deferred_at: { timestampValue: new Date().toISOString() },\n    status: { stringValue: \"STACKED\" }\n  }\n}) } };"
+      },
+      "id": "prepare-save-body",
+      "name": "Prepare Save Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/deferred_phases",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "write-deferred-phase",
+      "name": "Write Deferred Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        352
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_saved\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Saved to Dev Stack.</b><br>Phase ${meta.phase} will remain on develop and be included in the next promotion.<br><br><b>Commit SHA:</b> ${meta.build_id}<br><b>Originator:</b> ${meta.method}` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "prepare-save-card",
+      "name": "Prepare Save Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "save-confirmation-card",
+      "name": "Save Confirmation Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2128,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nconst phase = meta.phase;\nconst sha = meta.build_id;\nreturn { json: {\n  branchBody: JSON.stringify({ ref: `refs/heads/archive/${phase}`, sha: sha }),\n  revertMessage: `[AUTO] CHORE(archive): Revert ${phase} \u2014 archived [skip ci]`,\n  sha: sha,\n  phase: phase\n}};"
+      },
+      "id": "prepare-archive-bodies",
+      "name": "Prepare Archive Bodies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/git/commits/' + $('Approval Listener').first().json.query.build_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "get-head-commit",
+      "name": "Get HEAD Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        176
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/git/commits/' + $json.parents[0].sha }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "get-parent-commit",
+      "name": "Get Parent Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1904,
+        176
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/local2local/local2local/git/refs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Prepare Archive Bodies').first().json.branchBody }}",
+        "options": {}
+      },
+      "id": "create-archive-branch",
+      "name": "Create Archive Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2128,
+        176
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const p = $('Prepare Archive Bodies').first().json;\nconst treeSha = $('Get Parent Commit').first().json.tree.sha;\nreturn { json: {\n  ...$json,\n  revertBody: JSON.stringify({ message: p.revertMessage, tree: treeSha, parents: [ p.sha ] })\n}};"
+      },
+      "id": "prepare-revert-body",
+      "name": "Prepare Revert Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/local2local/local2local/git/commits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.revertBody }}",
+        "options": {}
+      },
+      "id": "create-revert-commit",
+      "name": "Create Revert Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2576,
+        176
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: {\n  ...$json,\n  refBody: JSON.stringify({ sha: $('Create Revert Commit').first().json.sha, force: true })\n}};"
+      },
+      "id": "prepare-update-ref-body",
+      "name": "Prepare Update Ref Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.github.com/repos/local2local/local2local/git/refs/heads/develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.refBody }}",
+        "options": {}
+      },
+      "id": "update-develop-ref",
+      "name": "Update Develop Ref",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3024,
+        176
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  fields: {\n    phase: { stringValue: meta.phase || \"\" },\n    commit_sha: { stringValue: meta.build_id || \"\" },\n    summary: { stringValue: decodeURIComponent(meta.summary || \"\") },\n    originator: { stringValue: meta.method || \"UNKNOWN\" },\n    archive_branch: { stringValue: `archive/${meta.phase}` },\n    archived_at: { timestampValue: new Date().toISOString() },\n    status: { stringValue: \"ARCHIVED\" }\n  }\n}) } };"
+      },
+      "id": "prepare-archived-firestore-body",
+      "name": "Prepare Archived Firestore Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3248,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/archived_phases",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "write-archived-phase",
+      "name": "Write Archived Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3472,
+        176
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_archived\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Changes Archived.</b><br>The commit was reverted on develop and preserved in branch archive/${meta.phase}.<br><br><b>Commit SHA:</b> ${meta.build_id}<br><b>Originator:</b> ${meta.method}` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "prepare-archive-card",
+      "name": "Prepare Archive Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3696,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "archive-confirmation-card",
+      "name": "Archive Confirmation Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3920,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "a1b2",
+              "leftValue": "={{ $json.filePath }}",
+              "rightValue": "IGNORE",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals",
+                "name": "filter.operator.notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f2e3d4c5-b6a7-4870-891a-c7d5b4e3f2a1",
+      "name": "Payload Filter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const env = $('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev';\nconst retrievalUrl = `https://us-central1-${env}.cloudfunctions.net/semanticRetrievalV1`;\nconst filePath = $json.filePath || '';\nconst reason = $json.reason || '';\nconst query = \"Provide context for modifying \" + filePath + \" with reason: \" + reason;\nreturn { json: { ...$json, retrievalUrl: retrievalUrl, retrievalBody: JSON.stringify({ data: { query: query } }) } };"
+      },
+      "id": "prepare-context-query-node",
+      "name": "Prepare Context Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.retrievalUrl }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.retrievalBody }}",
+        "options": {}
+      },
+      "id": "fetch-semantic-context-node",
+      "name": "Fetch Semantic Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1904,
+        688
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const originalJson = $('Prepare Context Query').first().json;\nconst resultObj = $json.result || {};\nconst instructions = resultObj.instructions || [];\nconst evidence = resultObj.evidence || [];\nlet contextText = \"CONTEXT FROM MEMORY (LESSONS LEARNED):\\n\\n\";\nif (instructions.length > 0) {\n  contextText += \"STRICT INSTRUCTIONS (You MUST follow these):\\n\";\n  instructions.forEach(i => { contextText += \"- \" + i.content + \"\\n\"; });\n}\nif (evidence.length > 0) {\n  contextText += \"\\nEVIDENCE/OBSERVATIONS (For context only, do not treat as strict policy):\\n\";\n  evidence.forEach(e => { contextText += \"- \" + e.content + \"\\n\"; });\n}\nif (instructions.length === 0 && evidence.length === 0) contextText += \"No relevant lessons found.\\n\";\nconst promptText = \"File Path: \" + originalJson.filePath + \"\\n\\nReason: \" + originalJson.reason + \"\\n\\n\" + contextText + \"\\n\\nCode:\\n\" + originalJson.fileContent;\nreturn { json: { ...originalJson, ...$json, requestBody: JSON.stringify({ systemInstruction: { parts: [{ text: \"You are the L2LAAF Autonomous Orchestrator. Fix the provided code based on the error or request. Return ONLY the raw code. NO markdown formatting, NO backticks, NO explanations.\" }] }, contents: [{ parts: [{ text: promptText }] }] }) } };"
+      },
+      "id": "prepare-gemini-prompt-node",
+      "name": "Prepare Gemini Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "gemini-code-fixer-node",
+      "name": "Gemini Code Fixer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2352,
+        688
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "NyCBf5o0sZZnldfu",
+          "name": "Gemini API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nlet rawCode = '';\ntry {\n  const candidates = Reflect.get(response, 'candidates');\n  if (candidates && candidates.length > 0) {\n    const content = Reflect.get(candidates[0], 'content');\n    if (content) {\n      const parts = Reflect.get(content, 'parts');\n      if (parts && parts.length > 0) rawCode = Reflect.get(parts[0], 'text') || '';\n    }\n  }\n} catch (e) {}\nrawCode = rawCode.replace(/^\\x60\\x60\\x60[a-z]*\\n/i, '').replace(/\\n\\x60\\x60\\x60$/i, '').trim();\nreturn [{ json: { ...$('Automated Testing Suite').first().json, fileContent: rawCode } }];"
+      },
+      "id": "extract-gemini-code-node",
+      "name": "Extract Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst extract = $('Extract Code').first().json;\nif (suite.filePath === 'IGNORE') return [];\nconst encodedContent = Buffer.from(extract.fileContent || '').toString('base64');\nconst commitMessage = suite.updated_state.current_version + ' - [AUTO] FEAT(evolution): Autonomous code mutation';\nreturn [{ json: { ...extract, encodedContent, commitMessage } }];"
+      },
+      "id": "prepare-mutate-payload-node",
+      "name": "Prepare Mutate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Automated Testing Suite').first().json.filePath + '?ref=develop' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "get-logic-sha",
+      "name": "Get Logic SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3024,
+        688
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://api.github.com/repos/local2local/local2local/contents/' + $('Automated Testing Suite').first().json.filePath }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ Object.assign({ message: $('Prepare Mutate Payload').first().json.commitMessage, content: $('Prepare Mutate Payload').first().json.encodedContent, branch: 'develop' }, $('Get Logic SHA').first().json.sha ? { sha: $('Get Logic SHA').first().json.sha } : {}) }}",
+        "options": {}
+      },
+      "id": "mutate-logic-http",
+      "name": "GitHub: Mutate Logic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3248,
+        688
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "d6e7f8a9-b1c2-4870-891a-b3c5d4e2f1a6",
+      "name": "Sync Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        3472,
+        688
+      ],
+      "webhookId": "d6e7f8a9-b1c2-4870-891a-b3c5d4e2f1a6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst version = suite.updated_state.meta?.current_version || $('Automated Testing Suite').first().json.updated_state.meta?.current_version || \"unknown\";\nconst stateToWrite = { ...suite.updated_state };\ndelete stateToWrite.current_phase;\ndelete stateToWrite.meta;\nconst encodedContent = Buffer.from(JSON.stringify(stateToWrite, null, 2)).toString('base64');\nconst commitMessage = version + ' - [AUTO] CHORE(orchestration): Promote phase to prod';\nreturn [{ json: { encodedContent, commitMessage } }];"
+      },
+      "id": "prepare-state-payload-node",
+      "name": "Prepare State Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        3696,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "get-state-sha",
+      "name": "Get State SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3920,
+        688
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ Object.assign({ message: $('Prepare State Payload').first().json.commitMessage, content: $('Prepare State Payload').first().json.encodedContent, branch: 'develop' }, $('Get State SHA').first().json.sha ? { sha: $('Get State SHA').first().json.sha } : {}) }}",
+        "options": {}
+      },
+      "id": "update-state-http",
+      "name": "GitHub: Update State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4144,
+        688
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/pubspec.yaml?ref=develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "aa11bb22-cc33-4444-ddee-ff5566778899",
+      "name": "Get pubspec on Develop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const pubspecResponse = $('Get pubspec on Develop').first().json;\nif (!pubspecResponse || !pubspecResponse.content) throw new Error('Could not fetch pubspec.yaml from develop');\nconst content = Buffer.from(pubspecResponse.content.replace(/\\n/g, ''), 'base64').toString('utf8');\nconst versionMatch = content.match(/^version:\\s*(\\d+)\\.(\\d+)\\.(\\d+)/m);\nif (!versionMatch) throw new Error('Could not parse version from pubspec.yaml: ' + content.substring(0, 200));\nlet major = parseInt(versionMatch[1]); let minor = parseInt(versionMatch[2]); let patch = parseInt(versionMatch[3]);\nconst bumpType = ($('Approval Listener').first().json.query.bump_type || 'PATCH').toUpperCase();\nconst summary = decodeURIComponent($('Approval Listener').first().json.query.summary || '');\nif (bumpType === 'MAJOR') { major++; minor = 0; patch = 0; } else if (bumpType === 'MINOR') { minor++; patch = 0; } else { patch++; }\nconst newVersion = `${major}.${minor}.${patch}`;\nconst newContent = content.replace(/^version:\\s*[\\d.]+(\\+\\d+)?/m, `version: ${newVersion}`);\nconst encodedContent = Buffer.from(newContent).toString('base64');\nconst promotionSummary = `${newVersion} - ${summary.replace(/^\\d+\\.\\d+\\.\\d+\\s*-\\s*/, '')}`;\nreturn [{ json: { newVersion, encodedContent, currentSha: pubspecResponse.sha, bumpType, summary, promotionSummary } }];"
+      },
+      "id": "bb22cc33-dd44-5555-eeff-006677889900",
+      "name": "Calculate New Version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: { requestBody: JSON.stringify({ message: `${$json.newVersion} - [AUTO] CHORE(version): Bump to ${$json.newVersion} (${$json.bumpType}) [skip ci]`, content: $json.encodedContent, sha: $json.currentSha, branch: \"develop\" }) } };"
+      },
+      "id": "prep-bumped-pubspec",
+      "name": "Prepare Bumped pubspec Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/local2local/local2local/contents/pubspec.yaml",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "cc33dd44-ee55-6666-ffaa-117788990011",
+      "name": "Write Bumped pubspec",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2128,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/compare/main...develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "fetch-stack-for-promote",
+      "name": "Fetch Stack For Promote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2352,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/git/refs/heads/develop",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "a9b8c7d6-e5f4-4321-abcd-098765432101",
+      "name": "Get Develop SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2576,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const sha = $('Get Develop SHA').first().json.object.sha;\nreturn { json: { requestBody: JSON.stringify({ sha: sha, force: true }) } };"
+      },
+      "id": "prep-update-main-body",
+      "name": "Prepare Update Main Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://api.github.com/repos/local2local/local2local/git/refs/heads/main",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "b2c3d4e5-f6a7-4890-bcde-012345678903",
+      "name": "Force Update Main",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2800,
+        528
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "m1",
+              "leftValue": "={{ $('Force Update Main').first().json.statusCode !== undefined && $('Force Update Main').first().json.statusCode >= 400 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-4901-cdef-012345678902",
+      "name": "Merge Error Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3024,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const phase = $('Approval Listener').first().json.query.phase || 'unknown';\nconst forceUpdateNode = $('Force Update Main').first().json || {};\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: 'l2laaf_merge_error',\n        card: {\n          header: { title: `\u274c PROMOTE TO PROD Failed: Phase ${phase}` },\n          sections: [{\n            widgets: [{\n              textParagraph: {\n                text: `<b>Failing Node:</b><br>Force Update Main<br><br><b>HTTP Status:</b><br>${forceUpdateNode.statusCode || 'unknown'}<br><br><b>Error Message:</b><br>${JSON.stringify(forceUpdateNode.body || {})}<br><br><b>Action Required:</b><br>Check for merge conflicts, then retry.`\n              }\n            }]\n          }]\n        }\n      }]\n    })\n  }\n};"
+      },
+      "id": "prep-merge-failed-card",
+      "name": "Prepare Merge Failed Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-4012-def0-123456789013",
+      "name": "Merge Failed Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3248,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json?ref=main",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "f6a7b8c9-d0e1-4345-cdef-012345678905",
+      "name": "Get Main State SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3248,
+        624
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const newVersion = $('Calculate New Version').first().json.newVersion;\nconst stateNode = $('Get Main State SHA').first().json;\nreturn { json: { requestBody: JSON.stringify({ message: `${newVersion} - [AUTO] CHORE(orchestration): Promote phase ${newVersion} to prod`, content: stateNode.content.replace(/\\n/g, ''), sha: stateNode.sha, branch: \"main\" }) } };"
+      },
+      "id": "prep-prom-commit-body",
+      "name": "Prepare Promotion Commit Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/local2local/local2local/contents/.l2laaf/state.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-4234-bcde-f12345678904",
+      "name": "Create Promotion Commit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3472,
+        624
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "wait-10s-for-gh",
+      "name": "Wait 10s For Workflow Run",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        3696,
+        624
+      ],
+      "webhookId": "a1b2c3d4-e5f6-4789-abcd-101112131415"
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/local2local/local2local/actions/runs?branch=main&event=push&per_page=5",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "poll-main-gh-actions",
+      "name": "Poll Main GH Actions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3920,
+        624
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "6OSt2bN1T5JeIKvt",
+          "name": "GitHub L2LAAF Admin (n8n-l2laaf-orchestrator)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const runs = $json.workflow_runs || [];\nconst targetSha = $('Create Promotion Commit').first().json.commit.sha;\nconst run = runs.find(r => r.head_sha === targetSha);\nif (!run) return { json: { status: 'not_found', targetSha } };\nreturn { json: { status: run.status, conclusion: run.conclusion, run_id: run.id } };"
+      },
+      "id": "check-gh-action-status",
+      "name": "Check GH Action Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4144,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "rc1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-run-complete",
+      "name": "Is Run Complete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4368,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "wait-15s-polling",
+      "name": "Wait 15s Polling Loop",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        4368,
+        768
+      ],
+      "webhookId": "b2c3d4e5-f6a7-4890-bcde-161718192021"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.conclusion }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-run-conclusion",
+      "name": "Check Run Conclusion",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4592,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const phase = $('Calculate New Version').first().json.newVersion;\nconst runUrl = `https://github.com/local2local/local2local/actions/runs/${$json.run_id}`;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_prod_failed\", card: { header: { title: `\u274c PROD Deploy Failed: Phase ${phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>GitHub Actions Failure.</b><br>The promotion commit was made, but the CI/CD pipeline on main failed.<br><br><b>Run ID:</b> ${$json.run_id}<br><br><a href=\"${runUrl}\">View logs on GitHub</a>` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "prepare-prod-failed-card",
+      "name": "Prepare Prod Failed Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4816,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "prod-deploy-failed-alert",
+      "name": "Prod Deploy Failed Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5040,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "pc1",
+              "leftValue": "={{ $('Automated Testing Suite').first().json.is_proposal }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e8f7a6b5-c4d3-4170-8b9a-e1f2d3c5b4a6",
+      "name": "Proposal Closure Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4816,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      fields: {\n        status: { stringValue: 'PROMOTED' },\n        hbrId: { stringValue: suite.hbrId || '' },\n        buildId: { stringValue: suite.buildId || '' },\n        phase: { stringValue: suite.updated_state?.current_version || '' }\n      }\n    })\n  }\n};"
+      },
+      "id": "prep-closure-body",
+      "name": "Prepare Closure Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4928,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://firestore.googleapis.com/v1/projects/\" + ($('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev') + \"/databases/(default)/documents/artifacts/local2local-kaskflow/public/data/logic_proposals\" }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "c1d2e3f4-a5b6-4870-981a-b7c6d5e4f3a2",
+      "name": "Trigger Firestore Closure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5040,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const newVersion = $('Calculate New Version').first().json.newVersion || \"unknown\";\nconst env = $('Approval Listener').first().json.query.env || \"dev\";\nreturn { json: { requestBody: JSON.stringify({ fields: { current: { stringValue: newVersion }, updated_at: { timestampValue: new Date().toISOString() }, environment: { stringValue: env } } }) } };"
+      },
+      "id": "prep-version-firestore",
+      "name": "Prepare Version Firestore Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5152,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/version",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "d4e5f6a7-b8c9-4012-abc3-d4e5f6a7b8c9",
+      "name": "Write Version to Firestore",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5264,
+        448
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const shas = $('Fetch Stack For Promote').first().json.commits || [];\nconst phase = $('Calculate New Version').first().json.newVersion;\nif (shas.length === 0) return [];\nreturn shas.map(c => ({ json: { commit_sha: c.sha, phase: phase } }));"
+      },
+      "id": "extract-stack-shas",
+      "name": "Extract Stack SHAs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5488,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ structuredQuery: { from: [{ collectionId: \"deferred_phases\" }], where: { fieldFilter: { field: { fieldPath: \"commit_sha\" }, op: \"EQUAL\", value: { stringValue: $json.commit_sha } } }, limit: 1 } }) }}",
+        "options": {}
+      },
+      "id": "query-deferred-phase",
+      "name": "Query Deferred Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5712,
+        304
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d1",
+              "leftValue": "={{ ($json.length > 0 && $json[0].document) ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-deferred-exists",
+      "name": "Check Deferred Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5936,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const phase = $('Extract Stack SHAs').item.json.phase;\nreturn { json: { requestBody: JSON.stringify({\n  fields: { promoted_in: { stringValue: phase }, status: { stringValue: \"PROMOTED\" } }\n}) } };"
+      },
+      "id": "prepare-patch-deferred-body",
+      "name": "Prepare Patch Deferred Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6160,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/' + $json[0].document.name + '?updateMask.fieldPaths=promoted_in&updateMask.fieldPaths=status' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Prepare Patch Deferred Body').item.json.requestBody }}",
+        "options": {}
+      },
+      "id": "update-deferred-phase",
+      "name": "Update Deferred Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6384,
+        288
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nconst newVersion = $('Calculate New Version').first().json.newVersion;\nconst summary = $('Calculate New Version').first().json.promotionSummary;\nconst commits = $('Fetch Stack For Promote').first().json.commits || [];\nconst stackArray = commits.map(c => ({ stringValue: c.sha }));\nreturn { json: { requestBody: JSON.stringify({\n  fields: {\n    phase: { stringValue: newVersion || \"\" },\n    commit_sha: { stringValue: meta.build_id || \"\" },\n    summary: { stringValue: summary || \"\" },\n    originator: { stringValue: meta.method || \"UNKNOWN\" },\n    promoted_at: { timestampValue: new Date().toISOString() },\n    promoted_by: { stringValue: \"todd.herron@local2local.ca\" },\n    status: { stringValue: \"ACTIVE\" },\n    dev_stack: { arrayValue: { values: stackArray } }\n  }\n}) } };"
+      },
+      "id": "prepare-promoted-firestore-body",
+      "name": "Prepare Promoted Firestore Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5488,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/local2local-dev/databases/(default)/documents/artifacts/system_status/public/data/promoted_phases",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f5a6-4789-bcde-f01234567890",
+      "name": "Write Promoted Phase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        5712,
+        592
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "NlT4tfnPyrdMF8jv",
+          "name": "GCP Orchestrator Admin"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const newVersion = $('Calculate New Version').first().json.newVersion;\nconst summary = $('Calculate New Version').first().json.promotionSummary;\nconst method = $('Approval Listener').first().json.query.method || 'UNKNOWN';\nconst build_id = $('Approval Listener').first().json.query.build_id || 'unknown';\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_promoted\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${newVersion}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Promoted to PROD.</b><br>Phase ${newVersion} promoted to prod. This merged the tested 'develop' branch to the 'main' branch and deployed to local2local-prod.<br><br><b>Phase:</b> ${newVersion}<br><b>Originator:</b> ${method}<br><b>Commit SHA:</b> ${build_id}<br><b>Summary:</b> ${summary}<br><b>Promoted by:</b> todd.herron@local2local.ca<br><b>Status:</b> ACTIVE` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "prepare-final-card",
+      "name": "Prepare Final Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5936,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "a5b6c7d8-e9f0-4170-8b1a-c3d4e5f6a7b8",
+      "name": "Final Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        6160,
+        592
+      ]
     }
-  });
-
-  return scheduledVersion || activeVersion || null;
+  ],
+  "pinData": {},
+  "connections": {
+    "MCP Code Payload": {
+      "main": [
+        [
+          {
+            "node": "Fetch Main State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Main State": {
+      "main": [
+        [
+          {
+            "node": "State Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "State Manager": {
+      "main": [
+        [
+          {
+            "node": "Fetch System Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch System Status": {
+      "main": [
+        [
+          {
+            "node": "Throttling Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttling Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Throttle Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle Switch": {
+      "main": [
+        [
+          {
+            "node": "Impact Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Throttle Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Blocked Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle Wait": {
+      "main": [
+        [
+          {
+            "node": "Impact Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Impact Classifier": {
+      "main": [
+        [
+          {
+            "node": "Extract Impact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Impact": {
+      "main": [
+        [
+          {
+            "node": "Impact Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Impact Switch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Validator Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Dev Stack Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Validator Prompt": {
+      "main": [
+        [
+          {
+            "node": "Validator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validator Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Critique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Critique": {
+      "main": [
+        [
+          {
+            "node": "Fetch Dev Stack Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Dev Stack Commits": {
+      "main": [
+        [
+          {
+            "node": "Prepare Deployment Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Deployment Card": {
+      "main": [
+        [
+          {
+            "node": "Google Chat Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Listener": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Proposal Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Proposal Data": {
+      "main": [
+        [
+          {
+            "node": "Log Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Scraper": {
+      "main": [
+        [
+          {
+            "node": "Fetch Latest State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest State": {
+      "main": [
+        [
+          {
+            "node": "Automated Testing Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Automated Testing Suite": {
+      "main": [
+        [
+          {
+            "node": "HITL Decision Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HITL Decision Switch": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Save Body",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Archive Bodies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Save Body": {
+      "main": [
+        [
+          {
+            "node": "Write Deferred Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Deferred Phase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Save Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Save Card": {
+      "main": [
+        [
+          {
+            "node": "Save Confirmation Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Archive Bodies": {
+      "main": [
+        [
+          {
+            "node": "Get HEAD Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HEAD Commit": {
+      "main": [
+        [
+          {
+            "node": "Get Parent Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Parent Commit": {
+      "main": [
+        [
+          {
+            "node": "Create Archive Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Archive Branch": {
+      "main": [
+        [
+          {
+            "node": "Prepare Revert Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Revert Body": {
+      "main": [
+        [
+          {
+            "node": "Create Revert Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Revert Commit": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update Ref Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Ref Body": {
+      "main": [
+        [
+          {
+            "node": "Update Develop Ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Develop Ref": {
+      "main": [
+        [
+          {
+            "node": "Prepare Archived Firestore Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Archived Firestore Body": {
+      "main": [
+        [
+          {
+            "node": "Write Archived Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Archived Phase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Archive Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Archive Card": {
+      "main": [
+        [
+          {
+            "node": "Archive Confirmation Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Filter": {
+      "main": [
+        [
+          {
+            "node": "Prepare Context Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get pubspec on Develop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Context Query": {
+      "main": [
+        [
+          {
+            "node": "Fetch Semantic Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Semantic Context": {
+      "main": [
+        [
+          {
+            "node": "Prepare Gemini Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Gemini Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini Code Fixer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Code Fixer": {
+      "main": [
+        [
+          {
+            "node": "Extract Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Code": {
+      "main": [
+        [
+          {
+            "node": "Prepare Mutate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Mutate Payload": {
+      "main": [
+        [
+          {
+            "node": "Get Logic SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Logic SHA": {
+      "main": [
+        [
+          {
+            "node": "GitHub: Mutate Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: Mutate Logic": {
+      "main": [
+        [
+          {
+            "node": "Sync Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Wait": {
+      "main": [
+        [
+          {
+            "node": "Prepare State Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare State Payload": {
+      "main": [
+        [
+          {
+            "node": "Get State SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get State SHA": {
+      "main": [
+        [
+          {
+            "node": "GitHub: Update State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub: Update State": {
+      "main": [
+        [
+          {
+            "node": "Get pubspec on Develop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get pubspec on Develop": {
+      "main": [
+        [
+          {
+            "node": "Calculate New Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate New Version": {
+      "main": [
+        [
+          {
+            "node": "Prepare Bumped pubspec Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Bumped pubspec Body": {
+      "main": [
+        [
+          {
+            "node": "Write Bumped pubspec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Bumped pubspec": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stack For Promote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stack For Promote": {
+      "main": [
+        [
+          {
+            "node": "Get Develop SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Develop SHA": {
+      "main": [
+        [
+          {
+            "node": "Prepare Update Main Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Update Main Body": {
+      "main": [
+        [
+          {
+            "node": "Force Update Main",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Force Update Main": {
+      "main": [
+        [
+          {
+            "node": "Merge Error Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Error Check": {
+      "main": [
+        [
+          {
+            "node": "Prepare Merge Failed Card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Main State SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Merge Failed Card": {
+      "main": [
+        [
+          {
+            "node": "Merge Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Main State SHA": {
+      "main": [
+        [
+          {
+            "node": "Prepare Promotion Commit Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Promotion Commit Body": {
+      "main": [
+        [
+          {
+            "node": "Create Promotion Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Promotion Commit": {
+      "main": [
+        [
+          {
+            "node": "Wait 10s For Workflow Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 10s For Workflow Run": {
+      "main": [
+        [
+          {
+            "node": "Poll Main GH Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Main GH Actions": {
+      "main": [
+        [
+          {
+            "node": "Check GH Action Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check GH Action Status": {
+      "main": [
+        [
+          {
+            "node": "Is Run Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Run Complete": {
+      "main": [
+        [
+          {
+            "node": "Check Run Conclusion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 15s Polling Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 15s Polling Loop": {
+      "main": [
+        [
+          {
+            "node": "Poll Main GH Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Run Conclusion": {
+      "main": [
+        [
+          {
+            "node": "Proposal Closure Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Prod Failed Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Prod Failed Card": {
+      "main": [
+        [
+          {
+            "node": "Prod Deploy Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Proposal Closure Check": {
+      "main": [
+        [
+          {
+            "node": "Prepare Closure Body",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Version Firestore Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Closure Body": {
+      "main": [
+        [
+          {
+            "node": "Trigger Firestore Closure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Firestore Closure": {
+      "main": [
+        [
+          {
+            "node": "Prepare Version Firestore Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Version Firestore Body": {
+      "main": [
+        [
+          {
+            "node": "Write Version to Firestore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Version to Firestore": {
+      "main": [
+        [
+          {
+            "node": "Extract Stack SHAs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Promoted Firestore Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Stack SHAs": {
+      "main": [
+        [
+          {
+            "node": "Query Deferred Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Deferred Phase": {
+      "main": [
+        [
+          {
+            "node": "Check Deferred Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Deferred Exists": {
+      "main": [
+        [
+          {
+            "node": "Prepare Patch Deferred Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Patch Deferred Body": {
+      "main": [
+        [
+          {
+            "node": "Update Deferred Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Promoted Firestore Body": {
+      "main": [
+        [
+          {
+            "node": "Write Promoted Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Promoted Phase": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Card": {
+      "main": [
+        [
+          {
+            "node": "Final Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "versionId": "e2aafe7c-84fc-407b-b18e-0f5c7e54bb75",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "ThWtTTPTR4ymYD6a",
+  "tags": []
 }
-
-export const resolveHBR = onCall(async (request) => {
-  const data = request.data as Record<string, string>;
-  const ruleMaker = data.ruleMaker;
-  const targetDateStr = data.targetDate;
-
-  if (!ruleMaker || !targetDateStr) {
-    throw new HttpsError("invalid-argument", "ruleMaker and targetDate are required.");
-  }
-
-  const targetDate = new Date(targetDateStr);
-  const version = await resolveHBRInternal(ruleMaker, targetDate);
-
-  if (!version) {
-    throw new HttpsError("not-found", `No applicable HBR version found for ${ruleMaker} on ${targetDateStr}`);
-  }
-
-  return version;
-});
 L2LAAF_BLOCK_END
 
-L2LAAF_BLOCK_START(FILE:Compliance Functions:functions/src/logic/compliance.ts)
-import { onDocumentWritten, QueryDocumentSnapshot } from "firebase-functions/v2/firestore";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore } from "firebase-admin/firestore";
-import { HBRVersion } from "./hbr/types";
-
-export const complianceAgentV2 = onDocumentWritten({ document: "artifacts/{appId}/public/data/agent_bus/{messageId}" }, async (event) => {
-  // Logic visibility maintained. Renamed to match V2 export.
-  const snapshot = event.data?.after as QueryDocumentSnapshot | undefined;
-  if (!snapshot || !snapshot.exists) return;
-});
-
-/**
- * Handles the archive-before-update requirement for HBR drift automation.
- * Called by the pipeline or n8n to safely apply a new version while superseding the old.
- */
-export const archiveAndCreateHBRVersion = onCall(async (request) => {
-  if (!request.auth?.token.admin && !request.auth?.token.superadmin) {
-    throw new HttpsError("permission-denied", "Must be an admin to update HBR versions.");
-  }
-
-  const data = request.data as Record<string, any>;
-  const newVersion = data.newVersion as HBRVersion;
-  const currentActiveId = data.currentActiveId as string | undefined;
-
-  const db = getFirestore();
-  const batch = db.batch();
-
-  if (currentActiveId) {
-    const currentRef = db.collection("artifacts/system_status/public/data/hbr_versions").doc(currentActiveId);
-    batch.update(currentRef, {
-      status: "SUPERSEDED",
-      valid_until: newVersion.valid_from,
-      superseded_by_version: newVersion.version_id
-    });
-    newVersion.supersedes_version = currentActiveId;
-  }
-
-  const newRef = db.collection("artifacts/system_status/public/data/hbr_versions").doc(newVersion.version_id);
-  batch.set(newRef, newVersion);
-
-  await batch.commit();
-  return { success: true, version_id: newVersion.version_id };
-});
-
-/**
- * Daily cron target for n8n HBR Version Activator.
- * Promotes SCHEDULED rules to ACTIVE when valid_from is reached.
- */
-export const activateScheduledHBRs = onCall(async (request) => {
-  const db = getFirestore();
-  const now = new Date();
-
-  const scheduledSnap = await db.collection("artifacts/system_status/public/data/hbr_versions")
-    .where("status", "==", "SCHEDULED")
-    .get();
-
-  const batch = db.batch();
-  let activatedCount = 0;
-  const activatedIds: string[] = [];
-
-  for (const doc of scheduledSnap.docs) {
-    const data = doc.data() as HBRVersion;
-    if (new Date(data.valid_from) <= now) {
-      // Find current active for this rule_maker + region_scope
-      const activeSnap = await db.collection("artifacts/system_status/public/data/hbr_versions")
-        .where("rule_maker", "==", data.rule_maker)
-        .where("region_scope", "==", data.region_scope)
-        .where("status", "==", "ACTIVE")
-        .get();
-
-      activeSnap.forEach((activeDoc) => {
-        batch.update(activeDoc.ref, {
-          status: "SUPERSEDED",
-          valid_until: data.valid_from,
-          superseded_by_version: data.version_id
-        });
-      });
-
-      batch.update(doc.ref, {
-        status: "ACTIVE",
-        supersedes_version: activeSnap.empty ? null : activeSnap.docs[0].id
-      });
-
-      activatedCount++;
-      activatedIds.push(data.version_id);
-    }
-  }
-
-  if (activatedCount > 0) {
-    await batch.commit();
-  }
-
-  return { success: true, activatedCount, activatedIds };
-});
+L2LAAF_BLOCK_START(COMMIT_MSG:Commit Message:COMMIT_MSG)
+[ASSISTED] FEAT(orchestrator): Implement Three-Option HITL Gate [BUMP: MINOR]
 L2LAAF_BLOCK_END

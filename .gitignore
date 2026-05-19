@@ -39,3 +39,4 @@ scripts/logic_payload.txt
 COMMIT_MSG
 flutter_problems_list.txt
 audit_bundle.txt.dart_tool/
+.dart_tool/

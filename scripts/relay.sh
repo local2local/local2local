@@ -89,7 +89,7 @@ if [ "$HAS_N8N" = "1" ] && [ -d "n8n_workflows" ]; then
     node .tmp_check.js || fatal_error "n8n Workflow JSON validation failed. Fix syntax before deploying."
     rm -f .tmp_check.js
 
-    MISSING=$(jq '[.nodes[] | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name]' n8n_workflows/*.json 2>/dev/null)
+    MISSING=$(jq -s '[.[].nodes[] | select(.type == "n8n-nodes-base.webhook") | select(.webhookId == null) | .name]' n8n_workflows/*.json 2>/dev/null)
     test "$MISSING" != "[]" && test -n "$MISSING" && fatal_error "Webhook nodes missing webhookId: $MISSING"
 
     echo "🟢 SUCCESS: n8n Workflows Validated (Syntax & Webhook IDs)."
