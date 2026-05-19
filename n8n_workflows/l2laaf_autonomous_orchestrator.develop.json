@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.6\n**Feature:** Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation",
+        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.6\n**Feature:** Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation\n**Fix:** 45.6 patch \u2014 repair promote data flow broken by ack node insertion",
         "height": 150,
         "width": 926,
         "color": 6
@@ -943,7 +943,7 @@
           "conditions": [
             {
               "id": "a1b2",
-              "leftValue": "={{ $json.filePath }}",
+              "leftValue": "={{ $('Automated Testing Suite').first().json.filePath }}",
               "rightValue": "IGNORE",
               "operator": {
                 "type": "string",
@@ -968,7 +968,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const env = $('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev';\nconst retrievalUrl = `https://us-central1-${env}.cloudfunctions.net/semanticRetrievalV1`;\nconst filePath = $json.filePath || '';\nconst reason = $json.reason || '';\nconst query = \"Provide context for modifying \" + filePath + \" with reason: \" + reason;\nreturn { json: { ...$json, retrievalUrl: retrievalUrl, retrievalBody: JSON.stringify({ data: { query: query } }) } };"
+        "jsCode": "const suite = $('Automated Testing Suite').first().json;\nconst env = $('Approval Listener').first().json.query.env === 'prod' ? 'local2local-prod' : 'local2local-dev';\nconst retrievalUrl = `https://us-central1-${env}.cloudfunctions.net/semanticRetrievalV1`;\nconst filePath = suite.filePath || '';\nconst reason = suite.reason || '';\nconst query = \"Provide context for modifying \" + filePath + \" with reason: \" + reason;\nreturn { json: { ...suite, retrievalUrl: retrievalUrl, retrievalBody: JSON.stringify({ data: { query: query } }) } };"
       },
       "id": "prepare-context-query-node",
       "name": "Prepare Context Query",
