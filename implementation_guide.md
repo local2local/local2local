@@ -1,70 +1,43 @@
-# Phase 45.5 Three-Option HITL Gate Implementation Guide
+# Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation
 
 ## Pre-Test Setup
-Seed the `deferred_phases` collection in Firestore (`local2local-dev`) with a mock document to simulate a stacked proposal waiting for promotion.
-- **Path**: `artifacts/system_status/public/data/deferred_phases/mock_deferred`
-- **JSON Payload**:
-  ```json
-  {
-    "commit_sha": "mock_sha_123",
-    "phase": "0.0.0",
-    "status": "STACKED"
-  }
-  ```
+No Firestore seeding required. Ensure the DEV n8n orchestrator has been updated
+to Phase 45.6 (confirmed by the Sticky Note version in the n8n workflow editor).
 
-## Test Step 1: PROMOTE TO PROD
-- **Action**: Execute the promote path.
-- **Method**: In Google Chat, click the "PROMOTE TO PROD" button on the HITL card, or trigger the Approval Listener test webhook manually via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20promote&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. `Calculate New Version` outputs the bumped version (e.g. 45.5.0).
-  2. `promoted_phases` record written to Firestore with `dev_stack` array populated.
-  3. CI/CD polling loop (`Wait 10s` → `Poll Main GH Actions` → `Is Run Complete`) loops until the GitHub Action completes.
-  4. `Final Alert` posts the "🚀 Promoted to PROD" confirmation card in Google Chat only after the GH Actions run concludes.
-
-## Test Step 2: SAVE IN DEV STACK
-- **Action**: Execute the save/defer path.
-- **Method**: In Google Chat, click the "SAVE IN DEV STACK" button, or trigger via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=save&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20save&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. Execution routes down the `SAVE` branch of `HITL Decision Switch`.
-  2. New record created in `deferred_phases` at `artifacts/system_status/public/data/deferred_phases/{auto-id}` with `status: "STACKED"`.
-  3. Save Confirmation card posts to Google Chat with phase and commit SHA.
-
-## Test Step 3: ARCHIVE CHANGES
-- **Action**: Execute the archive/revert path.
-- **Method**: In Google Chat, click the "ARCHIVE CHANGES" button, or trigger via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=archive&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20archive&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. Branch `archive/45.4.2` created on GitHub at the commit SHA.
-  2. Revert commit pushed to `develop` with message containing `[skip ci]` — confirm no new pipeline run triggers.
-  3. New record created in `archived_phases` with `archive_branch: "archive/45.4.2"` and `status: "ARCHIVED"`.
-  4. Archive Confirmation card posts to Google Chat.
-
-## Test Step 4: PROMOTE with Stacked Commits
-- **Action**: Promote after multiple commits exist on `develop` ahead of `main`.
+## Test Step 1: Bump type derivation — MINOR overrides PATCH trigger
+- **Action**: Push a MINOR-tagged commit followed by a PATCH-tagged (or untagged) trigger commit. Verify the HITL card uses MINOR, not PATCH.
 - **Method**:
-  1. Ensure at least two commits exist on `develop` ahead of `main` (push a trivial change if needed).
-  2. Trigger approval via shell using the SHA of the latest commit:
-     ```
-     curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=<latest_sha>&phase=45.4.2&method=manual&summary=Test%20stacked&bump_type=MINOR&hbrId="
-     ```
+  ```
+  git commit --allow-empty -m "[MANUAL] FEAT(test): Minor feature test [BUMP: MINOR]"
+  git push origin develop
+  # Wait for HITL card, then push a bare trigger:
+  git commit --allow-empty -m "[MANUAL] CHORE(pipeline): Trigger re-deploy"
+  git push origin develop
+  ```
 - **Expected Result**:
-  1. Deployment card in Google Chat lists the Dev Stack Commits section (only visible when stack depth > 1).
-  2. The pre-seeded `mock_deferred` document in `deferred_phases` (from Pre-Test Setup) is patched to `status: "PROMOTED"` with `promoted_in` set to the new version.
+  1. HITL card header shows `Release Candidate: X.X.X → MINOR bump` (not PATCH).
+  2. The PROMOTE TO PROD button URL contains `bump_type=MINOR`.
+  3. On promotion, pubspec.yaml bumps the MINOR segment (e.g. 45.4.4 → 45.5.0).
+
+## Test Step 2: PROMOTE TO PROD acknowledgment card
+- **Action**: On any HITL card, click PROMOTE TO PROD.
+- **Method**: Click the green PROMOTE TO PROD button in Google Chat.
+- **Expected Result**:
+  1. Within ~5 seconds, a `⏳ L2LAAF Deployment: Phase X acknowledged` card appears in Google Chat confirming the promotion was queued.
+  2. 4–6 minutes later (after GH Actions completes), the `🚀 Promoted to PROD` Final Alert card appears.
+  3. If GH Actions fails, the `❌ PROD Deploy Failed` error card appears instead of the Final Alert.
+
+## Test Step 3: ARCHIVE CHANGES cherry-pick reference
+- **Action**: On a HITL card, click ARCHIVE CHANGES.
+- **Method**: Click the red ARCHIVE CHANGES button in Google Chat.
+- **Expected Result**:
+  1. Archive Confirmation card appears with the commit SHA and the cherry-pick command:
+     `git cherry-pick <build_id>`
+  2. The archive branch reference `archive/<phase>` is shown.
+  3. The revert commit on develop contains `[skip ci]` — no new pipeline run triggers.
 
 ## Rollback Steps
-If any test case fails, perform the following before retrying:
-1. Delete any created Firestore test documents in `deferred_phases`, `archived_phases`, and `promoted_phases` via the Firestore console.
-2. Delete any `archive/*` branches created on GitHub during testing.
-3. If `main` was force-updated during a PROMOTE test, reset it to the prior SHA via:
-   ```
-   git push origin <prior_sha>:refs/heads/main --force
-   ```
-4. Revert `pubspec.yaml` on `develop` to version `45.4.2` if the version bump was written.
+If any test step fails before the HITL gate fires:
+1. Restore the Phase 45.5 orchestrator by re-running relay.sh with the previous logic_payload.txt.
+
+If the HITL gate fires but behaves incorrectly, click ARCHIVE CHANGES to revert on develop, then restore Phase 45.5 via relay.sh.

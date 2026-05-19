@@ -1,74 +1,47 @@
 L2LAAF_BLOCK_START(FILE:Implementation Guide:implementation_guide.md)
-# Phase 45.5 Three-Option HITL Gate Implementation Guide
+# Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation
 
 ## Pre-Test Setup
-Seed the `deferred_phases` collection in Firestore (`local2local-dev`) with a mock document to simulate a stacked proposal waiting for promotion.
-- **Path**: `artifacts/system_status/public/data/deferred_phases/mock_deferred`
-- **JSON Payload**:
-  ```json
-  {
-    "commit_sha": "mock_sha_123",
-    "phase": "0.0.0",
-    "status": "STACKED"
-  }
-  ```
+No Firestore seeding required. Ensure the DEV n8n orchestrator has been updated
+to Phase 45.6 (confirmed by the Sticky Note version in the n8n workflow editor).
 
-## Test Step 1: PROMOTE TO PROD
-- **Action**: Execute the promote path.
-- **Method**: In Google Chat, click the "PROMOTE TO PROD" button on the HITL card, or trigger the Approval Listener test webhook manually via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20promote&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. `Calculate New Version` outputs the bumped version (e.g. 45.5.0).
-  2. `promoted_phases` record written to Firestore with `dev_stack` array populated.
-  3. CI/CD polling loop (`Wait 10s` → `Poll Main GH Actions` → `Is Run Complete`) loops until the GitHub Action completes.
-  4. `Final Alert` posts the "🚀 Promoted to PROD" confirmation card in Google Chat only after the GH Actions run concludes.
-
-## Test Step 2: SAVE IN DEV STACK
-- **Action**: Execute the save/defer path.
-- **Method**: In Google Chat, click the "SAVE IN DEV STACK" button, or trigger via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=save&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20save&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. Execution routes down the `SAVE` branch of `HITL Decision Switch`.
-  2. New record created in `deferred_phases` at `artifacts/system_status/public/data/deferred_phases/{auto-id}` with `status: "STACKED"`.
-  3. Save Confirmation card posts to Google Chat with phase and commit SHA.
-
-## Test Step 3: ARCHIVE CHANGES
-- **Action**: Execute the archive/revert path.
-- **Method**: In Google Chat, click the "ARCHIVE CHANGES" button, or trigger via shell:
-  ```
-  curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=archive&env=dev&build_id=mock_sha_123&phase=45.4.2&method=manual&summary=Test%20archive&bump_type=MINOR&hbrId="
-  ```
-- **Expected Result**:
-  1. Branch `archive/45.4.2` created on GitHub at the commit SHA.
-  2. Revert commit pushed to `develop` with message containing `[skip ci]` — confirm no new pipeline run triggers.
-  3. New record created in `archived_phases` with `archive_branch: "archive/45.4.2"` and `status: "ARCHIVED"`.
-  4. Archive Confirmation card posts to Google Chat.
-
-## Test Step 4: PROMOTE with Stacked Commits
-- **Action**: Promote after multiple commits exist on `develop` ahead of `main`.
+## Test Step 1: Bump type derivation — MINOR overrides PATCH trigger
+- **Action**: Push a MINOR-tagged commit followed by a PATCH-tagged (or untagged) trigger commit. Verify the HITL card uses MINOR, not PATCH.
 - **Method**:
-  1. Ensure at least two commits exist on `develop` ahead of `main` (push a trivial change if needed).
-  2. Trigger approval via shell using the SHA of the latest commit:
-     ```
-     curl -X GET "https://local2local.app.n8n.cloud/webhook-test/ea64f359-a428-46e4-9dc1-d5c643f385eb?action=approve&env=dev&build_id=<latest_sha>&phase=45.4.2&method=manual&summary=Test%20stacked&bump_type=MINOR&hbrId="
-     ```
+  ```
+  git commit --allow-empty -m "[MANUAL] FEAT(test): Minor feature test [BUMP: MINOR]"
+  git push origin develop
+  # Wait for HITL card, then push a bare trigger:
+  git commit --allow-empty -m "[MANUAL] CHORE(pipeline): Trigger re-deploy"
+  git push origin develop
+  ```
 - **Expected Result**:
-  1. Deployment card in Google Chat lists the Dev Stack Commits section (only visible when stack depth > 1).
-  2. The pre-seeded `mock_deferred` document in `deferred_phases` (from Pre-Test Setup) is patched to `status: "PROMOTED"` with `promoted_in` set to the new version.
+  1. HITL card header shows `Release Candidate: X.X.X → MINOR bump` (not PATCH).
+  2. The PROMOTE TO PROD button URL contains `bump_type=MINOR`.
+  3. On promotion, pubspec.yaml bumps the MINOR segment (e.g. 45.4.4 → 45.5.0).
+
+## Test Step 2: PROMOTE TO PROD acknowledgment card
+- **Action**: On any HITL card, click PROMOTE TO PROD.
+- **Method**: Click the green PROMOTE TO PROD button in Google Chat.
+- **Expected Result**:
+  1. Within ~5 seconds, a `⏳ L2LAAF Deployment: Phase X acknowledged` card appears in Google Chat confirming the promotion was queued.
+  2. 4–6 minutes later (after GH Actions completes), the `🚀 Promoted to PROD` Final Alert card appears.
+  3. If GH Actions fails, the `❌ PROD Deploy Failed` error card appears instead of the Final Alert.
+
+## Test Step 3: ARCHIVE CHANGES cherry-pick reference
+- **Action**: On a HITL card, click ARCHIVE CHANGES.
+- **Method**: Click the red ARCHIVE CHANGES button in Google Chat.
+- **Expected Result**:
+  1. Archive Confirmation card appears with the commit SHA and the cherry-pick command:
+     `git cherry-pick <build_id>`
+  2. The archive branch reference `archive/<phase>` is shown.
+  3. The revert commit on develop contains `[skip ci]` — no new pipeline run triggers.
 
 ## Rollback Steps
-If any test case fails, perform the following before retrying:
-1. Delete any created Firestore test documents in `deferred_phases`, `archived_phases`, and `promoted_phases` via the Firestore console.
-2. Delete any `archive/*` branches created on GitHub during testing.
-3. If `main` was force-updated during a PROMOTE test, reset it to the prior SHA via:
-   ```
-   git push origin <prior_sha>:refs/heads/main --force
-   ```
-4. Revert `pubspec.yaml` on `develop` to version `45.4.2` if the version bump was written.
+If any test step fails before the HITL gate fires:
+1. Restore the Phase 45.5 orchestrator by re-running relay.sh with the previous logic_payload.txt.
+
+If the HITL gate fires but behaves incorrectly, click ARCHIVE CHANGES to revert on develop, then restore Phase 45.5 via relay.sh.
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomous_orchestrator.develop.json)
@@ -77,7 +50,7 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
   "nodes": [
     {
       "parameters": {
-        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.5\n**Feature:** Phase 45.5 Three-Option HITL Gate & Polling",
+        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.6\n**Feature:** Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation",
         "height": 150,
         "width": 926,
         "color": 6
@@ -464,7 +437,7 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const data = $('Extract Impact').first().json;\nconst meta = data.meta || {};\nconst system_status = data.system_status || 'GREEN';\nconst intent = data.intent || 'FUNCTIONALITY';\nconst env = data.updated_state?.active_environment || 'dev';\nconst version = meta.current_version || '0.0.0';\nconst summary = meta.summary || 'No summary provided.';\nconst build_id = meta.build_id || 'unknown';\nconst bump_type = meta.bump_type || 'PATCH';\nconst hbrId = meta.hbrId || 'manual';\nconst method = meta.method || 'UNKNOWN';\nlet critique = '';\ntry { critique = $('Extract Critique').first().json.validator_critique || ''; } catch(e) {}\nconst impact_level = data.impact_level || 'ROUTINE';\nconst throttle_message = data.throttle_message || 'Proceeding';\nconst commits = $json.commits || [];\n\nconst cardWidgets = [];\n\ncardWidgets.push({\n  textParagraph: {\n    text: `<b>Originator:</b> ${method} | <b>System Status:</b> ${system_status} | <b>Intent:</b> ${intent}<br><b>Version:</b> ${version} (${bump_type})<br><b>Environment:</b> ${env.toUpperCase()} | <b>Build ID:</b> ${build_id}<br><b>HBR ID:</b> ${hbrId} | <b>Impact Level:</b> ${impact_level}`\n  }\n});\n\ncardWidgets.push({\n  textParagraph: { text: `<b>Summary:</b><br>${summary}` }\n});\n\ncardWidgets.push({\n  decoratedText: { topLabel: 'Throttle Evaluation', text: throttle_message, wrapText: true }\n});\n\nif (critique) {\n  cardWidgets.push({\n    textParagraph: { text: `<font color='#ff0000'><b>Validator Critique:</b></font><br>${critique}` }\n  });\n}\n\nif (commits.length > 1) {\n  const commitsText = commits.map(c => `\u2022 <code>${c.sha.substring(0,7)}</code>: ${c.commit.message.split('\\n')[0]}`).join('<br>');\n  cardWidgets.push({\n    textParagraph: { text: `<b>Dev Stack Commits (${commits.length}):</b><br>${commitsText}` }\n  });\n}\n\nconst baseUrl = `https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb`;\nconst commonQuery = `env=${env}&build_id=${build_id}&phase=${version}&method=${method}&summary=${encodeURIComponent(summary)}&bump_type=${bump_type}&hbrId=${hbrId}`;\n\ncardWidgets.push({\n  buttonList: {\n    buttons: [\n      {\n        text: 'PROMOTE TO PROD',\n        color: { red: 0.1, green: 0.6, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=approve&${commonQuery}` } }\n      },\n      {\n        text: 'SAVE IN DEV STACK',\n        color: { red: 1.0, green: 0.6, blue: 0.0, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=save&${commonQuery}` } }\n      },\n      {\n        text: 'ARCHIVE CHANGES',\n        color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=archive&${commonQuery}` } }\n      }\n    ]\n  }\n});\n\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: `deployment_card_${build_id}`,\n        card: {\n          header: {\n            title: `\ud83d\ude80 L2LAAF Deployment: Phase ${version}`,\n            subtitle: `Release Candidate: ${version}`\n          },\n          sections: [{ widgets: cardWidgets }]\n        }\n      }]\n    })\n  }\n};"
+        "jsCode": "const data = $('Extract Impact').first().json;\nconst meta = data.meta || {};\nconst system_status = data.system_status || 'GREEN';\nconst intent = data.intent || 'FUNCTIONALITY';\nconst env = data.updated_state?.active_environment || 'dev';\nconst version = meta.current_version || '0.0.0';\nconst summary = meta.summary || 'No summary provided.';\nconst build_id = meta.build_id || 'unknown';\nconst bump_type = meta.bump_type || 'PATCH';\nconst hbrId = meta.hbrId || 'manual';\nconst method = meta.method || 'UNKNOWN';\nlet critique = '';\ntry { critique = $('Extract Critique').first().json.validator_critique || ''; } catch(e) {}\nconst impact_level = data.impact_level || 'ROUTINE';\nconst throttle_message = data.throttle_message || 'Proceeding';\nconst commits = $json.commits || [];\n\n// Derive max bump type across all dev stack commits\nconst BUMP_ORDER = { MAJOR: 3, MINOR: 2, PATCH: 1 };\nfunction parseBumpType(msg) {\n  const m = (msg || '').match(/\\[BUMP:\\s*(MAJOR|MINOR|PATCH)\\]/i);\n  return m ? m[1].toUpperCase() : 'PATCH';\n}\nconst maxBumpType = commits.reduce((max, c) => {\n  const bt = parseBumpType(c.commit.message);\n  return BUMP_ORDER[bt] > BUMP_ORDER[max] ? bt : max;\n}, parseBumpType(summary));\n\nconst cardWidgets = [];\n\ncardWidgets.push({\n  textParagraph: {\n    text: `<b>Originator:</b> ${method} | <b>System Status:</b> ${system_status} | <b>Intent:</b> ${intent}<br><b>Version:</b> ${version} \u2192 ${maxBumpType} bump<br><b>Environment:</b> ${env.toUpperCase()} | <b>Build ID:</b> ${build_id}<br><b>HBR ID:</b> ${hbrId} | <b>Impact Level:</b> ${impact_level}`\n  }\n});\n\ncardWidgets.push({\n  textParagraph: { text: `<b>Summary:</b><br>${summary}` }\n});\n\ncardWidgets.push({\n  decoratedText: { topLabel: 'Throttle Evaluation', text: throttle_message, wrapText: true }\n});\n\nif (critique) {\n  cardWidgets.push({\n    textParagraph: { text: `<font color='#ff0000'><b>Validator Critique:</b></font><br>${critique}` }\n  });\n}\n\nif (commits.length > 1) {\n  const commitsText = commits.map(c => `\u2022 <code>${c.sha.substring(0,7)}</code>: ${c.commit.message.split('\\n')[0]}`).join('<br>');\n  cardWidgets.push({\n    textParagraph: { text: `<b>Dev Stack Commits (${commits.length}):</b><br>${commitsText}` }\n  });\n}\n\nconst baseUrl = `https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb`;\nconst commonQuery = `env=${env}&build_id=${build_id}&phase=${version}&method=${method}&summary=${encodeURIComponent(summary)}&bump_type=${maxBumpType}&hbrId=${hbrId}`;\n\ncardWidgets.push({\n  buttonList: {\n    buttons: [\n      {\n        text: 'PROMOTE TO PROD',\n        color: { red: 0.1, green: 0.6, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=approve&${commonQuery}` } }\n      },\n      {\n        text: 'SAVE IN DEV STACK',\n        color: { red: 1.0, green: 0.6, blue: 0.0, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=save&${commonQuery}` } }\n      },\n      {\n        text: 'ARCHIVE CHANGES',\n        color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=archive&${commonQuery}` } }\n      }\n    ]\n  }\n});\n\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: `deployment_card_${build_id}`,\n        card: {\n          header: {\n            title: `\ud83d\ude80 L2LAAF Deployment: Phase ${version}`,\n            subtitle: `Release Candidate: ${version} \u2192 ${maxBumpType} bump`\n          },\n          sections: [{ widgets: cardWidgets }]\n        }\n      }]\n    })\n  }\n};"
       },
       "id": "prepare-deployment-card",
       "name": "Prepare Deployment Card",
@@ -975,7 +948,7 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_archived\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Changes Archived.</b><br>The commit was reverted on develop and preserved in branch archive/${meta.phase}.<br><br><b>Commit SHA:</b> ${meta.build_id}<br><b>Originator:</b> ${meta.method}` } }\n  ] }] } }]\n}) } };"
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_archived\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Changes Archived.</b><br>The commit was reverted on develop and preserved in branch <code>archive/${meta.phase}</code>.<br><br><b>Commit SHA:</b> <code>${meta.build_id}</code><br><b>Originator:</b> ${meta.method}<br><br><b>To recover later:</b><br><code>git cherry-pick ${meta.build_id}</code><br><font color='#888888'>(cherry-picks from branch archive/${meta.phase})</font>` } }\n  ] }] } }]\n}) } };"
       },
       "id": "prepare-archive-card",
       "name": "Prepare Archive Card",
@@ -2040,6 +2013,39 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
         6160,
         592
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nconst phase = meta.phase || 'unknown';\nconst bumpType = meta.bump_type || 'PATCH';\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: 'l2laaf_promote_ack', card: { header: { title: `\u23f3 L2LAAF Deployment: Phase ${phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Promotion to PROD acknowledged.</b><br>Phase ${phase} is being deployed. GitHub main branch deployment queued.<br><br><b>Bump type:</b> ${bumpType}<br><b>Originator:</b> ${meta.method || 'UNKNOWN'}<br><br><font color='#888888'>A confirmation card will appear when the deployment completes.</font>` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "aa11bb22-cc33-4d56-89ab-ef1234567891",
+      "name": "Prepare Promote Ack Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "bb22cc33-dd44-5e67-bcde-f01234567892",
+      "name": "Post Promote Ack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        752
+      ]
     }
   ],
   "pinData": {},
@@ -2294,7 +2300,7 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "Prepare Promote Ack Body",
             "type": "main",
             "index": 0
           }
@@ -3016,6 +3022,28 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
           }
         ]
       ]
+    },
+    "Prepare Promote Ack Body": {
+      "main": [
+        [
+          {
+            "node": "Post Promote Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Promote Ack": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -3038,5 +3066,5 @@ L2LAAF_BLOCK_START(FILE:Orchestrator Workflow DEV:n8n_workflows/l2laaf_autonomou
 L2LAAF_BLOCK_END
 
 L2LAAF_BLOCK_START(COMMIT_MSG:Commit Message:COMMIT_MSG)
-[ASSISTED] FEAT(orchestrator): Implement Three-Option HITL Gate [BUMP: MINOR]
+[ASSISTED] FEAT(orchestrator): HITL acknowledgment cards and dev-stack bump_type derivation [BUMP: MINOR]
 L2LAAF_BLOCK_END

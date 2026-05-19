@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.5\n**Feature:** Phase 45.5 Three-Option HITL Gate & Polling",
+        "content": "## \ud83e\udd16 L2LAAF Orchestrator\n**Phase:** 45.6\n**Feature:** Phase 45.6 HITL Acknowledgment Cards & Dev-Stack Bump Type Derivation",
         "height": 150,
         "width": 926,
         "color": 6
@@ -390,7 +390,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const data = $('Extract Impact').first().json;\nconst meta = data.meta || {};\nconst system_status = data.system_status || 'GREEN';\nconst intent = data.intent || 'FUNCTIONALITY';\nconst env = data.updated_state?.active_environment || 'dev';\nconst version = meta.current_version || '0.0.0';\nconst summary = meta.summary || 'No summary provided.';\nconst build_id = meta.build_id || 'unknown';\nconst bump_type = meta.bump_type || 'PATCH';\nconst hbrId = meta.hbrId || 'manual';\nconst method = meta.method || 'UNKNOWN';\nlet critique = '';\ntry { critique = $('Extract Critique').first().json.validator_critique || ''; } catch(e) {}\nconst impact_level = data.impact_level || 'ROUTINE';\nconst throttle_message = data.throttle_message || 'Proceeding';\nconst commits = $json.commits || [];\n\nconst cardWidgets = [];\n\ncardWidgets.push({\n  textParagraph: {\n    text: `<b>Originator:</b> ${method} | <b>System Status:</b> ${system_status} | <b>Intent:</b> ${intent}<br><b>Version:</b> ${version} (${bump_type})<br><b>Environment:</b> ${env.toUpperCase()} | <b>Build ID:</b> ${build_id}<br><b>HBR ID:</b> ${hbrId} | <b>Impact Level:</b> ${impact_level}`\n  }\n});\n\ncardWidgets.push({\n  textParagraph: { text: `<b>Summary:</b><br>${summary}` }\n});\n\ncardWidgets.push({\n  decoratedText: { topLabel: 'Throttle Evaluation', text: throttle_message, wrapText: true }\n});\n\nif (critique) {\n  cardWidgets.push({\n    textParagraph: { text: `<font color='#ff0000'><b>Validator Critique:</b></font><br>${critique}` }\n  });\n}\n\nif (commits.length > 1) {\n  const commitsText = commits.map(c => `\u2022 <code>${c.sha.substring(0,7)}</code>: ${c.commit.message.split('\\n')[0]}`).join('<br>');\n  cardWidgets.push({\n    textParagraph: { text: `<b>Dev Stack Commits (${commits.length}):</b><br>${commitsText}` }\n  });\n}\n\nconst baseUrl = `https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb`;\nconst commonQuery = `env=${env}&build_id=${build_id}&phase=${version}&method=${method}&summary=${encodeURIComponent(summary)}&bump_type=${bump_type}&hbrId=${hbrId}`;\n\ncardWidgets.push({\n  buttonList: {\n    buttons: [\n      {\n        text: 'PROMOTE TO PROD',\n        color: { red: 0.1, green: 0.6, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=approve&${commonQuery}` } }\n      },\n      {\n        text: 'SAVE IN DEV STACK',\n        color: { red: 1.0, green: 0.6, blue: 0.0, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=save&${commonQuery}` } }\n      },\n      {\n        text: 'ARCHIVE CHANGES',\n        color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=archive&${commonQuery}` } }\n      }\n    ]\n  }\n});\n\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: `deployment_card_${build_id}`,\n        card: {\n          header: {\n            title: `\ud83d\ude80 L2LAAF Deployment: Phase ${version}`,\n            subtitle: `Release Candidate: ${version}`\n          },\n          sections: [{ widgets: cardWidgets }]\n        }\n      }]\n    })\n  }\n};"
+        "jsCode": "const data = $('Extract Impact').first().json;\nconst meta = data.meta || {};\nconst system_status = data.system_status || 'GREEN';\nconst intent = data.intent || 'FUNCTIONALITY';\nconst env = data.updated_state?.active_environment || 'dev';\nconst version = meta.current_version || '0.0.0';\nconst summary = meta.summary || 'No summary provided.';\nconst build_id = meta.build_id || 'unknown';\nconst bump_type = meta.bump_type || 'PATCH';\nconst hbrId = meta.hbrId || 'manual';\nconst method = meta.method || 'UNKNOWN';\nlet critique = '';\ntry { critique = $('Extract Critique').first().json.validator_critique || ''; } catch(e) {}\nconst impact_level = data.impact_level || 'ROUTINE';\nconst throttle_message = data.throttle_message || 'Proceeding';\nconst commits = $json.commits || [];\n\n// Derive max bump type across all dev stack commits\nconst BUMP_ORDER = { MAJOR: 3, MINOR: 2, PATCH: 1 };\nfunction parseBumpType(msg) {\n  const m = (msg || '').match(/\\[BUMP:\\s*(MAJOR|MINOR|PATCH)\\]/i);\n  return m ? m[1].toUpperCase() : 'PATCH';\n}\nconst maxBumpType = commits.reduce((max, c) => {\n  const bt = parseBumpType(c.commit.message);\n  return BUMP_ORDER[bt] > BUMP_ORDER[max] ? bt : max;\n}, parseBumpType(summary));\n\nconst cardWidgets = [];\n\ncardWidgets.push({\n  textParagraph: {\n    text: `<b>Originator:</b> ${method} | <b>System Status:</b> ${system_status} | <b>Intent:</b> ${intent}<br><b>Version:</b> ${version} \u2192 ${maxBumpType} bump<br><b>Environment:</b> ${env.toUpperCase()} | <b>Build ID:</b> ${build_id}<br><b>HBR ID:</b> ${hbrId} | <b>Impact Level:</b> ${impact_level}`\n  }\n});\n\ncardWidgets.push({\n  textParagraph: { text: `<b>Summary:</b><br>${summary}` }\n});\n\ncardWidgets.push({\n  decoratedText: { topLabel: 'Throttle Evaluation', text: throttle_message, wrapText: true }\n});\n\nif (critique) {\n  cardWidgets.push({\n    textParagraph: { text: `<font color='#ff0000'><b>Validator Critique:</b></font><br>${critique}` }\n  });\n}\n\nif (commits.length > 1) {\n  const commitsText = commits.map(c => `\u2022 <code>${c.sha.substring(0,7)}</code>: ${c.commit.message.split('\\n')[0]}`).join('<br>');\n  cardWidgets.push({\n    textParagraph: { text: `<b>Dev Stack Commits (${commits.length}):</b><br>${commitsText}` }\n  });\n}\n\nconst baseUrl = `https://local2local.app.n8n.cloud/webhook/ea64f359-a428-46e4-9dc1-d5c643f385eb`;\nconst commonQuery = `env=${env}&build_id=${build_id}&phase=${version}&method=${method}&summary=${encodeURIComponent(summary)}&bump_type=${maxBumpType}&hbrId=${hbrId}`;\n\ncardWidgets.push({\n  buttonList: {\n    buttons: [\n      {\n        text: 'PROMOTE TO PROD',\n        color: { red: 0.1, green: 0.6, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=approve&${commonQuery}` } }\n      },\n      {\n        text: 'SAVE IN DEV STACK',\n        color: { red: 1.0, green: 0.6, blue: 0.0, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=save&${commonQuery}` } }\n      },\n      {\n        text: 'ARCHIVE CHANGES',\n        color: { red: 0.8, green: 0.1, blue: 0.1, alpha: 1 },\n        onClick: { openLink: { url: `${baseUrl}?action=archive&${commonQuery}` } }\n      }\n    ]\n  }\n});\n\nreturn {\n  json: {\n    requestBody: JSON.stringify({\n      cardsV2: [{\n        cardId: `deployment_card_${build_id}`,\n        card: {\n          header: {\n            title: `\ud83d\ude80 L2LAAF Deployment: Phase ${version}`,\n            subtitle: `Release Candidate: ${version} \u2192 ${maxBumpType} bump`\n          },\n          sections: [{ widgets: cardWidgets }]\n        }\n      }]\n    })\n  }\n};"
       },
       "id": "prepare-deployment-card",
       "name": "Prepare Deployment Card",
@@ -901,7 +901,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_archived\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Changes Archived.</b><br>The commit was reverted on develop and preserved in branch archive/${meta.phase}.<br><br><b>Commit SHA:</b> ${meta.build_id}<br><b>Originator:</b> ${meta.method}` } }\n  ] }] } }]\n}) } };"
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: \"l2laaf_archived\", card: { header: { title: `\ud83d\ude80 L2LAAF Deployment: Phase ${meta.phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Changes Archived.</b><br>The commit was reverted on develop and preserved in branch <code>archive/${meta.phase}</code>.<br><br><b>Commit SHA:</b> <code>${meta.build_id}</code><br><b>Originator:</b> ${meta.method}<br><br><b>To recover later:</b><br><code>git cherry-pick ${meta.build_id}</code><br><font color='#888888'>(cherry-picks from branch archive/${meta.phase})</font>` } }\n  ] }] } }]\n}) } };"
       },
       "id": "prepare-archive-card",
       "name": "Prepare Archive Card",
@@ -1966,6 +1966,39 @@
         6160,
         592
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const meta = $('Approval Listener').first().json.query;\nconst phase = meta.phase || 'unknown';\nconst bumpType = meta.bump_type || 'PATCH';\nreturn { json: { requestBody: JSON.stringify({\n  cardsV2: [{ cardId: 'l2laaf_promote_ack', card: { header: { title: `\u23f3 L2LAAF Deployment: Phase ${phase}` }, sections: [{ widgets: [\n    { textParagraph: { text: `<b>Promotion to PROD acknowledged.</b><br>Phase ${phase} is being deployed. GitHub main branch deployment queued.<br><br><b>Bump type:</b> ${bumpType}<br><b>Originator:</b> ${meta.method || 'UNKNOWN'}<br><br><font color='#888888'>A confirmation card will appear when the deployment completes.</font>` } }\n  ] }] } }]\n}) } };"
+      },
+      "id": "aa11bb22-cc33-4d56-89ab-ef1234567891",
+      "name": "Prepare Promote Ack Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAQxcghNA/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=gr9imhTgfAXF0zNK8TrwWFnw2K0QfPsL41igSuuoFEw",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {}
+      },
+      "id": "bb22cc33-dd44-5e67-bcde-f01234567892",
+      "name": "Post Promote Ack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1568,
+        752
+      ]
     }
   ],
   "pinData": {},
@@ -2220,7 +2253,7 @@
       "main": [
         [
           {
-            "node": "Payload Filter",
+            "node": "Prepare Promote Ack Body",
             "type": "main",
             "index": 0
           }
@@ -2937,6 +2970,28 @@
         [
           {
             "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Promote Ack Body": {
+      "main": [
+        [
+          {
+            "node": "Post Promote Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Promote Ack": {
+      "main": [
+        [
+          {
+            "node": "Payload Filter",
             "type": "main",
             "index": 0
           }
